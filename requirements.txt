@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+requests
+gitpython
+pyyaml
+jinja2
+docker
+openai
+python-multipart
+aiofiles
+beautifulsoup4
+markdown
+python-dotenv
