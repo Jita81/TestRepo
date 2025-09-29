@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - GitHub to App Converter</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+        
+        .dashboard-header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .dashboard-header h1 {
+            color: #333;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .dashboard-header p {
+            color: #6c757d;
+            margin-bottom: 0;
+        }
+        
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            height: 100%;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .stats-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+        
+        .stats-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .stats-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .gradient-purple {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .gradient-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .gradient-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .gradient-info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .table-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .table-card h2 {
+            color: #333;
+            font-weight: 700;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table thead th {
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+            color: #495057;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-failure {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-processing {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .progress-bar-animated {
+            animation: progress-bar-stripes 1s linear infinite;
+        }
+        
+        .btn-custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: transform 0.2s ease;
+        }
+        
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            color: white;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .navbar-custom {
+            background: white;
+            border-radius: 15px;
+            padding: 15px 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .navbar-custom .nav-link {
+            color: #495057;
+            font-weight: 500;
+            margin: 0 10px;
+            transition: color 0.3s ease;
+        }
+        
+        .navbar-custom .nav-link:hover,
+        .navbar-custom .nav-link.active {
+            color: #667eea;
+        }
+        
+        .repo-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .repo-link:hover {
+            text-decoration: underline;
+        }
+        
+        .platform-badge {
+            background: #e9ecef;
+            color: #495057;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .refresh-btn {
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+        
+        .refresh-btn.spinning {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .dashboard-header h1 {
+                font-size: 1.75rem;
+            }
+            
+            .stats-icon {
+                font-size: 2rem;
+            }
+            
+            .stats-value {
+                font-size: 1.75rem;
+            }
+            
+            .stats-card {
+                margin-bottom: 15px;
+            }
+            
+            .table-card {
+                padding: 15px;
+            }
+            
+            .btn-custom,
+            .btn-outline-secondary {
+                font-size: 0.875rem;
+                padding: 8px 15px;
+            }
+            
+            /* Stack buttons vertically on small screens */
+            .dashboard-header .col-md-4 {
+                margin-top: 15px;
+            }
+            
+            .me-2 {
+                margin-bottom: 10px !important;
+            }
+        }
+        
+        /* Tablet adjustments */
+        @media (min-width: 768px) and (max-width: 992px) {
+            .stats-value {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-custom">
+            <div class="container-fluid">
+                <span class="navbar-brand mb-0 h1">🚀 GitHub to App Converter</span>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/dashboard">
+                                <i class="bi bi-speedometer2"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">
+                                <i class="bi bi-plus-circle"></i> New Conversion
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1><i class="bi bi-speedometer2"></i> Dashboard</h1>
+                    <p>Overview of your GitHub repository conversions</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-outline-secondary me-2" onclick="loadSampleData()" id="sampleDataBtn">
+                        <i class="bi bi-database"></i> Load Sample Data
+                    </button>
+                    <button class="btn btn-custom" onclick="refreshData()">
+                        <i class="bi bi-arrow-clockwise refresh-btn" id="refreshIcon"></i> Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Statistics Cards -->
+        <div class="row mb-4 g-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="stats-card">
+                    <div class="stats-icon gradient-purple">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                    <div class="stats-value gradient-purple" id="totalConversions">0</div>
+                    <div class="stats-label">Total Conversions</div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="stats-card">
+                    <div class="stats-icon gradient-success">
+                        <i class="bi bi-check-circle"></i>
+                    </div>
+                    <div class="stats-value gradient-success" id="successfulConversions">0</div>
+                    <div class="stats-label">Successful</div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="stats-card">
+                    <div class="stats-icon gradient-warning">
+                        <i class="bi bi-x-circle"></i>
+                    </div>
+                    <div class="stats-value gradient-warning" id="failedConversions">0</div>
+                    <div class="stats-label">Failed</div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="stats-card">
+                    <div class="stats-icon gradient-info">
+                        <i class="bi bi-graph-up-arrow"></i>
+                    </div>
+                    <div class="stats-value gradient-info" id="successRate">0%</div>
+                    <div class="stats-label">Success Rate</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Conversions Table -->
+        <div class="table-card">
+            <h2><i class="bi bi-clock-history"></i> Recent Conversions</h2>
+            
+            <div class="table-responsive">
+                <table class="table table-hover" id="conversionsTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%">#</th>
+                            <th style="width: 35%">Repository</th>
+                            <th style="width: 15%">Platform</th>
+                            <th style="width: 15%">Status</th>
+                            <th style="width: 15%">Date</th>
+                            <th style="width: 15%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="conversionsTableBody">
+                        <!-- Table rows will be populated by JavaScript -->
+                        <tr>
+                            <td colspan="6" class="empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>No conversions yet. <a href="/" class="repo-link">Start your first conversion</a></p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <nav aria-label="Conversions pagination" id="paginationNav" style="display: none;">
+                <ul class="pagination justify-content-center mb-0">
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" tabindex="-1">Previous</a>
+                    </li>
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link" href="#">3</a></li>
+                    <li class="page-item">
+                        <a class="page-link" href="#">Next</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Sample data structure for conversions
+        let conversionsData = [];
+        
+        // Fetch dashboard statistics
+        async function fetchStatistics() {
+            try {
+                const response = await fetch('/api/statistics');
+                const data = await response.json();
+                
+                // Update statistics cards
+                document.getElementById('totalConversions').textContent = data.total_conversions || 0;
+                document.getElementById('successfulConversions').textContent = data.successful_conversions || 0;
+                document.getElementById('failedConversions').textContent = data.failed_conversions || 0;
+                document.getElementById('successRate').textContent = data.success_rate || '0%';
+                
+            } catch (error) {
+                console.error('Error fetching statistics:', error);
+            }
+        }
+        
+        // Fetch recent conversions
+        async function fetchRecentConversions() {
+            try {
+                const response = await fetch('/api/recent-conversions');
+                const data = await response.json();
+                
+                conversionsData = data.conversions || [];
+                renderConversionsTable();
+                
+            } catch (error) {
+                console.error('Error fetching conversions:', error);
+            }
+        }
+        
+        // Render conversions table
+        function renderConversionsTable() {
+            const tbody = document.getElementById('conversionsTableBody');
+            
+            if (conversionsData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="empty-state">
+                            <i class="bi bi-inbox"></i>
+                            <p>No conversions yet. <a href="/" class="repo-link">Start your first conversion</a></p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            
+            conversionsData.forEach((conversion, index) => {
+                const row = document.createElement('tr');
+                
+                // Determine status badge class
+                let statusClass = 'status-pending';
+                let statusIcon = 'bi-clock';
+                
+                if (conversion.status === 'success') {
+                    statusClass = 'status-success';
+                    statusIcon = 'bi-check-circle-fill';
+                } else if (conversion.status === 'failed') {
+                    statusClass = 'status-failure';
+                    statusIcon = 'bi-x-circle-fill';
+                } else if (conversion.status === 'processing') {
+                    statusClass = 'status-processing';
+                    statusIcon = 'bi-arrow-clockwise';
+                }
+                
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>
+                        <a href="${conversion.github_url}" target="_blank" class="repo-link">
+                            <i class="bi bi-github"></i> ${conversion.repo_name}
+                        </a>
+                    </td>
+                    <td>
+                        <span class="platform-badge">
+                            <i class="bi bi-${getPlatformIcon(conversion.platform)}"></i>
+                            ${conversion.platform}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-badge ${statusClass}">
+                            <i class="bi ${statusIcon}"></i> ${conversion.status}
+                        </span>
+                    </td>
+                    <td>${formatDate(conversion.date)}</td>
+                    <td>
+                        ${conversion.status === 'success' 
+                            ? `<button class="btn btn-sm btn-outline-primary" onclick="downloadApp('${conversion.id}')">
+                                <i class="bi bi-download"></i>
+                               </button>`
+                            : `<button class="btn btn-sm btn-outline-secondary" onclick="viewDetails('${conversion.id}')">
+                                <i class="bi bi-eye"></i>
+                               </button>`
+                        }
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteConversion('${conversion.id}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Helper function to get platform icon
+        function getPlatformIcon(platform) {
+            const icons = {
+                'executable': 'file-binary',
+                'docker': 'box',
+                'web': 'globe'
+            };
+            return icons[platform] || 'file-earmark';
+        }
+        
+        // Format date to readable format
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // Download app
+        async function downloadApp(conversionId) {
+            try {
+                const conversion = conversionsData.find(c => c.id === conversionId);
+                if (conversion && conversion.download_url) {
+                    window.location.href = conversion.download_url;
+                }
+            } catch (error) {
+                console.error('Error downloading app:', error);
+                alert('Failed to download application');
+            }
+        }
+        
+        // View conversion details
+        function viewDetails(conversionId) {
+            const conversion = conversionsData.find(c => c.id === conversionId);
+            if (conversion) {
+                alert(`Conversion Details:\n\nRepository: ${conversion.repo_name}\nStatus: ${conversion.status}\nPlatform: ${conversion.platform}\nDate: ${conversion.date}\n\n${conversion.error_message || 'No additional details available.'}`);
+            }
+        }
+        
+        // Delete conversion
+        async function deleteConversion(conversionId) {
+            if (confirm('Are you sure you want to delete this conversion?')) {
+                try {
+                    const response = await fetch(`/api/conversions/${conversionId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        // Refresh data
+                        await fetchRecentConversions();
+                        await fetchStatistics();
+                    } else {
+                        alert('Failed to delete conversion');
+                    }
+                } catch (error) {
+                    console.error('Error deleting conversion:', error);
+                    alert('Failed to delete conversion');
+                }
+            }
+        }
+        
+        // Refresh all data
+        async function refreshData() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            refreshIcon.classList.add('spinning');
+            
+            await Promise.all([
+                fetchStatistics(),
+                fetchRecentConversions()
+            ]);
+            
+            setTimeout(() => {
+                refreshIcon.classList.remove('spinning');
+            }, 500);
+        }
+        
+        // Load sample data for demonstration
+        async function loadSampleData() {
+            const btn = document.getElementById('sampleDataBtn');
+            const originalText = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise spinning"></i> Loading...';
+            
+            try {
+                const response = await fetch('/api/populate-sample-data', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Show success message
+                    const toast = document.createElement('div');
+                    toast.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+                    toast.style.zIndex = '9999';
+                    toast.innerHTML = `<i class="bi bi-check-circle"></i> ${data.message}`;
+                    document.body.appendChild(toast);
+                    
+                    setTimeout(() => toast.remove(), 3000);
+                    
+                    // Refresh dashboard
+                    await refreshData();
+                } else {
+                    alert('Failed to load sample data');
+                }
+            } catch (error) {
+                console.error('Error loading sample data:', error);
+                alert('Failed to load sample data');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+        
+        // Initialize dashboard on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchStatistics();
+            fetchRecentConversions();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                fetchStatistics();
+                fetchRecentConversions();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>
