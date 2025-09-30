@@ -1,0 +1,487 @@
+/* ============================================
+   CSS Variables - Theme Configuration
+   ============================================ */
+:root {
+    /* Colors */
+    --primary-color: #4CAF50;
+    --primary-dark: #45a049;
+    --primary-light: #81C784;
+    --danger-color: #f44336;
+    --danger-dark: #da190b;
+    --warning-color: #ff9800;
+    --text-color: #333333;
+    --text-light: #666666;
+    --text-muted: #999999;
+    --completed-color: #888888;
+    --background-color: #ffffff;
+    --background-alt: #f5f5f5;
+    --border-color: #e0e0e0;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    
+    /* Spacing */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    
+    /* Typography */
+    --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    --font-size-base: 16px;
+    --font-size-sm: 0.875rem;
+    --font-size-lg: 1.125rem;
+    --font-size-xl: 1.5rem;
+    --font-size-xxl: 2rem;
+    --line-height-base: 1.6;
+    
+    /* Layout */
+    --border-radius: 8px;
+    --border-radius-sm: 4px;
+    --transition-speed: 0.3s;
+    --max-width: 800px;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 3px var(--shadow-color);
+    --shadow-md: 0 4px 6px var(--shadow-color);
+    --shadow-lg: 0 10px 20px var(--shadow-color);
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
+body {
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+    color: var(--text-color);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: var(--spacing-lg);
+}
+
+/* ============================================
+   Container & Layout
+   ============================================ */
+.container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    background-color: var(--background-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+
+.app-header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: var(--spacing-xl);
+    text-align: center;
+}
+
+.app-header h1 {
+    margin: 0;
+    font-size: var(--font-size-xxl);
+    font-weight: 700;
+}
+
+.app-subtitle {
+    margin: var(--spacing-sm) 0 0;
+    opacity: 0.95;
+    font-size: var(--font-size-base);
+}
+
+.app-main {
+    padding: var(--spacing-xl);
+}
+
+.app-footer {
+    background-color: var(--background-alt);
+    padding: var(--spacing-md);
+    text-align: center;
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-color);
+}
+
+.app-footer p {
+    margin: 0;
+}
+
+/* ============================================
+   Task Form
+   ============================================ */
+.task-form {
+    margin-bottom: var(--spacing-xl);
+}
+
+.input-group {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.task-input {
+    flex: 1;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-base);
+    transition: all var(--transition-speed) ease;
+    background-color: var(--background-color);
+}
+
+.task-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.task-input:invalid {
+    border-color: var(--danger-color);
+}
+
+.task-input::placeholder {
+    color: var(--text-muted);
+}
+
+.btn-add {
+    padding: var(--spacing-md) var(--spacing-xl);
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    white-space: nowrap;
+}
+
+.btn-add:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-add:active {
+    transform: translateY(0);
+}
+
+.btn-add:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.btn-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+/* ============================================
+   Input Feedback
+   ============================================ */
+.input-feedback {
+    min-height: 1.5rem;
+    font-size: var(--font-size-sm);
+    padding: 0 var(--spacing-sm);
+    transition: all var(--transition-speed) ease;
+}
+
+.input-feedback.error {
+    color: var(--danger-color);
+}
+
+.input-feedback.success {
+    color: var(--primary-color);
+}
+
+.input-feedback.warning {
+    color: var(--warning-color);
+}
+
+/* ============================================
+   Task Counter
+   ============================================ */
+.task-counter {
+    text-align: center;
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    padding: var(--spacing-sm) 0;
+}
+
+/* ============================================
+   Task List
+   ============================================ */
+.task-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.task-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+    background-color: var(--background-color);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    transition: all var(--transition-speed) ease;
+    animation: slideIn var(--transition-speed) ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.task-item:hover {
+    border-color: var(--primary-light);
+    box-shadow: var(--shadow-sm);
+}
+
+.task-item.completed {
+    background-color: var(--background-alt);
+    border-color: var(--border-color);
+}
+
+.task-item.deleting {
+    animation: slideOut var(--transition-speed) ease;
+}
+
+@keyframes slideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
+.task-text {
+    flex: 1;
+    word-break: break-word;
+    font-size: var(--font-size-base);
+    color: var(--text-color);
+    transition: all var(--transition-speed) ease;
+}
+
+.task-item.completed .task-text {
+    text-decoration: line-through;
+    color: var(--completed-color);
+}
+
+/* ============================================
+   Task Actions
+   ============================================ */
+.task-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.btn-complete,
+.btn-delete {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-size: 1.25rem;
+    font-weight: bold;
+    transition: all var(--transition-speed) ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-complete {
+    background-color: var(--primary-light);
+    color: white;
+}
+
+.btn-complete:hover {
+    background-color: var(--primary-color);
+    transform: scale(1.1);
+}
+
+.task-item.completed .btn-complete {
+    background-color: var(--completed-color);
+}
+
+.btn-delete {
+    background-color: #ffcdd2;
+    color: var(--danger-color);
+}
+
+.btn-delete:hover {
+    background-color: var(--danger-color);
+    color: white;
+    transform: scale(1.1);
+}
+
+.btn-complete:focus,
+.btn-delete:focus {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+
+.btn-complete:active,
+.btn-delete:active {
+    transform: scale(0.95);
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+.empty-state {
+    text-align: center;
+    padding: var(--spacing-xl) var(--spacing-md);
+    color: var(--text-muted);
+    display: none;
+}
+
+.empty-state.visible {
+    display: block;
+}
+
+.empty-state-icon {
+    margin: 0 auto var(--spacing-md);
+    opacity: 0.3;
+}
+
+.empty-state-text {
+    font-size: var(--font-size-lg);
+    margin: 0;
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
+@media (max-width: 768px) {
+    body {
+        padding: var(--spacing-sm);
+    }
+    
+    .app-header h1 {
+        font-size: var(--font-size-xl);
+    }
+    
+    .app-main {
+        padding: var(--spacing-md);
+    }
+    
+    .input-group {
+        flex-direction: column;
+    }
+    
+    .btn-add {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .btn-text {
+        display: inline;
+    }
+    
+    .task-item {
+        padding: var(--spacing-md);
+    }
+    
+    .task-text {
+        font-size: var(--font-size-sm);
+    }
+    
+    .btn-complete,
+    .btn-delete {
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-header {
+        padding: var(--spacing-lg);
+    }
+    
+    .app-header h1 {
+        font-size: var(--font-size-lg);
+    }
+    
+    .app-subtitle {
+        font-size: var(--font-size-sm);
+    }
+    
+    .task-item {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+}
+
+/* ============================================
+   Accessibility
+   ============================================ */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus visible for keyboard navigation */
+@supports selector(:focus-visible) {
+    .task-input:focus {
+        outline: none;
+    }
+    
+    .task-input:focus-visible {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Print styles */
+@media print {
+    body {
+        background: white;
+    }
+    
+    .container {
+        box-shadow: none;
+    }
+    
+    .task-form,
+    .task-actions,
+    .app-footer {
+        display: none;
+    }
+    
+    .task-item {
+        break-inside: avoid;
+    }
+}
