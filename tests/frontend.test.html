@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Tests - Todo List</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+        h1 { color: #4f46e5; }
+        .test-suite {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .test-case {
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #e5e7eb;
+        }
+        .test-case.pass {
+            border-color: #10b981;
+            background: #d1fae5;
+        }
+        .test-case.fail {
+            border-color: #ef4444;
+            background: #fee2e2;
+        }
+        .summary {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+        }
+        .summary.pass { color: #10b981; }
+        .summary.fail { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <h1>Frontend JavaScript Tests</h1>
+    <div id="test-results"></div>
+    <div id="summary"></div>
+
+    <script src="../frontend/scripts/utils.js"></script>
+    <script>
+        const results = [];
+
+        function test(name, fn) {
+            try {
+                fn();
+                results.push({ name, passed: true });
+                return true;
+            } catch (error) {
+                results.push({ name, passed: false, error: error.message });
+                return false;
+            }
+        }
+
+        function assert(condition, message) {
+            if (!condition) {
+                throw new Error(message || 'Assertion failed');
+            }
+        }
+
+        function assertEqual(actual, expected, message) {
+            if (actual !== expected) {
+                throw new Error(message || `Expected ${expected} but got ${actual}`);
+            }
+        }
+
+        // Run tests
+        console.log('Running frontend tests...');
+
+        // Utils tests
+        test('formatDate - just now', () => {
+            const now = new Date();
+            const result = formatDate(now);
+            assert(result === 'just now', 'Should return "just now" for current time');
+        });
+
+        test('formatDate - minutes ago', () => {
+            const past = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
+            const result = formatDate(past);
+            assert(result.includes('minute'), 'Should return minutes ago');
+        });
+
+        test('escapeHtml - special characters', () => {
+            const input = '<script>alert("xss")</script>';
+            const result = escapeHtml(input);
+            assert(!result.includes('<script>'), 'Should escape script tags');
+            assert(result.includes('&lt;'), 'Should contain escaped characters');
+        });
+
+        test('validateTodoDescription - valid description', () => {
+            const result = validateTodoDescription('Valid todo');
+            assert(result.valid === true, 'Should validate valid description');
+        });
+
+        test('validateTodoDescription - empty description', () => {
+            const result = validateTodoDescription('');
+            assert(result.valid === false, 'Should reject empty description');
+            assert(result.error, 'Should provide error message');
+        });
+
+        test('validateTodoDescription - too long', () => {
+            const longText = 'a'.repeat(501);
+            const result = validateTodoDescription(longText);
+            assert(result.valid === false, 'Should reject too long description');
+        });
+
+        test('validateTodoDescription - whitespace only', () => {
+            const result = validateTodoDescription('   ');
+            assert(result.valid === false, 'Should reject whitespace-only description');
+        });
+
+        test('pluralize - singular', () => {
+            const result = pluralize(1, 'item');
+            assertEqual(result, 'item', 'Should return singular form');
+        });
+
+        test('pluralize - plural', () => {
+            const result = pluralize(5, 'item');
+            assertEqual(result, 'items', 'Should return plural form');
+        });
+
+        test('pluralize - custom plural', () => {
+            const result = pluralize(2, 'child', 'children');
+            assertEqual(result, 'children', 'Should return custom plural form');
+        });
+
+        test('generateId - uniqueness', () => {
+            const id1 = generateId();
+            const id2 = generateId();
+            assert(id1 !== id2, 'Should generate unique IDs');
+        });
+
+        test('sanitizeHtml - prevents XSS', () => {
+            const malicious = '<img src=x onerror=alert(1)>';
+            const result = sanitizeHtml(malicious);
+            assert(!result.includes('onerror'), 'Should remove event handlers');
+        });
+
+        // Display results
+        const resultsDiv = document.getElementById('test-results');
+        const summaryDiv = document.getElementById('summary');
+
+        const passed = results.filter(r => r.passed).length;
+        const failed = results.filter(r => !r.passed).length;
+
+        results.forEach(result => {
+            const testCase = document.createElement('div');
+            testCase.className = `test-case ${result.passed ? 'pass' : 'fail'}`;
+            testCase.innerHTML = `
+                <strong>${result.passed ? '✓' : '✗'} ${result.name}</strong>
+                ${result.error ? `<br><small>Error: ${result.error}</small>` : ''}
+            `;
+            resultsDiv.appendChild(testCase);
+        });
+
+        summaryDiv.className = `summary ${failed === 0 ? 'pass' : 'fail'}`;
+        summaryDiv.innerHTML = `
+            <div>Tests: ${results.length} | Passed: ${passed} | Failed: ${failed}</div>
+            <div>${failed === 0 ? '✓ All tests passed!' : '✗ Some tests failed'}</div>
+        `;
+
+        console.log(`Tests completed: ${passed}/${results.length} passed`);
+    </script>
+</body>
+</html>
