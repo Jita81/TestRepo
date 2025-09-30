@@ -1,0 +1,292 @@
+openapi: 3.0.0
+info:
+  title: Greeting API
+  version: 1.0.0
+  description: |
+    A simple greeting API that returns hello messages in multiple languages.
+    
+    ## Features
+    - Multi-language support (English, Spanish, French)
+    - Personalized greetings with names
+    - Rate limiting for API protection
+    - Comprehensive input validation
+    - CORS support for web clients
+    
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Greetings
+    description: Greeting operations
+  - name: Utility
+    description: Utility endpoints
+
+paths:
+  /api/greeting:
+    get:
+      summary: Get a greeting message
+      description: |
+        Returns a greeting message in the specified language. Optionally includes
+        a personalized name in the greeting.
+        
+        ## Supported Languages
+        - `en` - English (default)
+        - `es` - Spanish
+        - `fr` - French
+        
+        ## Rate Limiting
+        This endpoint is rate-limited to 100 requests per 15-minute window per IP address.
+        
+      operationId: getGreeting
+      tags:
+        - Greetings
+      parameters:
+        - name: lang
+          in: query
+          description: Language code for the greeting (2 characters)
+          required: false
+          schema:
+            type: string
+            enum: [en, es, fr]
+            default: en
+            example: en
+        - name: name
+          in: query
+          description: Name for personalized greeting (1-50 characters, letters, spaces, hyphens, apostrophes only)
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 50
+            pattern: '^[\p{L}\s''-]+$'
+            example: John
+      responses:
+        '200':
+          description: Successful greeting response
+          headers:
+            RateLimit-Limit:
+              description: The maximum number of requests allowed in the time window
+              schema:
+                type: integer
+                example: 100
+            RateLimit-Remaining:
+              description: The number of requests remaining in the current time window
+              schema:
+                type: integer
+                example: 99
+            RateLimit-Reset:
+              description: The time when the rate limit window resets (Unix timestamp)
+              schema:
+                type: integer
+                example: 1609459200
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GreetingResponse'
+              examples:
+                default:
+                  summary: Default English greeting
+                  value:
+                    message: 'Hello!'
+                withName:
+                  summary: Personalized English greeting
+                  value:
+                    message: 'Hello, John!'
+                spanish:
+                  summary: Spanish greeting
+                  value:
+                    message: '¡Hola!'
+                spanishWithName:
+                  summary: Personalized Spanish greeting
+                  value:
+                    message: '¡Hola, Juan!'
+                french:
+                  summary: French greeting
+                  value:
+                    message: 'Bonjour!'
+                frenchWithName:
+                  summary: Personalized French greeting
+                  value:
+                    message: 'Bonjour, Marie!'
+        '400':
+          description: Bad request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidLanguage:
+                  summary: Invalid language code
+                  value:
+                    error:
+                      message: 'Validation failed'
+                      details:
+                        - field: lang
+                          message: 'Unsupported language code. Supported languages: en, es, fr'
+                          value: 'xx'
+                invalidName:
+                  summary: Invalid name format
+                  value:
+                    error:
+                      message: 'Validation failed'
+                      details:
+                        - field: name
+                          message: 'Name can only contain letters, spaces, hyphens, and apostrophes'
+                          value: 'John123'
+                nameTooLong:
+                  summary: Name exceeds maximum length
+                  value:
+                    error:
+                      message: 'Validation failed'
+                      details:
+                        - field: name
+                          message: 'Name must be between 1 and 50 characters'
+                          value: 'VeryLongNameThatExceedsTheMaximumAllowedLength...'
+        '429':
+          description: Too Many Requests - Rate limit exceeded
+          headers:
+            Retry-After:
+              description: Number of seconds to wait before retrying
+              schema:
+                type: integer
+                example: 900
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  message: 'Too many requests from this IP, please try again later.'
+                  status: 429
+                  retryAfter: 900
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  message: 'Internal Server Error'
+                  status: 500
+                  timestamp: '2025-09-30T12:00:00.000Z'
+
+  /api/greeting/languages:
+    get:
+      summary: Get supported languages
+      description: Returns a list of all supported language codes
+      operationId: getSupportedLanguages
+      tags:
+        - Greetings
+      responses:
+        '200':
+          description: List of supported languages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  languages:
+                    type: array
+                    items:
+                      type: string
+                    example: ['en', 'es', 'fr']
+                  count:
+                    type: integer
+                    example: 3
+              example:
+                languages: ['en', 'es', 'fr']
+                count: 3
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the API
+      operationId: healthCheck
+      tags:
+        - Utility
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: '2025-09-30T12:00:00.000Z'
+                  uptime:
+                    type: number
+                    description: Server uptime in seconds
+                    example: 3600.5
+
+components:
+  schemas:
+    GreetingResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: The greeting message
+          example: 'Hello, John!'
+    
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Error message
+              example: 'Validation failed'
+            status:
+              type: integer
+              description: HTTP status code
+              example: 400
+            timestamp:
+              type: string
+              format: date-time
+              description: Error timestamp
+              example: '2025-09-30T12:00:00.000Z'
+            details:
+              type: array
+              description: Detailed validation errors (for 400 responses)
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    description: Field that failed validation
+                    example: 'lang'
+                  message:
+                    type: string
+                    description: Validation error message
+                    example: 'Unsupported language code'
+                  value:
+                    type: string
+                    description: Invalid value provided
+                    example: 'xx'
+
+  securitySchemes: {}
+
+security: []

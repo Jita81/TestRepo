@@ -1,0 +1,187 @@
+{
+  "info": {
+    "name": "Greeting API",
+    "description": "A simple greeting API that returns hello messages in multiple languages",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Greetings",
+      "item": [
+        {
+          "name": "Get Default Greeting",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/greeting",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "greeting"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Personalized Greeting",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/greeting?name=John",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "greeting"],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "John"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Spanish Greeting",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/greeting?lang=es",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "greeting"],
+              "query": [
+                {
+                  "key": "lang",
+                  "value": "es"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Personalized Spanish Greeting",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/greeting?lang=es&name=Juan",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "greeting"],
+              "query": [
+                {
+                  "key": "lang",
+                  "value": "es"
+                },
+                {
+                  "key": "name",
+                  "value": "Juan"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get French Greeting",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/greeting?lang=fr&name=Marie",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "greeting"],
+              "query": [
+                {
+                  "key": "lang",
+                  "value": "fr"
+                },
+                {
+                  "key": "name",
+                  "value": "Marie"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Supported Languages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/greeting/languages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "greeting", "languages"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Test Invalid Language",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/greeting?lang=xx",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "greeting"],
+              "query": [
+                {
+                  "key": "lang",
+                  "value": "xx"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Test Invalid Name Characters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/greeting?name=John123",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "greeting"],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "John123"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Utility",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}
