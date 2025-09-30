@@ -1,0 +1,45 @@
+{
+  "sampleTasks": [
+    {
+      "id": "test-task-1",
+      "text": "Buy groceries",
+      "completed": false,
+      "timestamp": 1609459200000
+    },
+    {
+      "id": "test-task-2",
+      "text": "Finish project report",
+      "completed": true,
+      "timestamp": 1609545600000
+    },
+    {
+      "id": "test-task-3",
+      "text": "Call dentist for appointment",
+      "completed": false,
+      "timestamp": 1609632000000
+    }
+  ],
+  "edgeCases": {
+    "emptyTask": "",
+    "whitespaceTask": "   ",
+    "maxLengthTask": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate.",
+    "tooLongTask": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore.",
+    "specialChars": "Task with <script>alert('xss')</script> & special chars",
+    "emoji": "🎉 Complete important task ✅",
+    "unicode": "Tâche en français avec des caractères spéciaux: é, è, ê, ë, à",
+    "singleChar": "A",
+    "nearMaxLength": "This is a task that is very close to the maximum character limit of 280 characters. Let me add more text to make it longer and test the warning threshold. The warning should appear when we reach 90% of the maximum limit which is around 252 characters."
+  },
+  "bulkTasks": [
+    { "text": "Task 1", "completed": false, "timestamp": 1609459200000 },
+    { "text": "Task 2", "completed": false, "timestamp": 1609459201000 },
+    { "text": "Task 3", "completed": true, "timestamp": 1609459202000 },
+    { "text": "Task 4", "completed": false, "timestamp": 1609459203000 },
+    { "text": "Task 5", "completed": true, "timestamp": 1609459204000 },
+    { "text": "Task 6", "completed": false, "timestamp": 1609459205000 },
+    { "text": "Task 7", "completed": false, "timestamp": 1609459206000 },
+    { "text": "Task 8", "completed": true, "timestamp": 1609459207000 },
+    { "text": "Task 9", "completed": false, "timestamp": 1609459208000 },
+    { "text": "Task 10", "completed": false, "timestamp": 1609459209000 }
+  ]
+}
