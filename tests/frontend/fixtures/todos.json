@@ -1,0 +1,80 @@
+{
+  "sampleTasks": [
+    {
+      "id": "test-task-1",
+      "text": "Buy groceries",
+      "completed": false,
+      "timestamp": 1609459200000
+    },
+    {
+      "id": "test-task-2",
+      "text": "Write documentation",
+      "completed": false,
+      "timestamp": 1609459260000
+    },
+    {
+      "id": "test-task-3",
+      "text": "Review pull requests",
+      "completed": true,
+      "timestamp": 1609459320000
+    },
+    {
+      "id": "test-task-4",
+      "text": "Deploy to production",
+      "completed": false,
+      "timestamp": 1609459380000
+    },
+    {
+      "id": "test-task-5",
+      "text": "Update dependencies",
+      "completed": true,
+      "timestamp": 1609459440000
+    }
+  ],
+  
+  "edgeCaseTasks": [
+    {
+      "id": "test-edge-1",
+      "text": "a",
+      "completed": false,
+      "timestamp": 1609459200000
+    },
+    {
+      "id": "test-edge-2",
+      "text": "This is a very long task description that contains many characters to test the character limit handling and UI rendering with long text content that should wrap properly without breaking the layout design and user experience",
+      "completed": false,
+      "timestamp": 1609459260000
+    },
+    {
+      "id": "test-edge-3",
+      "text": "Task with emoji 🚀 🎉 ✨",
+      "completed": false,
+      "timestamp": 1609459320000
+    },
+    {
+      "id": "test-edge-4",
+      "text": "Task with special chars: <script>alert('xss')</script>",
+      "completed": false,
+      "timestamp": 1609459380000
+    },
+    {
+      "id": "test-edge-5",
+      "text": "Task with quotes: \"double\" and 'single'",
+      "completed": false,
+      "timestamp": 1609459440000
+    }
+  ],
+  
+  "bulkTasks": [
+    { "text": "Task 1", "completed": false },
+    { "text": "Task 2", "completed": false },
+    { "text": "Task 3", "completed": true },
+    { "text": "Task 4", "completed": false },
+    { "text": "Task 5", "completed": true },
+    { "text": "Task 6", "completed": false },
+    { "text": "Task 7", "completed": false },
+    { "text": "Task 8", "completed": true },
+    { "text": "Task 9", "completed": false },
+    { "text": "Task 10", "completed": false }
+  ]
+}

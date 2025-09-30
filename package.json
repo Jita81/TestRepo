@@ -1,0 +1,30 @@
+{
+  "name": "todo-app-tests",
+  "version": "1.0.0",
+  "description": "Frontend tests for Todo List application using Playwright",
+  "scripts": {
+    "test": "playwright test tests/frontend/",
+    "test:ui": "playwright test tests/frontend/ --ui",
+    "test:headed": "playwright test tests/frontend/ --headed",
+    "test:debug": "playwright test tests/frontend/ --debug",
+    "test:chromium": "playwright test tests/frontend/ --project=chromium",
+    "test:firefox": "playwright test tests/frontend/ --project=firefox",
+    "test:webkit": "playwright test tests/frontend/ --project=webkit",
+    "test:mobile": "playwright test tests/frontend/ --project='Mobile Chrome' --project='Mobile Safari'",
+    "test:report": "playwright show-report",
+    "test:codegen": "playwright codegen http://localhost:8000"
+  },
+  "keywords": [
+    "todo",
+    "testing",
+    "playwright",
+    "e2e"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  }
+}

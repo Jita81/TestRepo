@@ -1,0 +1,82 @@
+{
+  "version": "1.0",
+  "test_framework": "playwright",
+  
+  "test_locations": {
+    "backend": "",
+    "frontend": "tests/frontend/",
+    "integration": ""
+  },
+  
+  "test_commands": {
+    "backend": "",
+    "frontend": "playwright test tests/frontend/ --reporter=json --reporter=html",
+    "integration": "",
+    "all": "playwright test tests/frontend/ --reporter=json --reporter=html"
+  },
+  
+  "setup_commands": {
+    "install_python": "",
+    "install_node": "npm install",
+    "database": ""
+  },
+  
+  "test_endpoint": {
+    "host": "localhost",
+    "port": 8000,
+    "base_path": "/",
+    "health_check": "/"
+  },
+  
+  "coverage_targets": {
+    "backend": 0,
+    "frontend": 70
+  },
+  
+  "test_metadata": {
+    "generated_at": "2025-09-30T00:00:00Z",
+    "implementation_commit": "latest",
+    "test_files_created": [
+      "tests/frontend/playwright.config.ts",
+      "tests/frontend/pages/TodoPage.ts",
+      "tests/frontend/fixtures/test-fixtures.ts",
+      "tests/frontend/fixtures/todos.json",
+      "tests/frontend/todo-basic.spec.ts",
+      "tests/frontend/todo-validation.spec.ts",
+      "tests/frontend/todo-persistence.spec.ts",
+      "tests/frontend/todo-accessibility.spec.ts",
+      "tests/frontend/todo-responsive.spec.ts",
+      "tests/frontend/todo-ui-states.spec.ts"
+    ],
+    "total_test_count": "70+",
+    "test_categories": [
+      "Basic Operations (Add, Complete, Delete)",
+      "Input Validation",
+      "Data Persistence (localStorage)",
+      "Accessibility (ARIA, Keyboard Navigation)",
+      "Responsive Design (Mobile, Tablet, Desktop)",
+      "UI States and Feedback",
+      "Error Handling",
+      "Cross-browser Compatibility"
+    ]
+  },
+  
+  "browser_targets": [
+    "chromium",
+    "firefox",
+    "webkit",
+    "Mobile Chrome",
+    "Mobile Safari",
+    "iPad"
+  ],
+  
+  "test_features": {
+    "page_object_model": true,
+    "custom_fixtures": true,
+    "cross_browser": true,
+    "responsive_testing": true,
+    "accessibility_testing": true,
+    "visual_regression": false,
+    "api_testing": false
+  }
+}

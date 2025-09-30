@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Test results
+/tests/frontend/test-results/
+/tests/frontend/playwright-report/
+/tests/frontend/test-results.json
+playwright-report/
+test-results/
+
+# Playwright
+.playwright/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
