@@ -1,0 +1,32 @@
+# Development files
+src/**/*.test.ts
+src/**/*.test.tsx
+src/setupTests.ts
+examples/
+.github/
+
+# Config files
+.eslintrc.js
+jest.config.js
+tsconfig.json
+
+# Documentation
+CONTRIBUTING.md
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Dependencies
+node_modules/
+
+# Testing
+coverage/
+
+# Misc
+*.log
+.DS_Store
