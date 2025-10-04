@@ -4,9 +4,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { DragDropContext } from 'react-beautiful-dnd';
+import React from 'react';
 import TaskBoard from '../../src/components/TaskBoard';
-import { WebSocketProvider } from '../../src/contexts/WebSocketContext';
 import api from '../../src/services/api';
 
 // Mock dependencies
@@ -19,15 +18,24 @@ vi.mock('react-hot-toast', () => ({
   },
 }));
 
-// Mock WebSocket context
-const mockWebSocketContext = {
-  socket: {
-    on: vi.fn(),
-    off: vi.fn(),
-    emit: vi.fn(),
-  },
-  isConnected: true,
-};
+// Mock contexts
+vi.mock('../../src/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'user-1', email: 'test@example.com' },
+    token: 'mock-token',
+  }),
+}));
+
+vi.mock('../../src/contexts/WebSocketContext', () => ({
+  useWebSocket: () => ({
+    socket: {
+      on: vi.fn(),
+      off: vi.fn(),
+      emit: vi.fn(),
+    },
+    isConnected: true,
+  }),
+}));
 
 describe('TaskBoard Component', () => {
   const mockProjectId = 'project-123';
@@ -77,11 +85,7 @@ describe('TaskBoard Component', () => {
   });
 
   const renderTaskBoard = () => {
-    return render(
-      <WebSocketProvider value={mockWebSocketContext}>
-        <TaskBoard projectId={mockProjectId} />
-      </WebSocketProvider>
-    );
+    return render(<TaskBoard projectId={mockProjectId} />);
   };
 
   describe('Initial Render', () => {
