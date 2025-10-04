@@ -6,9 +6,11 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest --coverage",
+    "test": "jest --runInBand --detectOpenHandles --forceExit",
     "test:watch": "jest --watch",
-    "test:integration": "jest --testPathPattern=tests/integration",
+    "test:coverage": "jest --coverage --runInBand --detectOpenHandles --forceExit",
+    "test:unit": "jest tests/unit --runInBand",
+    "test:integration": "jest tests/integration --runInBand --detectOpenHandles --forceExit",
     "migrate": "node src/database/migrations/run-migrations.js",
     "seed": "node src/database/seeds/seed.js"
   },
@@ -23,7 +25,7 @@
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.6.1",
-    "socket.io-redis": "^6.1.1",
+    "@socket.io/redis-adapter": "^8.2.1",
     "pg": "^8.11.3",
     "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",

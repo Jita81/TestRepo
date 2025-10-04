@@ -39,7 +39,8 @@ const generateRefreshToken = (payload) => {
  */
 const generateTokens = (user) => {
   const payload = {
-    userId: user.id,
+    id: user.id,
+    userId: user.id, // Include both for backwards compatibility
     email: user.email,
     username: user.username,
     role: user.role,
