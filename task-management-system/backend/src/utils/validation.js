@@ -34,13 +34,15 @@ function validatePassword(password) {
   }
 
   // Check for common weak passwords
-  const commonPasswords = [
-    'password', 'password1', 'password123', '12345678', 'qwerty123',
-    'abc12345', 'password!', 'admin123', 'letmein1', 'welcome1'
-  ];
-  
-  if (commonPasswords.includes(password.toLowerCase())) {
-    errors.push('Password is too common. Please choose a stronger password');
+  if (password) {
+    const commonPasswords = [
+      'password', 'password1', 'password123', '12345678', 'qwerty123',
+      'abc12345', 'password!', 'admin123', 'letmein1', 'welcome1'
+    ];
+    
+    if (commonPasswords.includes(password.toLowerCase())) {
+      errors.push('Password is too common. Please choose a stronger password');
+    }
   }
 
   return {
@@ -103,7 +105,11 @@ function validateEmail(email) {
   // Additional checks
   if (email.length > 254) return false; // Max email length
   
-  const [localPart, domain] = email.split('@');
+  const parts = email.split('@');
+  if (parts.length !== 2) return false;
+  
+  const [localPart, domain] = parts;
+  if (!localPart || !domain) return false;
   if (localPart.length > 64) return false; // Max local part length
   
   return true;
