@@ -5,7 +5,7 @@ using README analysis and agentic coding.
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
@@ -15,6 +15,7 @@ import tempfile
 import shutil
 from pathlib import Path
 import asyncio
+import re
 from typing import Optional
 
 from src.github_integration import GitHubRepository
@@ -96,6 +97,135 @@ async def get_status(task_id: str):
     """Get the status of a conversion task."""
     # This would integrate with a task queue system
     return {"status": "completed", "progress": 100}
+
+@app.get("/contact", response_class=HTMLResponse)
+async def contact_form(request: Request):
+    """
+    Serve the contact form page.
+    
+    This endpoint displays a validated contact form with fields for:
+    - Name (2-50 characters, letters, spaces, hyphens only)
+    - Email (valid email format)
+    - Message (10-1000 characters)
+    """
+    return templates.TemplateResponse("contact_form.html", {"request": request})
+
+@app.post("/contact/submit")
+async def submit_contact_form(
+    name: str = Form(...),
+    email: str = Form(...),
+    message: str = Form(...)
+):
+    """
+    Handle contact form submission with server-side validation.
+    
+    This endpoint:
+    1. Validates all form fields against defined rules
+    2. Strips HTML/formatting from message field
+    3. Returns success/error responses
+    
+    Args:
+        name: Contact name (2-50 chars, letters/spaces/hyphens only)
+        email: Valid email address
+        message: Message content (10-1000 characters)
+        
+    Returns:
+        JSON response with status and message
+    """
+    try:
+        # Strip whitespace from inputs
+        name = name.strip()
+        email = email.strip()
+        message = message.strip()
+        
+        # Server-side validation patterns
+        name_pattern = re.compile(r'^[a-zA-Z\s-]{2,50}$')
+        email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+        
+        # Validate name
+        if not name:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "Name is required"}
+            )
+        
+        if not name_pattern.match(name):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": "Name must be 2-50 characters and contain only letters, spaces, or hyphens"
+                }
+            )
+        
+        # Validate email
+        if not email:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "Email is required"}
+            )
+        
+        if not email_pattern.match(email):
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "Please enter a valid email address"}
+            )
+        
+        # Validate message
+        if not message:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "Message is required"}
+            )
+        
+        message_length = len(message)
+        if message_length < 10:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "Message must be at least 10 characters"}
+            )
+        
+        if message_length > 1000:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "Message cannot exceed 1000 characters"}
+            )
+        
+        # Strip any HTML tags from message (security measure)
+        # Remove HTML tags using regex
+        message = re.sub(r'<[^>]+>', '', message)
+        
+        # In a production environment, you would:
+        # 1. Save to database
+        # 2. Send email notification
+        # 3. Log the submission
+        # 4. Possibly integrate with a CRM
+        
+        # For now, we'll just log the submission
+        print(f"Contact form submission received:")
+        print(f"  Name: {name}")
+        print(f"  Email: {email}")
+        print(f"  Message: {message[:50]}...")
+        
+        # Return success response
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "Message sent successfully!"
+            }
+        )
+        
+    except Exception as e:
+        # Handle unexpected errors
+        print(f"Error processing contact form: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "An error occurred while processing your request. Please try again."
+            }
+        )
 
 if __name__ == "__main__":
     # Create necessary directories
