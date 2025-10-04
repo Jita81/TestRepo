@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Form</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1em;
+            opacity: 0.9;
+        }
+        
+        .form-container {
+            padding: 40px;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+            position: relative;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .required {
+            color: #dc3545;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-group input.error,
+        .form-group textarea.error {
+            border-color: #dc3545;
+        }
+        
+        .form-group input.error:focus,
+        .form-group textarea.error:focus {
+            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+        }
+        
+        .form-group textarea {
+            min-height: 150px;
+            resize: vertical;
+            line-height: 1.5;
+        }
+        
+        .error-message {
+            display: none;
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 5px;
+            font-weight: 500;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .char-count {
+            text-align: right;
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .char-count.warning {
+            color: #ffc107;
+        }
+        
+        .char-count.error {
+            color: #dc3545;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            opacity: 0.7;
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        .submit-btn.loading .spinner {
+            display: block;
+        }
+        
+        .submit-btn.loading .btn-text {
+            display: none;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Alert messages */
+        .alert {
+            display: none;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            animation: slideDown 0.3s ease;
+        }
+        
+        .alert.show {
+            display: block;
+        }
+        
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+        
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        /* Offline indicator */
+        .offline-indicator {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ffc107;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .offline-indicator.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-indicator" id="offlineIndicator">
+        ⚠️ You are currently offline
+    </div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>📧 Contact Us</h1>
+            <p>We'd love to hear from you!</p>
+        </div>
+        
+        <div class="form-container">
+            <!-- Alert message -->
+            <div class="alert" id="alertMessage" role="alert"></div>
+            
+            <!-- Contact Form -->
+            <form id="contactForm" novalidate>
+                <!-- Name Field -->
+                <div class="form-group">
+                    <label for="name">
+                        Name <span class="required">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="name" 
+                        name="name" 
+                        placeholder="Enter your full name"
+                        maxlength="50"
+                        autocomplete="name"
+                        aria-required="true"
+                        aria-describedby="nameError nameHelp"
+                    >
+                    <div class="error-message" id="nameError" role="alert"></div>
+                    <div class="help-text" id="nameHelp">2-50 characters</div>
+                </div>
+                
+                <!-- Email Field -->
+                <div class="form-group">
+                    <label for="email">
+                        Email <span class="required">*</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email" 
+                        placeholder="your.email@example.com"
+                        autocomplete="email"
+                        aria-required="true"
+                        aria-describedby="emailError emailHelp"
+                    >
+                    <div class="error-message" id="emailError" role="alert"></div>
+                    <div class="help-text" id="emailHelp">We'll never share your email</div>
+                </div>
+                
+                <!-- Message Field -->
+                <div class="form-group">
+                    <label for="message">
+                        Message <span class="required">*</span>
+                    </label>
+                    <textarea 
+                        id="message" 
+                        name="message" 
+                        placeholder="Type your message here..."
+                        maxlength="1000"
+                        aria-required="true"
+                        aria-describedby="messageError messageHelp messageCount"
+                    ></textarea>
+                    <div class="error-message" id="messageError" role="alert"></div>
+                    <div class="char-count" id="messageCount">0 / 1000 characters</div>
+                    <div class="help-text" id="messageHelp">10-1000 characters</div>
+                </div>
+                
+                <!-- Submit Button -->
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    <span class="spinner"></span>
+                    <span class="btn-text">Send Message</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Contact Form Handler
+         * Implements comprehensive validation and error handling
+         */
+        (function() {
+            'use strict';
+            
+            // DOM Elements
+            const form = document.getElementById('contactForm');
+            const nameInput = document.getElementById('name');
+            const emailInput = document.getElementById('email');
+            const messageInput = document.getElementById('message');
+            const submitBtn = document.getElementById('submitBtn');
+            const alertMessage = document.getElementById('alertMessage');
+            const offlineIndicator = document.getElementById('offlineIndicator');
+            const messageCount = document.getElementById('messageCount');
+            
+            // Validation rules
+            const VALIDATION_RULES = {
+                name: {
+                    minLength: 2,
+                    maxLength: 50,
+                    // Allow most Unicode characters but block common XSS vectors and special chars
+                    invalidChars: /[<>{}[\]()\\/;:@#$%^&*+=`~"]/,
+                    messages: {
+                        required: 'This field is required',
+                        minLength: 'Name must be at least 2 characters',
+                        maxLength: 'Name must not exceed 50 characters',
+                        pattern: 'Name contains invalid characters'
+                    }
+                },
+                email: {
+                    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                    messages: {
+                        required: 'This field is required',
+                        invalid: 'Please enter valid email address'
+                    }
+                },
+                message: {
+                    minLength: 10,
+                    maxLength: 1000,
+                    messages: {
+                        required: 'This field is required',
+                        minLength: 'Message must be at least 10 characters',
+                        maxLength: 'Message must not exceed 1000 characters',
+                        whitespace: 'Message cannot contain only whitespace'
+                    }
+                }
+            };
+            
+            // State management
+            let isSubmitting = false;
+            let validationTimeout = null;
+            
+            // Initialize
+            init();
+            
+            function init() {
+                // Check online status
+                updateOnlineStatus();
+                window.addEventListener('online', updateOnlineStatus);
+                window.addEventListener('offline', updateOnlineStatus);
+                
+                // Form event listeners
+                form.addEventListener('submit', handleSubmit);
+                
+                // Real-time validation on blur
+                nameInput.addEventListener('blur', () => validateField('name'));
+                emailInput.addEventListener('blur', () => validateField('email'));
+                messageInput.addEventListener('blur', () => validateField('message'));
+                
+                // Clear errors on input
+                nameInput.addEventListener('input', () => clearFieldError('name'));
+                emailInput.addEventListener('input', () => clearFieldError('name'));
+                messageInput.addEventListener('input', () => {
+                    clearFieldError('message');
+                    updateCharCount();
+                });
+                
+                // Sanitize paste events
+                nameInput.addEventListener('paste', handlePaste);
+                emailInput.addEventListener('paste', handlePaste);
+                messageInput.addEventListener('paste', handlePaste);
+                
+                // Initialize character count
+                updateCharCount();
+            }
+            
+            /**
+             * Update online/offline status indicator
+             */
+            function updateOnlineStatus() {
+                if (!navigator.onLine) {
+                    offlineIndicator.classList.add('show');
+                } else {
+                    offlineIndicator.classList.remove('show');
+                }
+            }
+            
+            /**
+             * Update character count for message field
+             */
+            function updateCharCount() {
+                const length = messageInput.value.length;
+                const maxLength = VALIDATION_RULES.message.maxLength;
+                messageCount.textContent = `${length} / ${maxLength} characters`;
+                
+                // Update styling based on length
+                messageCount.classList.remove('warning', 'error');
+                if (length > maxLength * 0.9) {
+                    messageCount.classList.add('warning');
+                }
+                if (length >= maxLength) {
+                    messageCount.classList.add('error');
+                }
+            }
+            
+            /**
+             * Handle paste events to strip formatting
+             */
+            function handlePaste(e) {
+                e.preventDefault();
+                const text = (e.clipboardData || window.clipboardData).getData('text');
+                // Strip formatting and insert plain text
+                const sanitized = sanitizeInput(text);
+                document.execCommand('insertText', false, sanitized);
+            }
+            
+            /**
+             * Sanitize input to prevent XSS
+             */
+            function sanitizeInput(input) {
+                const temp = document.createElement('div');
+                temp.textContent = input;
+                return temp.innerHTML.replace(/[<>]/g, '');
+            }
+            
+            /**
+             * Validate a single field
+             */
+            function validateField(fieldName) {
+                const input = document.getElementById(fieldName);
+                const value = input.value.trim();
+                const rules = VALIDATION_RULES[fieldName];
+                let errorMessage = '';
+                
+                // Check if required field is empty
+                if (!value) {
+                    errorMessage = rules.messages.required;
+                }
+                // Validate name
+                else if (fieldName === 'name') {
+                    if (value.length < rules.minLength) {
+                        errorMessage = rules.messages.minLength;
+                    } else if (value.length > rules.maxLength) {
+                        errorMessage = rules.messages.maxLength;
+                    } else if (rules.invalidChars.test(value)) {
+                        errorMessage = rules.messages.pattern;
+                    }
+                }
+                // Validate email
+                else if (fieldName === 'email') {
+                    if (!rules.pattern.test(value)) {
+                        errorMessage = rules.messages.invalid;
+                    }
+                }
+                // Validate message
+                else if (fieldName === 'message') {
+                    // Check for whitespace-only content
+                    if (!value.replace(/\s/g, '').length) {
+                        errorMessage = rules.messages.whitespace;
+                    } else if (value.length < rules.minLength) {
+                        errorMessage = rules.messages.minLength;
+                    } else if (value.length > rules.maxLength) {
+                        errorMessage = rules.messages.maxLength;
+                    }
+                }
+                
+                if (errorMessage) {
+                    showFieldError(fieldName, errorMessage);
+                    return false;
+                } else {
+                    clearFieldError(fieldName);
+                    return true;
+                }
+            }
+            
+            /**
+             * Show error message for a field
+             */
+            function showFieldError(fieldName, message) {
+                const input = document.getElementById(fieldName);
+                const errorElement = document.getElementById(`${fieldName}Error`);
+                
+                input.classList.add('error');
+                errorElement.textContent = message;
+                errorElement.classList.add('show');
+                input.setAttribute('aria-invalid', 'true');
+            }
+            
+            /**
+             * Clear error message for a field
+             */
+            function clearFieldError(fieldName) {
+                const input = document.getElementById(fieldName);
+                const errorElement = document.getElementById(`${fieldName}Error`);
+                
+                input.classList.remove('error');
+                errorElement.classList.remove('show');
+                input.setAttribute('aria-invalid', 'false');
+            }
+            
+            /**
+             * Validate all fields
+             */
+            function validateForm() {
+                const nameValid = validateField('name');
+                const emailValid = validateField('email');
+                const messageValid = validateField('message');
+                
+                return nameValid && emailValid && messageValid;
+            }
+            
+            /**
+             * Show alert message
+             */
+            function showAlert(message, type) {
+                alertMessage.textContent = message;
+                alertMessage.className = `alert ${type} show`;
+                alertMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                
+                // Auto-hide success messages after 5 seconds
+                if (type === 'success') {
+                    setTimeout(() => {
+                        alertMessage.classList.remove('show');
+                    }, 5000);
+                }
+            }
+            
+            /**
+             * Hide alert message
+             */
+            function hideAlert() {
+                alertMessage.classList.remove('show');
+            }
+            
+            /**
+             * Set loading state
+             */
+            function setLoading(loading) {
+                isSubmitting = loading;
+                submitBtn.disabled = loading;
+                
+                if (loading) {
+                    submitBtn.classList.add('loading');
+                    // Disable all form inputs during submission
+                    nameInput.disabled = true;
+                    emailInput.disabled = true;
+                    messageInput.disabled = true;
+                } else {
+                    submitBtn.classList.remove('loading');
+                    nameInput.disabled = false;
+                    emailInput.disabled = false;
+                    messageInput.disabled = false;
+                }
+            }
+            
+            /**
+             * Handle form submission
+             */
+            async function handleSubmit(e) {
+                e.preventDefault();
+                
+                // Prevent double submission
+                if (isSubmitting) {
+                    return;
+                }
+                
+                // Hide previous alerts
+                hideAlert();
+                
+                // Validate form
+                if (!validateForm()) {
+                    showAlert('Please fix the errors before submitting', 'error');
+                    return;
+                }
+                
+                // Check online status
+                if (!navigator.onLine) {
+                    showAlert('You are currently offline. Please check your internet connection.', 'error');
+                    return;
+                }
+                
+                // Prepare form data
+                const formData = {
+                    name: sanitizeInput(nameInput.value.trim()),
+                    email: emailInput.value.trim().toLowerCase(),
+                    message: sanitizeInput(messageInput.value.trim())
+                };
+                
+                // Set loading state
+                setLoading(true);
+                
+                try {
+                    // Submit to API
+                    const response = await fetch('/api/contact', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData),
+                        // Add timeout for the request
+                        signal: AbortSignal.timeout(30000) // 30 second timeout
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.status === 'success') {
+                        // Success
+                        showAlert('Message sent successfully', 'success');
+                        
+                        // Reset form
+                        form.reset();
+                        updateCharCount();
+                        
+                        // Clear any lingering errors
+                        ['name', 'email', 'message'].forEach(clearFieldError);
+                    } else {
+                        // Server returned error
+                        const errorMessage = data.message || 'Unable to send message. Please try again later.';
+                        showAlert(errorMessage, 'error');
+                    }
+                } catch (error) {
+                    // Network or timeout error
+                    console.error('Form submission error:', error);
+                    
+                    let errorMessage = 'Unable to send message. Please try again later.';
+                    
+                    if (error.name === 'AbortError') {
+                        errorMessage = 'Request timed out. Please try again.';
+                    } else if (!navigator.onLine) {
+                        errorMessage = 'You appear to be offline. Please check your connection.';
+                    }
+                    
+                    showAlert(errorMessage, 'error');
+                } finally {
+                    // Always remove loading state
+                    setLoading(false);
+                }
+            }
+        })();
+    </script>
+</body>
+</html>

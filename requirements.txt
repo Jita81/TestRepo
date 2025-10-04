@@ -11,3 +11,7 @@ aiofiles
 beautifulsoup4
 markdown
 python-dotenv
+pydantic[email]
+email-validator
+pytest
+httpx
