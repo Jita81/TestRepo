@@ -5,7 +5,7 @@ using README analysis and agentic coding.
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
@@ -15,6 +15,8 @@ import tempfile
 import shutil
 from pathlib import Path
 import asyncio
+import re
+import html
 from typing import Optional
 
 from src.github_integration import GitHubRepository
@@ -38,6 +40,107 @@ agentic_coder = AgenticCoder()
 async def home(request: Request):
     """Main interface for the GitHub to App converter."""
     return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/contact", response_class=HTMLResponse)
+async def contact_page(request: Request):
+    """Contact form page."""
+    return templates.TemplateResponse("contact.html", {"request": request})
+
+@app.post("/contact")
+async def submit_contact(
+    name: str = Form(...),
+    email: str = Form(...),
+    message: str = Form(...)
+):
+    """
+    Handle contact form submission with validation and sanitization.
+    
+    Args:
+        name: User's name (2-50 characters)
+        email: User's email address (valid email format)
+        message: User's message (10-1000 characters)
+    
+    Returns:
+        JSON response with status and message
+    """
+    # Sanitize inputs - escape HTML entities to prevent XSS attacks
+    name = html.escape(name.strip())
+    email = html.escape(email.strip())
+    message = html.escape(message.strip())
+    
+    # Server-side validation
+    errors = []
+    
+    # Validate name
+    if not name:
+        errors.append("Name is required")
+    elif len(name) < 2:
+        errors.append("Name must be at least 2 characters long")
+    elif len(name) > 50:
+        errors.append("Name must not exceed 50 characters")
+    
+    # Validate email with regex pattern
+    email_pattern = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+    if not email:
+        errors.append("Email address is required")
+    elif not email_pattern.match(email):
+        errors.append("Please enter a valid email address")
+    
+    # Validate message
+    if not message:
+        errors.append("Message is required")
+    elif len(message) < 10:
+        errors.append("Message must be at least 10 characters long")
+    elif len(message) > 1000:
+        errors.append("Message must not exceed 1000 characters")
+    
+    # If there are validation errors, return them
+    if errors:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "error",
+                "message": "; ".join(errors)
+            }
+        )
+    
+    # In a production environment, you would:
+    # 1. Store the message in a database
+    # 2. Send an email notification
+    # 3. Queue the message for processing
+    # For this demo, we'll just log it and return success
+    
+    try:
+        # Log the contact form submission (in production, save to database or send email)
+        print(f"Contact form submission:")
+        print(f"  Name: {name}")
+        print(f"  Email: {email}")
+        print(f"  Message: {message[:100]}...")  # Log first 100 chars
+        
+        # Here you would typically:
+        # - Save to database
+        # - Send email to admin
+        # - Send confirmation email to user
+        # - Add to CRM system
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "Message sent successfully"
+            }
+        )
+        
+    except Exception as e:
+        # Handle any unexpected errors
+        print(f"Error processing contact form: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "Unable to send message. Please try again later."
+            }
+        )
 
 @app.post("/convert")
 async def convert_repository(
