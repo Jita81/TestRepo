@@ -1,10 +1,10 @@
 /**
- * Loading spinner component
+ * LoadingSpinner Component - Reusable loading indicator
  */
 
 import React from 'react';
 
-export default function LoadingSpinner({ size = 'medium', text = 'Loading...' }) {
+const LoadingSpinner = ({ size = 'medium', className = '' }) => {
   const sizeClasses = {
     small: 'w-4 h-4',
     medium: 'w-8 h-8',
@@ -12,11 +12,16 @@ export default function LoadingSpinner({ size = 'medium', text = 'Loading...' })
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen">
-      <div className={`${sizeClasses[size]} animate-spin`}>
-        <div className="h-full w-full border-4 border-t-primary-600 border-r-primary-600 border-b-gray-200 border-l-gray-200 rounded-full"></div>
-      </div>
-      {text && <p className="mt-4 text-gray-600 dark:text-gray-400">{text}</p>}
+    <div
+      className={`inline-block animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite] ${
+        sizeClasses[size]
+      } ${className}`}
+      role="status"
+      aria-label="Loading"
+    >
+      <span className="sr-only">Loading...</span>
     </div>
   );
-}
+};
+
+export default LoadingSpinner;
