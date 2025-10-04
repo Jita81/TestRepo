@@ -14,6 +14,13 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url VARCHAR(500),
     role VARCHAR(50) DEFAULT 'member' CHECK (role IN ('admin', 'manager', 'member')),
     is_active BOOLEAN DEFAULT true,
+    is_verified BOOLEAN DEFAULT false,
+    verification_token VARCHAR(255),
+    verification_token_expires TIMESTAMP WITH TIME ZONE,
+    reset_password_token VARCHAR(255),
+    reset_password_expires TIMESTAMP WITH TIME ZONE,
+    failed_login_attempts INTEGER DEFAULT 0,
+    locked_until TIMESTAMP WITH TIME ZONE,
     last_seen_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
