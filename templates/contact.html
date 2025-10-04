@@ -275,6 +275,9 @@
             </div>
             
             <form id="contactForm" novalidate>
+                <!-- CSRF Token (Hidden) -->
+                <input type="hidden" id="csrfToken" name="csrf_token" value="{{ csrf_token }}">
+                
                 <!-- Name Field -->
                 <div class="form-group" id="nameGroup">
                     <label for="name">
@@ -338,75 +341,226 @@
     </div>
 
     <script>
-        // Configuration
-        const MAX_MESSAGE_LENGTH = 1000;
-        const RATE_LIMIT_DURATION = 5000; // 5 seconds
-        const SUCCESS_DISPLAY_DURATION = 3000; // 3 seconds
+        /**
+         * Contact Form Validation and Submission
+         * 
+         * Features:
+         * - CSRF token protection
+         * - Debounced validation for performance
+         * - Comprehensive error handling with error boundary
+         * - XSS protection via HTML stripping
+         * - Rate limiting and offline detection
+         * - Accessibility support (ARIA, keyboard navigation)
+         * 
+         * @version 2.0.0
+         * @author Contact Form Team
+         */
         
-        // State management
-        let lastSubmissionTime = 0;
-        let isSubmitting = false;
+        // ==================== CONFIGURATION ====================
         
-        // DOM elements
-        const contactForm = document.getElementById('contactForm');
-        const nameInput = document.getElementById('name');
-        const emailInput = document.getElementById('email');
-        const messageInput = document.getElementById('message');
-        const submitBtn = document.getElementById('submitBtn');
-        const successMessage = document.getElementById('successMessage');
-        const offlineAlert = document.getElementById('offlineAlert');
-        const rateLimitMessage = document.getElementById('rateLimitMessage');
-        const charCounter = document.getElementById('charCounter');
-        const charCount = document.getElementById('charCount');
+        /**
+         * Validation configuration object
+         * Centralized configuration for easy maintenance
+         * @const {Object}
+         */
+        const VALIDATION_CONFIG = {
+            maxMessageLength: 1000,
+            maxNameLength: 100,
+            maxEmailLength: 254,
+            emailPattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+            rateLimitDuration: 5000, // 5 seconds
+            successDisplayDuration: 3000, // 3 seconds
+            debounceDelay: 300, // 300ms debounce for validation
+            charCounterWarning: 800,
+            charCounterDanger: 950
+        };
         
-        // Character counter for message field
-        messageInput.addEventListener('input', function() {
-            const length = this.value.length;
-            charCount.textContent = length;
+        // ==================== STATE MANAGEMENT ====================
+        
+        /**
+         * Application state
+         * @type {Object}
+         */
+        const state = {
+            lastSubmissionTime: 0,
+            isSubmitting: false,
+            debounceTimers: {}
+        };
+        
+        // ==================== DOM ELEMENTS ====================
+        
+        /**
+         * Cached DOM element references for performance
+         * @const {Object}
+         */
+        const DOM = {
+            contactForm: document.getElementById('contactForm'),
+            nameInput: document.getElementById('name'),
+            emailInput: document.getElementById('email'),
+            messageInput: document.getElementById('message'),
+            csrfToken: document.getElementById('csrfToken'),
+            submitBtn: document.getElementById('submitBtn'),
+            successMessage: document.getElementById('successMessage'),
+            offlineAlert: document.getElementById('offlineAlert'),
+            rateLimitMessage: document.getElementById('rateLimitMessage'),
+            charCounter: document.getElementById('charCounter'),
+            charCount: document.getElementById('charCount')
+        };
+        
+        // ==================== UTILITY FUNCTIONS ====================
+        
+        /**
+         * Debounce function to limit the rate of function execution
+         * Improves performance by preventing excessive validation calls
+         * 
+         * @param {Function} func - The function to debounce
+         * @param {number} delay - Delay in milliseconds
+         * @param {string} key - Unique key for this debounce timer
+         * @returns {Function} Debounced function
+         */
+        function debounce(func, delay, key) {
+            return function(...args) {
+                clearTimeout(state.debounceTimers[key]);
+                state.debounceTimers[key] = setTimeout(() => {
+                    func.apply(this, args);
+                }, delay);
+            };
+        }
+        
+        /**
+         * Error boundary - catches and handles JavaScript errors gracefully
+         * Prevents the entire app from crashing due to unexpected errors
+         * 
+         * @param {Function} func - Function to wrap with error handling
+         * @param {string} context - Context description for logging
+         * @returns {Function} Wrapped function with error handling
+         */
+        function withErrorBoundary(func, context) {
+            return async function(...args) {
+                try {
+                    return await func.apply(this, args);
+                } catch (error) {
+                    console.error(`Error in ${context}:`, error);
+                    
+                    // Show user-friendly error message
+                    alert('An unexpected error occurred. Please refresh the page and try again.');
+                    
+                    // Log error for monitoring (in production, send to error tracking service)
+                    if (window.errorLogger) {
+                        window.errorLogger.log(error, context);
+                    }
+                    
+                    // Reset UI state
+                    if (DOM.submitBtn) {
+                        DOM.submitBtn.disabled = false;
+                        DOM.submitBtn.classList.remove('loading');
+                    }
+                    state.isSubmitting = false;
+                    
+                    return null;
+                }
+            };
+        }
+        
+        /**
+         * Updates the character counter for the message field
+         * Shows remaining characters with color-coded warnings
+         * 
+         * @param {HTMLTextAreaElement} textarea - The message textarea element
+         */
+        function updateCharCounter(textarea) {
+            const length = textarea.value.length;
+            DOM.charCount.textContent = length;
             
-            // Update counter styling based on character count
-            if (length >= 950) {
-                charCounter.classList.add('danger');
-                charCounter.classList.remove('warning');
-            } else if (length >= 800) {
-                charCounter.classList.add('warning');
-                charCounter.classList.remove('danger');
+            // Update counter styling based on character count thresholds
+            if (length >= VALIDATION_CONFIG.charCounterDanger) {
+                DOM.charCounter.classList.add('danger');
+                DOM.charCounter.classList.remove('warning');
+            } else if (length >= VALIDATION_CONFIG.charCounterWarning) {
+                DOM.charCounter.classList.add('warning');
+                DOM.charCounter.classList.remove('danger');
             } else {
-                charCounter.classList.remove('warning', 'danger');
+                DOM.charCounter.classList.remove('warning', 'danger');
             }
+        }
+        
+        /**
+         * Strips HTML tags and formatting from pasted content
+         * Security measure to prevent XSS attacks
+         * 
+         * @param {string} html - Text potentially containing HTML
+         * @returns {string} Plain text without HTML
+         */
+        function stripHtml(html) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            return tmp.textContent || tmp.innerText || '';
+        }
+        
+        /**
+         * Handles input in the message field with HTML stripping
+         * 
+         * @param {Event} event - Input event
+         */
+        function handleMessageInput(event) {
+            const textarea = event.target;
             
-            // Strip HTML tags and formatting from pasted content
-            const strippedText = stripHtml(this.value);
-            if (strippedText !== this.value) {
-                const cursorPos = this.selectionStart;
-                this.value = strippedText;
-                this.setSelectionRange(cursorPos, cursorPos);
+            // Update character counter
+            updateCharCounter(textarea);
+            
+            // Strip HTML tags from pasted content
+            const strippedText = stripHtml(textarea.value);
+            if (strippedText !== textarea.value) {
+                const cursorPos = textarea.selectionStart;
+                textarea.value = strippedText;
+                textarea.setSelectionRange(cursorPos, cursorPos);
             }
-        });
+        }
         
-        // Real-time validation on blur
-        nameInput.addEventListener('blur', function() {
+        /**
+         * Debounced validation for a specific field
+         * Prevents excessive validation calls while typing
+         * 
+         * @param {string} fieldName - Name of the field to validate
+         * @param {string} value - Field value to validate
+         */
+        const debouncedValidateField = debounce(validateField, VALIDATION_CONFIG.debounceDelay, 'validation');
+        
+        // ==================== EVENT LISTENERS ====================
+        
+        // Character counter and HTML stripping for message field
+        DOM.messageInput.addEventListener('input', withErrorBoundary(handleMessageInput, 'message input'));
+        
+        // Debounced validation on input (for performance)
+        DOM.nameInput.addEventListener('input', withErrorBoundary(function() {
+            document.getElementById('nameGroup').classList.remove('error');
+            debouncedValidateField('name', this.value.trim());
+        }, 'name input'));
+        
+        DOM.emailInput.addEventListener('input', withErrorBoundary(function() {
+            document.getElementById('emailGroup').classList.remove('error');
+            debouncedValidateField('email', this.value.trim());
+        }, 'email input'));
+        
+        DOM.messageInput.addEventListener('input', withErrorBoundary(function() {
+            document.getElementById('messageGroup').classList.remove('error');
+        }, 'message input error clear'));
+        
+        // Immediate validation on blur
+        DOM.nameInput.addEventListener('blur', withErrorBoundary(function() {
             validateField('name', this.value.trim());
-        });
+        }, 'name blur'));
         
-        emailInput.addEventListener('blur', function() {
+        DOM.emailInput.addEventListener('blur', withErrorBoundary(function() {
             validateField('email', this.value.trim());
-        });
+        }, 'email blur'));
         
-        messageInput.addEventListener('blur', function() {
+        DOM.messageInput.addEventListener('blur', withErrorBoundary(function() {
             validateField('message', this.value.trim());
-        });
+        }, 'message blur'));
         
-        // Clear error on input
-        [nameInput, emailInput, messageInput].forEach(input => {
-            input.addEventListener('input', function() {
-                const groupId = this.id + 'Group';
-                document.getElementById(groupId).classList.remove('error');
-            });
-        });
-        
-        // Form submission handler
-        contactForm.addEventListener('submit', async function(e) {
+        // Form submission handler with error boundary
+        DOM.contactForm.addEventListener('submit', withErrorBoundary(async function(e) {
             e.preventDefault();
             
             // Hide previous messages
@@ -418,48 +572,52 @@
                 return;
             }
             
-            // Check rate limiting
+            // Check rate limiting (client-side check, server also validates)
             const now = Date.now();
-            if (now - lastSubmissionTime < RATE_LIMIT_DURATION) {
+            if (now - state.lastSubmissionTime < VALIDATION_CONFIG.rateLimitDuration) {
                 showRateLimitMessage();
                 return;
             }
             
             // Validate all fields
-            const name = nameInput.value.trim();
-            const email = emailInput.value.trim();
-            const message = messageInput.value.trim();
+            const name = DOM.nameInput.value.trim();
+            const email = DOM.emailInput.value.trim();
+            const message = DOM.messageInput.value.trim();
             
             const isNameValid = validateField('name', name);
             const isEmailValid = validateField('email', email);
             const isMessageValid = validateField('message', message);
             
             if (!isNameValid || !isEmailValid || !isMessageValid) {
-                // Focus on first error field
+                // Focus on first error field for accessibility
                 if (!isNameValid) {
-                    nameInput.focus();
+                    DOM.nameInput.focus();
                 } else if (!isEmailValid) {
-                    emailInput.focus();
+                    DOM.emailInput.focus();
                 } else if (!isMessageValid) {
-                    messageInput.focus();
+                    DOM.messageInput.focus();
                 }
                 return;
             }
             
-            // Prevent multiple submissions
-            if (isSubmitting) {
+            // Prevent multiple simultaneous submissions
+            if (state.isSubmitting) {
                 return;
             }
             
-            // Submit the form
-            await submitForm({ name, email, message });
-        });
+            // Get CSRF token
+            const csrfToken = DOM.csrfToken.value;
+            
+            // Submit the form with CSRF protection
+            await submitForm({ name, email, message, csrf_token: csrfToken });
+        }, 'form submission'));
         
         /**
-         * Validates a form field
-         * @param {string} fieldName - Name of the field to validate
+         * Validates a form field against configured validation rules
+         * 
+         * @param {string} fieldName - Name of the field to validate ('name', 'email', or 'message')
          * @param {string} value - Value to validate
-         * @returns {boolean} - True if valid, false otherwise
+         * @returns {boolean} True if valid, false otherwise
          */
         function validateField(fieldName, value) {
             const group = document.getElementById(fieldName + 'Group');
@@ -472,14 +630,30 @@
                 return false;
             }
             
-            // Email-specific validation
+            // Field-specific validation using configuration
             if (fieldName === 'email') {
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(value)) {
+                if (!VALIDATION_CONFIG.emailPattern.test(value)) {
                     group.classList.add('error');
                     errorElement.textContent = 'Please enter a valid email address';
                     return false;
                 }
+                if (value.length > VALIDATION_CONFIG.maxEmailLength) {
+                    group.classList.add('error');
+                    errorElement.textContent = `Email must not exceed ${VALIDATION_CONFIG.maxEmailLength} characters`;
+                    return false;
+                }
+            }
+            
+            if (fieldName === 'name' && value.length > VALIDATION_CONFIG.maxNameLength) {
+                group.classList.add('error');
+                errorElement.textContent = `Name must not exceed ${VALIDATION_CONFIG.maxNameLength} characters`;
+                return false;
+            }
+            
+            if (fieldName === 'message' && value.length > VALIDATION_CONFIG.maxMessageLength) {
+                group.classList.add('error');
+                errorElement.textContent = `Message must not exceed ${VALIDATION_CONFIG.maxMessageLength} characters`;
+                return false;
             }
             
             // Remove error state if valid
@@ -488,15 +662,17 @@
         }
         
         /**
-         * Submits the form data to the server
-         * @param {Object} data - Form data to submit
+         * Submits the form data to the server with CSRF protection
+         * 
+         * @param {Object} data - Form data to submit (includes name, email, message, csrf_token)
+         * @returns {Promise<void>}
          */
         async function submitForm(data) {
-            isSubmitting = true;
+            state.isSubmitting = true;
             
             // Show loading state
-            submitBtn.disabled = true;
-            submitBtn.classList.add('loading');
+            DOM.submitBtn.disabled = true;
+            DOM.submitBtn.classList.add('loading');
             
             try {
                 const response = await fetch('/contact/submit', {
@@ -510,19 +686,26 @@
                 const result = await response.json();
                 
                 if (response.ok && result.status === 'success') {
-                    // Update last submission time
-                    lastSubmissionTime = Date.now();
+                    // Update last submission time for rate limiting
+                    state.lastSubmissionTime = Date.now();
                     
                     // Show success message
                     showSuccessMessage();
                     
-                    // Clear form after 3 seconds
+                    // Clear form after configured duration
                     setTimeout(() => {
                         clearForm();
-                        successMessage.classList.remove('show');
-                    }, SUCCESS_DISPLAY_DURATION);
+                        DOM.successMessage.classList.remove('show');
+                    }, VALIDATION_CONFIG.successDisplayDuration);
+                } else if (response.status === 403) {
+                    // CSRF token invalid - need to refresh page
+                    alert(result.message || 'Security token expired. Please refresh the page.');
+                    setTimeout(() => window.location.reload(), 1000);
+                } else if (response.status === 429) {
+                    // Rate limit exceeded
+                    alert(result.message || 'Too many requests. Please wait a moment.');
                 } else {
-                    // Handle server error
+                    // Handle other server errors
                     alert(result.message || 'An error occurred. Please try again.');
                 }
             } catch (error) {
@@ -530,70 +713,71 @@
                 if (!navigator.onLine) {
                     showOfflineAlert();
                 } else {
-                    alert('Failed to send message. Please try again.');
+                    console.error('Submission error:', error);
+                    alert('Failed to send message. Please check your connection and try again.');
                 }
             } finally {
                 // Reset loading state
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('loading');
-                isSubmitting = false;
+                DOM.submitBtn.disabled = false;
+                DOM.submitBtn.classList.remove('loading');
+                state.isSubmitting = false;
             }
         }
         
         /**
-         * Strips HTML tags and formatting from text
-         * @param {string} html - Text potentially containing HTML
-         * @returns {string} - Plain text without HTML
-         */
-        function stripHtml(html) {
-            const tmp = document.createElement('div');
-            tmp.innerHTML = html;
-            return tmp.textContent || tmp.innerText || '';
-        }
-        
-        /**
-         * Shows the success message
+         * Shows the success message with animation
+         * 
+         * @returns {void}
          */
         function showSuccessMessage() {
-            successMessage.classList.add('show');
+            DOM.successMessage.classList.add('show');
         }
         
         /**
-         * Shows the offline alert
+         * Shows the offline alert and auto-hides after 5 seconds
+         * 
+         * @returns {void}
          */
         function showOfflineAlert() {
-            offlineAlert.classList.add('show');
+            DOM.offlineAlert.classList.add('show');
             setTimeout(() => {
-                offlineAlert.classList.remove('show');
+                DOM.offlineAlert.classList.remove('show');
             }, 5000);
         }
         
         /**
-         * Shows the rate limit message
+         * Shows the rate limit message and auto-hides after 3 seconds
+         * 
+         * @returns {void}
          */
         function showRateLimitMessage() {
-            rateLimitMessage.classList.add('show');
+            DOM.rateLimitMessage.classList.add('show');
             setTimeout(() => {
-                rateLimitMessage.classList.remove('show');
+                DOM.rateLimitMessage.classList.remove('show');
             }, 3000);
         }
         
         /**
-         * Hides all messages
+         * Hides all alert messages (success, offline, rate limit)
+         * 
+         * @returns {void}
          */
         function hideMessages() {
-            successMessage.classList.remove('show');
-            offlineAlert.classList.remove('show');
-            rateLimitMessage.classList.remove('show');
+            DOM.successMessage.classList.remove('show');
+            DOM.offlineAlert.classList.remove('show');
+            DOM.rateLimitMessage.classList.remove('show');
         }
         
         /**
-         * Clears the form and resets validation
+         * Clears the form and resets all validation states
+         * Used after successful submission
+         * 
+         * @returns {void}
          */
         function clearForm() {
-            contactForm.reset();
-            charCount.textContent = '0';
-            charCounter.classList.remove('warning', 'danger');
+            DOM.contactForm.reset();
+            DOM.charCount.textContent = '0';
+            DOM.charCounter.classList.remove('warning', 'danger');
             
             // Remove all error states
             ['nameGroup', 'emailGroup', 'messageGroup'].forEach(groupId => {
@@ -601,25 +785,54 @@
             });
         }
         
-        // Online/Offline detection
-        window.addEventListener('online', function() {
-            offlineAlert.classList.remove('show');
-        });
+        // ==================== NETWORK DETECTION ====================
         
-        window.addEventListener('offline', function() {
+        /**
+         * Handle online event - hide offline alert
+         */
+        window.addEventListener('online', withErrorBoundary(function() {
+            DOM.offlineAlert.classList.remove('show');
+        }, 'online event'));
+        
+        /**
+         * Handle offline event - show offline alert
+         */
+        window.addEventListener('offline', withErrorBoundary(function() {
             showOfflineAlert();
-        });
+        }, 'offline event'));
         
-        // Handle browser autofill validation
-        // Check for autofilled values after a short delay
+        // ==================== BROWSER AUTOFILL HANDLING ====================
+        
+        /**
+         * Validate browser-autofilled fields after a short delay
+         * Ensures autofilled values are validated same as manual entry
+         */
         setTimeout(() => {
-            [nameInput, emailInput, messageInput].forEach(input => {
+            [DOM.nameInput, DOM.emailInput, DOM.messageInput].forEach(input => {
                 if (input.value) {
                     // Validate autofilled values
                     validateField(input.id, input.value.trim());
                 }
             });
         }, 100);
+        
+        // ==================== INITIALIZATION ====================
+        
+        /**
+         * Initialize the contact form
+         * Sets up initial state and validates DOM elements exist
+         */
+        (function initializeForm() {
+            // Verify all required DOM elements exist
+            const requiredElements = ['contactForm', 'nameInput', 'emailInput', 'messageInput', 'csrfToken', 'submitBtn'];
+            const missingElements = requiredElements.filter(key => !DOM[key]);
+            
+            if (missingElements.length > 0) {
+                console.error('Missing required DOM elements:', missingElements);
+            }
+            
+            console.log('Contact form initialized successfully');
+        })();
     </script>
 </body>
 </html>
