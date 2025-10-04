@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Form</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .contact-container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .contact-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .contact-header h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+            font-weight: 400;
+        }
+        
+        .contact-header p {
+            font-size: 1em;
+            opacity: 0.9;
+        }
+        
+        .contact-form-container {
+            padding: 40px;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+            position: relative;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .form-group label .required {
+            color: #dc3545;
+            margin-left: 2px;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-group input.error,
+        .form-group textarea.error {
+            border-color: #dc3545;
+        }
+        
+        .form-group input:disabled,
+        .form-group textarea:disabled {
+            background-color: #f8f9fa;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        .error-message {
+            display: none;
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 6px;
+            font-weight: 500;
+            /* Screen reader support */
+            role: alert;
+            aria-live: polite;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .character-count {
+            font-size: 12px;
+            color: #6c757d;
+            text-align: right;
+            margin-top: 5px;
+        }
+        
+        .character-count.error {
+            color: #dc3545;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 32px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            position: relative;
+        }
+        
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .submit-btn.loading {
+            color: transparent;
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        .submit-btn.loading .spinner {
+            display: block;
+        }
+        
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        /* Success message */
+        .success-message {
+            display: none;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            color: #155724;
+            padding: 16px;
+            margin-bottom: 20px;
+            font-size: 15px;
+            text-align: center;
+            font-weight: 500;
+            animation: slideDown 0.3s ease;
+        }
+        
+        .success-message.show {
+            display: block;
+        }
+        
+        /* Offline message */
+        .offline-message {
+            display: none;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            color: #856404;
+            padding: 16px;
+            margin-bottom: 20px;
+            font-size: 15px;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .offline-message.show {
+            display: block;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Accessibility - Focus visible for keyboard navigation */
+        *:focus-visible {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+        
+        /* Screen reader only content */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="contact-container">
+        <div class="contact-header">
+            <h1>📧 Contact Us</h1>
+            <p>We'd love to hear from you!</p>
+        </div>
+        
+        <div class="contact-form-container">
+            <!-- Success Message -->
+            <div id="successMessage" class="success-message" role="alert" aria-live="polite">
+                Thank you for your message! We'll get back to you soon.
+            </div>
+            
+            <!-- Offline Message -->
+            <div id="offlineMessage" class="offline-message" role="alert" aria-live="assertive">
+                Currently offline, please try again later
+            </div>
+            
+            <!-- Contact Form -->
+            <form id="contactForm" novalidate aria-label="Contact form">
+                <!-- Name Field -->
+                <div class="form-group">
+                    <label for="name">
+                        Name<span class="required" aria-label="required">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="name" 
+                        name="name"
+                        aria-required="true"
+                        aria-describedby="nameError nameHelp"
+                        aria-invalid="false"
+                        placeholder="Enter your full name"
+                        autocomplete="name"
+                        maxlength="50"
+                        required
+                    >
+                    <div id="nameError" class="error-message" role="alert"></div>
+                    <div id="nameHelp" class="sr-only">Name must be 2-50 characters, alphanumeric with spaces and hyphens only</div>
+                </div>
+                
+                <!-- Email Field -->
+                <div class="form-group">
+                    <label for="email">
+                        Email<span class="required" aria-label="required">*</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email"
+                        aria-required="true"
+                        aria-describedby="emailError emailHelp"
+                        aria-invalid="false"
+                        placeholder="your.email@example.com"
+                        autocomplete="email"
+                        required
+                    >
+                    <div id="emailError" class="error-message" role="alert"></div>
+                    <div id="emailHelp" class="sr-only">Please enter a valid email address</div>
+                </div>
+                
+                <!-- Message Field -->
+                <div class="form-group">
+                    <label for="message">
+                        Message<span class="required" aria-label="required">*</span>
+                    </label>
+                    <textarea 
+                        id="message" 
+                        name="message"
+                        aria-required="true"
+                        aria-describedby="messageError messageCount messageHelp"
+                        aria-invalid="false"
+                        placeholder="Enter your message (10-1000 characters)"
+                        maxlength="1000"
+                        required
+                    ></textarea>
+                    <div id="messageError" class="error-message" role="alert"></div>
+                    <div id="messageCount" class="character-count" aria-live="polite">
+                        <span id="currentCount">0</span> / 1000 characters
+                    </div>
+                    <div id="messageHelp" class="sr-only">Message must be between 10 and 1000 characters</div>
+                </div>
+                
+                <!-- Submit Button -->
+                <button type="submit" class="submit-btn" id="submitBtn" aria-label="Submit contact form">
+                    <span id="btnText">Send Message</span>
+                    <div class="spinner" aria-hidden="true"></div>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Contact Form Component
+         * Handles form validation, submission, and user feedback
+         */
+        
+        // Form elements
+        const form = document.getElementById('contactForm');
+        const nameInput = document.getElementById('name');
+        const emailInput = document.getElementById('email');
+        const messageInput = document.getElementById('message');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const successMessage = document.getElementById('successMessage');
+        const offlineMessage = document.getElementById('offlineMessage');
+        const currentCount = document.getElementById('currentCount');
+        const messageCount = document.getElementById('messageCount');
+        
+        // Validation patterns
+        const NAME_PATTERN = /^[a-zA-Z0-9\s-]{2,50}$/;
+        const EMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        const MESSAGE_MIN_LENGTH = 10;
+        const MESSAGE_MAX_LENGTH = 1000;
+        
+        // Prevent double submission
+        let isSubmitting = false;
+        
+        /**
+         * Validates a single field
+         * @param {HTMLElement} input - The input element to validate
+         * @returns {boolean} - True if valid, false otherwise
+         */
+        function validateField(input) {
+            const value = input.value.trim();
+            const errorDiv = document.getElementById(`${input.id}Error`);
+            let errorMessage = '';
+            let isValid = true;
+            
+            // Reset error state
+            errorDiv.classList.remove('show');
+            input.classList.remove('error');
+            input.setAttribute('aria-invalid', 'false');
+            
+            // Name validation
+            if (input.id === 'name') {
+                if (value === '') {
+                    errorMessage = 'Name is required';
+                    isValid = false;
+                } else if (value.length < 2) {
+                    errorMessage = 'Name must be at least 2 characters';
+                    isValid = false;
+                } else if (value.length > 50) {
+                    errorMessage = 'Name must not exceed 50 characters';
+                    isValid = false;
+                } else if (!NAME_PATTERN.test(value)) {
+                    errorMessage = 'Name can only contain letters, numbers, spaces, and hyphens';
+                    isValid = false;
+                }
+            }
+            
+            // Email validation
+            if (input.id === 'email') {
+                if (value === '') {
+                    errorMessage = 'Email is required';
+                    isValid = false;
+                } else if (!EMAIL_PATTERN.test(value)) {
+                    errorMessage = 'Please enter a valid email address';
+                    isValid = false;
+                }
+            }
+            
+            // Message validation
+            if (input.id === 'message') {
+                if (value === '') {
+                    errorMessage = 'Message is required';
+                    isValid = false;
+                } else if (value.length < MESSAGE_MIN_LENGTH) {
+                    errorMessage = `Message must be at least ${MESSAGE_MIN_LENGTH} characters`;
+                    isValid = false;
+                } else if (value.length > MESSAGE_MAX_LENGTH) {
+                    errorMessage = `Message must not exceed ${MESSAGE_MAX_LENGTH} characters`;
+                    isValid = false;
+                }
+            }
+            
+            // Show error if validation failed
+            if (!isValid) {
+                errorDiv.textContent = errorMessage;
+                errorDiv.classList.add('show');
+                input.classList.add('error');
+                input.setAttribute('aria-invalid', 'true');
+            }
+            
+            return isValid;
+        }
+        
+        /**
+         * Validates all form fields
+         * @returns {boolean} - True if all fields are valid
+         */
+        function validateForm() {
+            const nameValid = validateField(nameInput);
+            const emailValid = validateField(emailInput);
+            const messageValid = validateField(messageInput);
+            
+            return nameValid && emailValid && messageValid;
+        }
+        
+        /**
+         * Updates character count for message field
+         */
+        function updateCharacterCount() {
+            const length = messageInput.value.length;
+            currentCount.textContent = length;
+            
+            // Change color if approaching or exceeding limit
+            if (length > MESSAGE_MAX_LENGTH) {
+                messageCount.classList.add('error');
+            } else {
+                messageCount.classList.remove('error');
+            }
+        }
+        
+        /**
+         * Sanitizes pasted content to remove HTML/formatting
+         * @param {ClipboardEvent} e - The paste event
+         */
+        function handlePaste(e) {
+            e.preventDefault();
+            
+            // Get plain text from clipboard
+            const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+            
+            // Strip any potential HTML/formatting and insert as plain text
+            const sanitized = text.replace(/<[^>]*>/g, '').trim();
+            
+            // Insert at cursor position
+            const start = e.target.selectionStart;
+            const end = e.target.selectionEnd;
+            const currentValue = e.target.value;
+            
+            e.target.value = currentValue.substring(0, start) + sanitized + currentValue.substring(end);
+            
+            // Move cursor to end of pasted text
+            e.target.selectionStart = e.target.selectionEnd = start + sanitized.length;
+            
+            // Trigger validation and character count update
+            if (e.target.id === 'message') {
+                updateCharacterCount();
+            }
+            validateField(e.target);
+        }
+        
+        /**
+         * Sets loading state for the form
+         * @param {boolean} loading - True to show loading, false to hide
+         */
+        function setLoadingState(loading) {
+            if (loading) {
+                submitBtn.classList.add('loading');
+                submitBtn.disabled = true;
+                nameInput.disabled = true;
+                emailInput.disabled = true;
+                messageInput.disabled = true;
+                btnText.textContent = 'Sending...';
+            } else {
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+                nameInput.disabled = false;
+                emailInput.disabled = false;
+                messageInput.disabled = false;
+                btnText.textContent = 'Send Message';
+            }
+        }
+        
+        /**
+         * Clears all form fields and resets state
+         */
+        function clearForm() {
+            form.reset();
+            updateCharacterCount();
+            
+            // Clear any error messages
+            document.querySelectorAll('.error-message').forEach(el => {
+                el.classList.remove('show');
+            });
+            
+            // Remove error styling
+            document.querySelectorAll('.error').forEach(el => {
+                el.classList.remove('error');
+            });
+            
+            // Reset ARIA attributes
+            [nameInput, emailInput, messageInput].forEach(input => {
+                input.setAttribute('aria-invalid', 'false');
+            });
+        }
+        
+        /**
+         * Shows success message and clears form
+         */
+        function showSuccess() {
+            successMessage.classList.add('show');
+            clearForm();
+            
+            // Hide success message after 5 seconds
+            setTimeout(() => {
+                successMessage.classList.remove('show');
+            }, 5000);
+            
+            // Announce success to screen readers
+            const announcement = document.createElement('div');
+            announcement.className = 'sr-only';
+            announcement.setAttribute('role', 'status');
+            announcement.setAttribute('aria-live', 'polite');
+            announcement.textContent = 'Form submitted successfully. Thank you for your message.';
+            document.body.appendChild(announcement);
+            setTimeout(() => document.body.removeChild(announcement), 1000);
+        }
+        
+        /**
+         * Shows offline message
+         */
+        function showOfflineMessage() {
+            offlineMessage.classList.add('show');
+            
+            setTimeout(() => {
+                offlineMessage.classList.remove('show');
+            }, 5000);
+        }
+        
+        /**
+         * Handles form submission
+         * @param {Event} e - The submit event
+         */
+        async function handleSubmit(e) {
+            e.preventDefault();
+            
+            // Prevent double submission
+            if (isSubmitting) {
+                return;
+            }
+            
+            // Hide previous messages
+            successMessage.classList.remove('show');
+            offlineMessage.classList.remove('show');
+            
+            // Validate form
+            if (!validateForm()) {
+                // Focus first invalid field for accessibility
+                const firstError = form.querySelector('.error');
+                if (firstError) {
+                    firstError.focus();
+                }
+                return;
+            }
+            
+            // Check if online
+            if (!navigator.onLine) {
+                showOfflineMessage();
+                return;
+            }
+            
+            // Set submitting state
+            isSubmitting = true;
+            setLoadingState(true);
+            
+            try {
+                // Prepare form data
+                const formData = new FormData(form);
+                
+                // Submit to server
+                const response = await fetch('/contact', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    showSuccess();
+                } else {
+                    // Handle error response
+                    const data = await response.json();
+                    throw new Error(data.message || 'Failed to submit form');
+                }
+                
+            } catch (error) {
+                console.error('Form submission error:', error);
+                
+                // Show error message
+                const errorDiv = document.getElementById('messageError');
+                errorDiv.textContent = error.message || 'An error occurred. Please try again.';
+                errorDiv.classList.add('show');
+                
+            } finally {
+                isSubmitting = false;
+                setLoadingState(false);
+            }
+        }
+        
+        // Event Listeners
+        
+        // Form submission
+        form.addEventListener('submit', handleSubmit);
+        
+        // Real-time validation on blur (when user leaves field)
+        nameInput.addEventListener('blur', () => validateField(nameInput));
+        emailInput.addEventListener('blur', () => validateField(emailInput));
+        messageInput.addEventListener('blur', () => validateField(messageInput));
+        
+        // Validate on input for better UX (clear errors as user types)
+        nameInput.addEventListener('input', () => {
+            if (nameInput.classList.contains('error')) {
+                validateField(nameInput);
+            }
+        });
+        
+        emailInput.addEventListener('input', () => {
+            if (emailInput.classList.contains('error')) {
+                validateField(emailInput);
+            }
+        });
+        
+        messageInput.addEventListener('input', () => {
+            updateCharacterCount();
+            if (messageInput.classList.contains('error')) {
+                validateField(messageInput);
+            }
+        });
+        
+        // Handle paste events to strip formatting
+        nameInput.addEventListener('paste', handlePaste);
+        emailInput.addEventListener('paste', handlePaste);
+        messageInput.addEventListener('paste', handlePaste);
+        
+        // Validate auto-filled data
+        window.addEventListener('load', () => {
+            // Check if browser auto-filled any fields
+            setTimeout(() => {
+                if (nameInput.value) validateField(nameInput);
+                if (emailInput.value) validateField(emailInput);
+                if (messageInput.value) {
+                    validateField(messageInput);
+                    updateCharacterCount();
+                }
+            }, 100);
+        });
+        
+        // Initialize character count
+        updateCharacterCount();
+        
+        // Maintain form state on back/forward navigation
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) {
+                // Page was restored from back/forward cache
+                updateCharacterCount();
+                
+                // Re-validate filled fields
+                if (nameInput.value) validateField(nameInput);
+                if (emailInput.value) validateField(emailInput);
+                if (messageInput.value) validateField(messageInput);
+            }
+        });
+        
+        // Listen for online/offline events
+        window.addEventListener('online', () => {
+            offlineMessage.classList.remove('show');
+        });
+        
+        window.addEventListener('offline', () => {
+            if (isSubmitting) {
+                showOfflineMessage();
+            }
+        });
+    </script>
+</body>
+</html>
