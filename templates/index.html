@@ -233,6 +233,32 @@
             background: #667eea;
             color: white;
         }
+        
+        .footer {
+            text-align: center;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        
+        .footer .contact-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 12px 30px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 10px;
+            border: 2px solid #667eea;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .footer .contact-link:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -331,6 +357,11 @@
                 <a href="#" class="example-url" onclick="setExampleUrl('https://github.com/pytorch/pytorch')">PyTorch</a>
                 <a href="#" class="example-url" onclick="setExampleUrl('https://github.com/kubernetes/kubernetes')">Kubernetes</a>
             </div>
+        </div>
+        
+        <div class="footer">
+            <p>Need help or have questions?</p>
+            <a href="/contact" class="contact-link">📧 Contact Us</a>
         </div>
     </div>
 

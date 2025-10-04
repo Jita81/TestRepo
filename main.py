@@ -97,6 +97,107 @@ async def get_status(task_id: str):
     # This would integrate with a task queue system
     return {"status": "completed", "progress": 100}
 
+@app.get("/contact", response_class=HTMLResponse)
+async def contact_form(request: Request):
+    """Display the contact form page."""
+    return templates.TemplateResponse("contact.html", {"request": request})
+
+@app.post("/contact/submit")
+async def submit_contact_form(
+    name: str = Form(...),
+    email: str = Form(...),
+    message: str = Form(...)
+):
+    """
+    Handle contact form submission with validation.
+    
+    Validates:
+    - Name: 2-50 characters, letters and spaces only
+    - Email: Valid email format
+    - Message: 10-1000 characters
+    
+    Args:
+        name: User's name
+        email: User's email address
+        message: User's message
+        
+    Returns:
+        JSON response with status and message
+    """
+    import re
+    
+    # Server-side validation (defense in depth)
+    errors = []
+    
+    # Validate name: 2-50 characters, letters and spaces only
+    name = name.strip()
+    if not name:
+        errors.append("Name is required")
+    elif len(name) < 2:
+        errors.append("Name must be at least 2 characters long")
+    elif len(name) > 50:
+        errors.append("Name must not exceed 50 characters")
+    elif not re.match(r'^[a-zA-Z\s]{2,50}$', name):
+        errors.append("Name can only contain letters and spaces")
+    
+    # Validate email: Valid email format
+    email = email.strip()
+    if not email:
+        errors.append("Email is required")
+    elif not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        errors.append("Please enter a valid email address")
+    
+    # Validate message: 10-1000 characters
+    # Strip any HTML tags that might have been included
+    message = re.sub(r'<[^>]+>', '', message).strip()
+    if not message:
+        errors.append("Message is required")
+    elif len(message) < 10:
+        errors.append("Message must be at least 10 characters long")
+    elif len(message) > 1000:
+        errors.append("Message must not exceed 1000 characters")
+    
+    # If validation fails, return error response
+    if errors:
+        raise HTTPException(
+            status_code=400,
+            detail={"status": "error", "errors": errors}
+        )
+    
+    # In a production environment, you would:
+    # 1. Save to database
+    # 2. Send email notification
+    # 3. Log the submission
+    # For this demo, we'll just return success
+    
+    try:
+        # Log the contact form submission (in production, send email or save to DB)
+        print(f"Contact form submission received:")
+        print(f"  Name: {name}")
+        print(f"  Email: {email}")
+        print(f"  Message: {message[:50]}...")
+        
+        # Simulate processing
+        # In production:
+        # - Send email to admin/support team
+        # - Store in database
+        # - Send confirmation email to user
+        # - Add to CRM system
+        
+        return {
+            "status": "success",
+            "message": "Message sent successfully! We'll get back to you soon."
+        }
+    
+    except Exception as e:
+        # Log the error (in production, use proper logging)
+        print(f"Error processing contact form: {str(e)}")
+        
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": "Unable to send message. Please try again."}
+        )
+
 if __name__ == "__main__":
     # Create necessary directories
     os.makedirs("generated_apps", exist_ok=True)
