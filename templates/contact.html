@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Form - GitHub to App Converter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1em;
+            opacity: 0.9;
+        }
+        
+        .form-container {
+            padding: 40px;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .required {
+            color: #dc3545;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            background-color: white;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+        
+        /* Error state styles */
+        .form-group input.error,
+        .form-group textarea.error {
+            border-color: #dc3545;
+        }
+        
+        .form-group input.error:focus,
+        .form-group textarea.error:focus {
+            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+        }
+        
+        .error-message {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+            animation: slideDown 0.3s ease;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .char-count {
+            font-size: 12px;
+            color: #666;
+            text-align: right;
+            margin-top: 5px;
+        }
+        
+        .char-count.warning {
+            color: #ff6b6b;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .submit-btn .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto;
+        }
+        
+        .submit-btn.loading .spinner {
+            display: block;
+        }
+        
+        .submit-btn.loading .button-text {
+            display: none;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Alert messages */
+        .alert {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+            animation: slideDown 0.3s ease;
+        }
+        
+        .alert.show {
+            display: block;
+        }
+        
+        .alert.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .alert.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .alert-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+        
+        .back-link:hover {
+            color: #764ba2;
+        }
+        
+        /* Accessibility improvements */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        
+        /* Focus visible for keyboard navigation */
+        *:focus-visible {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📧 Contact Us</h1>
+            <p>We'd love to hear from you!</p>
+        </div>
+        
+        <div class="form-container">
+            <!-- Success/Error Alert -->
+            <div id="alertBox" class="alert" role="alert" aria-live="polite">
+                <div class="alert-title" id="alertTitle"></div>
+                <div id="alertMessage"></div>
+            </div>
+            
+            <form id="contactForm" novalidate aria-label="Contact form">
+                <!-- Name Field -->
+                <div class="form-group">
+                    <label for="name">
+                        Name <span class="required" aria-label="required">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="name" 
+                        name="name"
+                        placeholder="John Doe"
+                        maxlength="50"
+                        required
+                        aria-required="true"
+                        aria-describedby="nameError nameCharCount"
+                        autocomplete="name"
+                    >
+                    <div class="char-count" id="nameCharCount" aria-live="polite">
+                        <span id="nameCount">0</span>/50
+                    </div>
+                    <div class="error-message" id="nameError" role="alert"></div>
+                </div>
+                
+                <!-- Email Field -->
+                <div class="form-group">
+                    <label for="email">
+                        Email <span class="required" aria-label="required">*</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email"
+                        placeholder="john@example.com"
+                        required
+                        aria-required="true"
+                        aria-describedby="emailError"
+                        autocomplete="email"
+                    >
+                    <div class="error-message" id="emailError" role="alert"></div>
+                </div>
+                
+                <!-- Message Field -->
+                <div class="form-group">
+                    <label for="message">
+                        Message <span class="required" aria-label="required">*</span>
+                    </label>
+                    <textarea 
+                        id="message" 
+                        name="message"
+                        placeholder="Your message here..."
+                        maxlength="500"
+                        required
+                        aria-required="true"
+                        aria-describedby="messageError messageCharCount"
+                    ></textarea>
+                    <div class="char-count" id="messageCharCount" aria-live="polite">
+                        <span id="messageCount">0</span>/500
+                    </div>
+                    <div class="error-message" id="messageError" role="alert"></div>
+                </div>
+                
+                <!-- Submit Button -->
+                <button 
+                    type="submit" 
+                    class="submit-btn" 
+                    id="submitBtn"
+                    aria-label="Submit contact form"
+                >
+                    <span class="button-text">Send Message</span>
+                    <div class="spinner" role="status" aria-label="Sending message"></div>
+                </button>
+            </form>
+            
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+    </div>
+
+    <script>
+        // Form state management
+        const form = document.getElementById('contactForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const alertBox = document.getElementById('alertBox');
+        const alertTitle = document.getElementById('alertTitle');
+        const alertMessage = document.getElementById('alertMessage');
+        
+        // Input fields
+        const nameInput = document.getElementById('name');
+        const emailInput = document.getElementById('email');
+        const messageInput = document.getElementById('message');
+        
+        // Error message elements
+        const nameError = document.getElementById('nameError');
+        const emailError = document.getElementById('emailError');
+        const messageError = document.getElementById('messageError');
+        
+        // Character count elements
+        const nameCount = document.getElementById('nameCount');
+        const messageCount = document.getElementById('messageCount');
+        const nameCharCount = document.getElementById('nameCharCount');
+        const messageCharCount = document.getElementById('messageCharCount');
+        
+        // Rate limiting state
+        let lastSubmitTime = 0;
+        const RATE_LIMIT_MS = 1000; // 1 second rate limit
+        
+        // Sanitization helper - removes HTML/script tags
+        function sanitizeInput(input) {
+            const div = document.createElement('div');
+            div.textContent = input;
+            return div.innerHTML;
+        }
+        
+        // Email validation regex (RFC 5322 simplified)
+        function isValidEmail(email) {
+            const emailRegex = /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+            return emailRegex.test(email);
+        }
+        
+        // Validate individual field
+        function validateField(field, value) {
+            let isValid = true;
+            let errorMsg = '';
+            
+            switch(field) {
+                case 'name':
+                    const trimmedName = value.trim();
+                    if (!trimmedName) {
+                        isValid = false;
+                        errorMsg = 'Name is required';
+                    } else if (trimmedName.length < 2) {
+                        isValid = false;
+                        errorMsg = 'Name must be at least 2 characters';
+                    } else if (trimmedName.length > 50) {
+                        isValid = false;
+                        errorMsg = 'Name must not exceed 50 characters';
+                    }
+                    break;
+                    
+                case 'email':
+                    const trimmedEmail = value.trim();
+                    if (!trimmedEmail) {
+                        isValid = false;
+                        errorMsg = 'Email is required';
+                    } else if (!isValidEmail(trimmedEmail)) {
+                        isValid = false;
+                        errorMsg = 'Please enter a valid email address';
+                    }
+                    break;
+                    
+                case 'message':
+                    const trimmedMessage = value.trim();
+                    if (!trimmedMessage) {
+                        isValid = false;
+                        errorMsg = 'Message is required';
+                    } else if (trimmedMessage.length < 10) {
+                        isValid = false;
+                        errorMsg = 'Message must be at least 10 characters';
+                    } else if (trimmedMessage.length > 500) {
+                        isValid = false;
+                        errorMsg = 'Message must not exceed 500 characters';
+                    }
+                    break;
+            }
+            
+            return { isValid, errorMsg };
+        }
+        
+        // Show error message
+        function showError(input, errorElement, message) {
+            input.classList.add('error');
+            errorElement.textContent = message;
+            errorElement.classList.add('show');
+            input.setAttribute('aria-invalid', 'true');
+        }
+        
+        // Clear error message
+        function clearError(input, errorElement) {
+            input.classList.remove('error');
+            errorElement.classList.remove('show');
+            input.setAttribute('aria-invalid', 'false');
+        }
+        
+        // Show alert message
+        function showAlert(type, title, message) {
+            alertBox.className = `alert ${type} show`;
+            alertTitle.textContent = title;
+            alertMessage.textContent = message;
+            
+            // Scroll to alert
+            alertBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            
+            // Auto-hide success messages after 5 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    alertBox.classList.remove('show');
+                }, 5000);
+            }
+        }
+        
+        // Hide alert
+        function hideAlert() {
+            alertBox.classList.remove('show');
+        }
+        
+        // Clear form
+        function clearForm() {
+            form.reset();
+            nameCount.textContent = '0';
+            messageCount.textContent = '0';
+            nameCharCount.classList.remove('warning');
+            messageCharCount.classList.remove('warning');
+        }
+        
+        // Update character count
+        function updateCharCount(input, countElement, charCountElement, max) {
+            const length = input.value.length;
+            countElement.textContent = length;
+            
+            // Show warning when approaching limit (90%)
+            if (length >= max * 0.9) {
+                charCountElement.classList.add('warning');
+            } else {
+                charCountElement.classList.remove('warning');
+            }
+        }
+        
+        // Real-time character counting
+        nameInput.addEventListener('input', () => {
+            updateCharCount(nameInput, nameCount, nameCharCount, 50);
+        });
+        
+        messageInput.addEventListener('input', () => {
+            updateCharCount(messageInput, messageCount, messageCharCount, 500);
+        });
+        
+        // Real-time validation on blur
+        nameInput.addEventListener('blur', () => {
+            const validation = validateField('name', nameInput.value);
+            if (!validation.isValid) {
+                showError(nameInput, nameError, validation.errorMsg);
+            } else {
+                clearError(nameInput, nameError);
+            }
+        });
+        
+        emailInput.addEventListener('blur', () => {
+            const validation = validateField('email', emailInput.value);
+            if (!validation.isValid) {
+                showError(emailInput, emailError, validation.errorMsg);
+            } else {
+                clearError(emailInput, emailError);
+            }
+        });
+        
+        messageInput.addEventListener('blur', () => {
+            const validation = validateField('message', messageInput.value);
+            if (!validation.isValid) {
+                showError(messageInput, messageError, validation.errorMsg);
+            } else {
+                clearError(messageInput, messageError);
+            }
+        });
+        
+        // Clear errors on input
+        nameInput.addEventListener('input', () => {
+            if (nameError.classList.contains('show')) {
+                clearError(nameInput, nameError);
+            }
+        });
+        
+        emailInput.addEventListener('input', () => {
+            if (emailError.classList.contains('show')) {
+                clearError(emailInput, emailError);
+            }
+        });
+        
+        messageInput.addEventListener('input', () => {
+            if (messageError.classList.contains('show')) {
+                clearError(messageInput, messageError);
+            }
+        });
+        
+        // Form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Hide previous alerts
+            hideAlert();
+            
+            // Check rate limiting
+            const now = Date.now();
+            if (now - lastSubmitTime < RATE_LIMIT_MS) {
+                showAlert('error', 'Too Fast!', 'Please wait a moment before submitting again.');
+                return;
+            }
+            
+            // Validate all fields
+            const nameValidation = validateField('name', nameInput.value);
+            const emailValidation = validateField('email', emailInput.value);
+            const messageValidation = validateField('message', messageInput.value);
+            
+            // Show errors if any
+            let hasErrors = false;
+            
+            if (!nameValidation.isValid) {
+                showError(nameInput, nameError, nameValidation.errorMsg);
+                hasErrors = true;
+            } else {
+                clearError(nameInput, nameError);
+            }
+            
+            if (!emailValidation.isValid) {
+                showError(emailInput, emailError, emailValidation.errorMsg);
+                hasErrors = true;
+            } else {
+                clearError(emailInput, emailError);
+            }
+            
+            if (!messageValidation.isValid) {
+                showError(messageInput, messageError, messageValidation.errorMsg);
+                hasErrors = true;
+            } else {
+                clearError(messageInput, messageError);
+            }
+            
+            // Stop if there are validation errors
+            if (hasErrors) {
+                showAlert('error', 'Validation Error', 'Please fix the errors above before submitting.');
+                // Focus on first error field
+                if (!nameValidation.isValid) {
+                    nameInput.focus();
+                } else if (!emailValidation.isValid) {
+                    emailInput.focus();
+                } else if (!messageValidation.isValid) {
+                    messageInput.focus();
+                }
+                return;
+            }
+            
+            // Prepare sanitized form data
+            const formData = new FormData();
+            formData.append('name', sanitizeInput(nameInput.value.trim()));
+            formData.append('email', sanitizeInput(emailInput.value.trim()));
+            formData.append('message', sanitizeInput(messageInput.value.trim()));
+            
+            // Show loading state
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            
+            try {
+                // Check if online
+                if (!navigator.onLine) {
+                    throw new Error('You appear to be offline. Please check your internet connection.');
+                }
+                
+                const response = await fetch('/contact/submit', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    // Success!
+                    showAlert('success', 'Success!', 'Message sent successfully');
+                    clearForm();
+                    lastSubmitTime = Date.now();
+                    
+                    // Announce success to screen readers
+                    const announcement = document.createElement('div');
+                    announcement.setAttribute('role', 'status');
+                    announcement.setAttribute('aria-live', 'polite');
+                    announcement.className = 'sr-only';
+                    announcement.textContent = 'Your message was sent successfully';
+                    document.body.appendChild(announcement);
+                    setTimeout(() => announcement.remove(), 1000);
+                } else {
+                    // Server returned an error
+                    showAlert('error', 'Error', data.message || 'Unable to send message. Please try again.');
+                }
+                
+            } catch (error) {
+                // Network or other error
+                showAlert('error', 'Error', error.message || 'Unable to send message. Please try again.');
+            } finally {
+                // Reset button state
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+            }
+        });
+        
+        // Handle paste events for truncation
+        nameInput.addEventListener('paste', (e) => {
+            setTimeout(() => {
+                if (nameInput.value.length > 50) {
+                    nameInput.value = nameInput.value.substring(0, 50);
+                    updateCharCount(nameInput, nameCount, nameCharCount, 50);
+                    showAlert('error', 'Text Truncated', 'Name was truncated to 50 characters.');
+                }
+            }, 0);
+        });
+        
+        messageInput.addEventListener('paste', (e) => {
+            setTimeout(() => {
+                if (messageInput.value.length > 500) {
+                    messageInput.value = messageInput.value.substring(0, 500);
+                    updateCharCount(messageInput, messageCount, messageCharCount, 500);
+                    showAlert('error', 'Text Truncated', 'Message was truncated to 500 characters.');
+                }
+            }, 0);
+        });
+        
+        // Keyboard navigation support
+        form.addEventListener('keydown', (e) => {
+            // Allow Escape to clear errors
+            if (e.key === 'Escape') {
+                hideAlert();
+            }
+        });
+    </script>
+</body>
+</html>

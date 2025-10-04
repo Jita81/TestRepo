@@ -5,7 +5,7 @@ using README analysis and agentic coding.
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
@@ -16,6 +16,8 @@ import shutil
 from pathlib import Path
 import asyncio
 from typing import Optional
+import re
+import html
 
 from src.github_integration import GitHubRepository
 from src.readme_parser import ReadmeParser
@@ -96,6 +98,105 @@ async def get_status(task_id: str):
     """Get the status of a conversion task."""
     # This would integrate with a task queue system
     return {"status": "completed", "progress": 100}
+
+@app.get("/contact", response_class=HTMLResponse)
+async def contact_form(request: Request):
+    """Display the contact form."""
+    return templates.TemplateResponse("contact.html", {"request": request})
+
+@app.post("/contact/submit")
+async def submit_contact_form(
+    name: str = Form(...),
+    email: str = Form(...),
+    message: str = Form(...)
+):
+    """
+    Handle contact form submission with comprehensive validation.
+    
+    Validates:
+    - Name: 2-50 characters, required
+    - Email: Valid email format, required
+    - Message: 10-500 characters, required
+    
+    Returns:
+        JSON response with status and message
+    """
+    try:
+        # Sanitize inputs to prevent XSS attacks
+        name = html.escape(name.strip())
+        email = html.escape(email.strip())
+        message = html.escape(message.strip())
+        
+        # Validation rules
+        errors = []
+        
+        # Validate name (2-50 characters)
+        if not name:
+            errors.append("Name is required")
+        elif len(name) < 2:
+            errors.append("Name must be at least 2 characters")
+        elif len(name) > 50:
+            errors.append("Name must not exceed 50 characters")
+        
+        # Validate email format using RFC 5322 simplified regex
+        email_pattern = re.compile(
+            r"^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@"
+            r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+            r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+        )
+        if not email:
+            errors.append("Email is required")
+        elif not email_pattern.match(email):
+            errors.append("Please enter a valid email address")
+        
+        # Validate message (10-500 characters)
+        if not message:
+            errors.append("Message is required")
+        elif len(message) < 10:
+            errors.append("Message must be at least 10 characters")
+        elif len(message) > 500:
+            errors.append("Message must not exceed 500 characters")
+        
+        # If there are validation errors, return them
+        if errors:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": "; ".join(errors),
+                    "errors": errors
+                }
+            )
+        
+        # Process the contact form submission
+        # In a real application, this would:
+        # - Send an email
+        # - Store in database
+        # - Send to a CRM system
+        # For now, we'll just log it and return success
+        
+        print(f"Contact form submission received:")
+        print(f"  Name: {name}")
+        print(f"  Email: {email}")
+        print(f"  Message: {message}")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "Message sent successfully"
+            }
+        )
+        
+    except Exception as e:
+        # Handle any unexpected errors
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "Unable to send message. Please try again."
+            }
+        )
 
 if __name__ == "__main__":
     # Create necessary directories
