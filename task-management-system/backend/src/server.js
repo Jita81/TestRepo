@@ -21,6 +21,11 @@ const authRoutes = require('./routes/auth.routes');
 const projectRoutes = require('./routes/projects.routes');
 const taskRoutes = require('./routes/tasks.routes');
 const commentRoutes = require('./routes/comments.routes');
+const analyticsRoutes = require('./routes/analytics.routes');
+
+// Initialize scheduler for automated reports
+const schedulerService = require('./services/scheduler.service');
+schedulerService.initializeScheduler();
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -95,6 +100,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/comments', commentRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -108,6 +114,7 @@ app.get('/', (req, res) => {
       projects: '/api/projects',
       tasks: '/api/tasks',
       comments: '/api/comments',
+      analytics: '/api/analytics',
     },
   });
 });
