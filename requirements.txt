@@ -14,3 +14,5 @@ python-dotenv
 slowapi
 pytest
 pytest-asyncio
+cryptography
+boto3

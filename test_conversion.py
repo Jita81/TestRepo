@@ -9,12 +9,40 @@ import json
 import time
 import sys
 import os
+import logging
 from typing import Optional
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def get_auth_token() -> Optional[str]:
-    """Get authentication token if available."""
-    return os.getenv("API_TOKEN") or os.getenv("TEST_AUTH_TOKEN")
+    """
+    Get authentication token securely.
+    
+    Security considerations:
+    - Tokens should not be stored in plain text
+    - Use encrypted environment variables in production
+    - Consider using secret management service (AWS Secrets Manager, HashiCorp Vault)
+    """
+    # Try secure methods first
+    encrypted_token = os.getenv("API_TOKEN_ENCRYPTED")
+    if encrypted_token:
+        try:
+            # Decrypt token (requires security_manager module)
+            from src.security_manager import security_manager
+            return security_manager.decrypt_token(encrypted_token)
+        except ImportError:
+            logger.warning("Security manager not available, using plain token")
+    
+    # Fallback to plain token (development only)
+    if os.getenv("NODE_ENV") != "production":
+        return os.getenv("API_TOKEN") or os.getenv("TEST_AUTH_TOKEN")
+    
+    # In production, require encrypted tokens
+    logger.error("No secure token available in production mode")
+    return None
 
 
 def get_headers(auth_required: bool = False) -> dict:

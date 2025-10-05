@@ -24,64 +24,179 @@ def check_dependencies():
         print("Please run: pip install -r requirements.txt")
         return False
 
+def validate_environment_variables():
+    """
+    Validate required environment variables are set.
+    
+    Returns:
+        tuple: (is_valid, missing_vars, warnings)
+    """
+    required_vars = {
+        'OPENAI_API_KEY': 'OpenAI API key for AI features',
+    }
+    
+    optional_vars = {
+        'GITHUB_TOKEN': 'GitHub API token for higher rate limits',
+        'REDIS_URL': 'Redis connection for rate limiting',
+        'API_TOKEN': 'API authentication token',
+        'ENCRYPTION_KEY': 'Key for encrypting sensitive data',
+    }
+    
+    missing_vars = []
+    warnings = []
+    
+    # Check required variables
+    for var_name, description in required_vars.items():
+        value = os.getenv(var_name)
+        if not value or value == f"your_{var_name.lower()}_here":
+            missing_vars.append((var_name, description))
+    
+    # Check optional variables
+    for var_name, description in optional_vars.items():
+        if not os.getenv(var_name):
+            warnings.append((var_name, description))
+    
+    is_valid = len(missing_vars) == 0
+    return is_valid, missing_vars, warnings
+
+
 def setup_environment():
-    """Set up the environment securely."""
+    """Set up the environment securely with comprehensive validation."""
+    print("🔧 Setting up environment...")
+    
     # Create necessary directories
     directories = [
         "generated_apps",
         "temp_repos", 
         "static",
-        "templates"
+        "templates",
+        "logs"
     ]
     
     for directory in directories:
-        Path(directory).mkdir(exist_ok=True)
-        print(f"✅ Created directory: {directory}")
+        try:
+            Path(directory).mkdir(exist_ok=True)
+            print(f"✅ Created directory: {directory}")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not create {directory}: {e}")
     
-    # Ensure .gitignore exists and includes .env
+    # Comprehensive .gitignore setup
     gitignore_path = Path(".gitignore")
-    required_entries = [".env", ".env.local", ".env.*.local", "*.pyc", "__pycache__/", "temp_repos/", "generated_apps/"]
+    required_entries = [
+        "# Security - Sensitive files",
+        ".env",
+        ".env.local",
+        ".env.*.local",
+        ".env.production",
+        "*.key",
+        "*.pem",
+        "",
+        "# Python",
+        "*.pyc",
+        "__pycache__/",
+        "*.py[cod]",
+        "*$py.class",
+        ".pytest_cache/",
+        "",
+        "# Application data",
+        "temp_repos/",
+        "generated_apps/",
+        "logs/",
+        "*.log",
+        "",
+        "# IDE",
+        ".vscode/",
+        ".idea/",
+        "*.swp",
+        "",
+        "# OS",
+        ".DS_Store",
+        "Thumbs.db",
+    ]
     
-    if gitignore_path.exists():
-        with open(gitignore_path, 'r') as f:
-            existing_entries = f.read()
-        
-        new_entries = [entry for entry in required_entries if entry not in existing_entries]
-        if new_entries:
-            with open(gitignore_path, 'a') as f:
-                f.write("\n# Security - Environment variables\n")
-                for entry in new_entries:
-                    f.write(f"{entry}\n")
-            print("✅ Updated .gitignore with security entries")
-    else:
-        with open(gitignore_path, 'w') as f:
-            f.write("# Security - Environment variables\n")
+    try:
+        if gitignore_path.exists():
+            with open(gitignore_path, 'r') as f:
+                existing_content = f.read()
+            
+            # Add missing entries
+            new_entries = []
             for entry in required_entries:
-                f.write(f"{entry}\n")
-        print("✅ Created .gitignore with security entries")
+                if entry and entry not in existing_content and not entry.startswith('#'):
+                    new_entries.append(entry)
+            
+            if new_entries:
+                with open(gitignore_path, 'a') as f:
+                    f.write("\n# Auto-generated security entries\n")
+                    for entry in new_entries:
+                        f.write(f"{entry}\n")
+                print(f"✅ Updated .gitignore ({len(new_entries)} new entries)")
+        else:
+            with open(gitignore_path, 'w') as f:
+                for entry in required_entries:
+                    f.write(f"{entry}\n")
+            print("✅ Created comprehensive .gitignore")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not update .gitignore: {e}")
     
     # Check for .env file
     if not Path(".env").exists():
         if Path(".env.example").exists():
             print("⚠️  No .env file found. Copying from .env.example")
-            import shutil
-            shutil.copy(".env.example", ".env")
-            print("📝 Please edit .env file and add your OpenAI API key")
-            print("🔒 IMPORTANT: .env file is now protected in .gitignore")
+            try:
+                import shutil
+                shutil.copy(".env.example", ".env")
+                print("📝 Please edit .env file and add your API keys")
+                print("🔒 IMPORTANT: .env file is protected in .gitignore")
+            except Exception as e:
+                print(f"❌ Error copying .env.example: {e}")
         else:
-            print("⚠️  No .env file found. Creating template...")
-            with open(".env", "w") as f:
-                f.write("# OpenAI Configuration\n")
-                f.write("OPENAI_API_KEY=your_api_key_here\n\n")
-                f.write("# GitHub Configuration (optional)\n")
-                f.write("GITHUB_TOKEN=your_github_token_here\n\n")
-                f.write("# Application Configuration\n")
-                f.write("DEBUG=False\n")
-                f.write("HOST=0.0.0.0\n")
-                f.write("PORT=8000\n")
-            print("✅ Created .env template file")
-            print("📝 Please edit .env file and add your API keys")
-            print("🔒 IMPORTANT: .env file is protected in .gitignore")
+            print("⚠️  No .env file found. Creating secure template...")
+            try:
+                with open(".env", "w") as f:
+                    f.write("# ==========================================\n")
+                    f.write("# SECURITY WARNING: Never commit this file\n")
+                    f.write("# ==========================================\n\n")
+                    f.write("# OpenAI Configuration (REQUIRED)\n")
+                    f.write("OPENAI_API_KEY=your_api_key_here\n\n")
+                    f.write("# GitHub Configuration (optional, for higher rate limits)\n")
+                    f.write("GITHUB_TOKEN=your_github_token_here\n\n")
+                    f.write("# Security (optional, for encryption)\n")
+                    f.write("ENCRYPTION_KEY=generate_with_fernet.generate_key()\n")
+                    f.write("API_TOKEN=your_secure_api_token_here\n\n")
+                    f.write("# Application Configuration\n")
+                    f.write("DEBUG=False\n")
+                    f.write("HOST=0.0.0.0\n")
+                    f.write("PORT=8000\n")
+                    f.write("NODE_ENV=development\n\n")
+                    f.write("# Rate Limiting (optional)\n")
+                    f.write("REDIS_URL=memory://\n")
+                print("✅ Created secure .env template")
+                print("📝 Please edit .env and replace placeholder values")
+                print("🔒 IMPORTANT: .env file is protected in .gitignore")
+            except Exception as e:
+                print(f"❌ Error creating .env: {e}")
+    
+    # Validate .env file
+    print("\n🔍 Validating environment variables...")
+    is_valid, missing_vars, warnings = validate_environment_variables()
+    
+    if not is_valid:
+        print("\n❌ Missing required environment variables:")
+        for var_name, description in missing_vars:
+            print(f"   - {var_name}: {description}")
+        print("\n📝 Please update your .env file with valid values")
+    else:
+        print("✅ All required environment variables are set")
+    
+    if warnings:
+        print("\n⚠️  Optional environment variables not set:")
+        for var_name, description in warnings[:3]:  # Show first 3
+            print(f"   - {var_name}: {description}")
+        if len(warnings) > 3:
+            print(f"   ... and {len(warnings) - 3} more")
+    
+    return is_valid
 
 def main():
     """Main startup function."""
@@ -93,7 +208,15 @@ def main():
         sys.exit(1)
     
     # Setup environment
-    setup_environment()
+    env_valid = setup_environment()
+    
+    if not env_valid:
+        print("\n⚠️  Environment setup incomplete!")
+        print("The application may not work correctly without required variables.")
+        response = input("Continue anyway? (y/N): ")
+        if response.lower() != 'y':
+            print("👋 Setup cancelled. Please configure your .env file.")
+            sys.exit(0)
     
     # Load environment variables securely
     from dotenv import load_dotenv

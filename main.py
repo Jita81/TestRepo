@@ -5,7 +5,7 @@ using README analysis and agentic coding.
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
@@ -34,14 +34,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize rate limiter with proper configuration
+# Initialize rate limiter with comprehensive DoS protection
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"],
     storage_uri=os.getenv("REDIS_URL", "memory://"),
     strategy="fixed-window",
     headers_enabled=True,
+    swallow_errors=False,  # Ensure errors are properly handled
 )
+
+# Configure rate limit exceeded handler
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Custom rate limit exceeded handler with detailed logging."""
+    logger.warning(f"Rate limit exceeded for IP: {get_remote_address(request)}")
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "Rate limit exceeded",
+            "message": "Too many requests. Please try again later.",
+            "retry_after": exc.retry_after if hasattr(exc, 'retry_after') else 60
+        },
+        headers={
+            "Retry-After": str(exc.retry_after if hasattr(exc, 'retry_after') else 60),
+            "X-RateLimit-Limit": "Per endpoint limits apply",
+        }
+    )
 
 # Create FastAPI app with rate limiting
 app = FastAPI(
@@ -51,7 +70,6 @@ app = FastAPI(
     docs_url="/docs" if os.getenv("DEBUG", "False").lower() == "true" else None,
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Security headers
 @app.middleware("http")

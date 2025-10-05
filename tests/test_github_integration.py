@@ -8,8 +8,13 @@ import pytest
 import asyncio
 import os
 import shutil
+import logging
 from unittest.mock import Mock, patch, MagicMock
 from src.github_integration import GitHubRepository, GitHubRepositoryError
+
+# Configure logging for tests
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 class TestGitHubRepositoryHappyPath:
@@ -31,33 +36,68 @@ class TestGitHubRepositoryHappyPath:
         
         yield repo
         
-        # Comprehensive cleanup
+        # Comprehensive cleanup with proper error handling
+        cleanup_errors = []
+        
         try:
             # Clean tracked directories
             for dir_path in created_dirs:
-                if os.path.exists(dir_path):
+                try:
+                    if os.path.exists(dir_path):
+                        shutil.rmtree(dir_path)
+                        logger.debug(f"Cleaned directory: {dir_path}")
+                except PermissionError as e:
+                    # Retry with ignore_errors
                     shutil.rmtree(dir_path, ignore_errors=True)
+                    cleanup_errors.append(f"Permission error on {dir_path}: {e}")
+                except Exception as e:
+                    cleanup_errors.append(f"Failed to clean {dir_path}: {e}")
             
             # Clean temp directory
             if os.path.exists(repo.temp_dir):
-                shutil.rmtree(repo.temp_dir, ignore_errors=True)
+                try:
+                    shutil.rmtree(repo.temp_dir)
+                except PermissionError:
+                    # Retry with ignore_errors
+                    shutil.rmtree(repo.temp_dir, ignore_errors=True)
+                except Exception as e:
+                    cleanup_errors.append(f"Failed to clean temp_dir: {e}")
             
             # Clean any leftover files
-            import glob
-            temp_files = glob.glob(os.path.join(repo.temp_dir, "*"))
-            for temp_file in temp_files:
-                try:
-                    if os.path.isdir(temp_file):
-                        shutil.rmtree(temp_file, ignore_errors=True)
-                    else:
-                        os.remove(temp_file)
-                except Exception:
-                    pass
+            try:
+                import glob
+                if os.path.exists(repo.temp_dir):
+                    temp_files = glob.glob(os.path.join(repo.temp_dir, "*"))
+                    for temp_file in temp_files:
+                        try:
+                            if os.path.isdir(temp_file):
+                                shutil.rmtree(temp_file, ignore_errors=True)
+                            elif os.path.isfile(temp_file):
+                                os.remove(temp_file)
+                        except Exception as e:
+                            cleanup_errors.append(f"Failed to remove {temp_file}: {e}")
+            except Exception as e:
+                cleanup_errors.append(f"Glob cleanup failed: {e}")
+        
         except Exception as e:
-            print(f"Cleanup warning: {e}")
+            cleanup_errors.append(f"Critical cleanup error: {e}")
+        
         finally:
-            # Ensure cleanup happens
-            pass
+            # Log any cleanup errors but don't fail the test
+            if cleanup_errors:
+                logger.warning(f"Cleanup completed with {len(cleanup_errors)} warnings")
+                for error in cleanup_errors:
+                    logger.debug(error)
+            
+            # Final verification
+            try:
+                if os.path.exists(repo.temp_dir):
+                    # Last resort cleanup
+                    import gc
+                    gc.collect()  # Force garbage collection
+                    shutil.rmtree(repo.temp_dir, ignore_errors=True)
+            except:
+                pass  # Ignore final cleanup errors
     
     def test_parse_github_url_https(self, github_repo):
         """Test parsing standard HTTPS GitHub URL."""
@@ -93,22 +133,39 @@ class TestGitHubRepositoryErrorHandling:
         repo = GitHubRepository()
         yield repo
         
-        # Comprehensive cleanup
+        # Comprehensive cleanup with proper error handling
+        cleanup_success = False
+        cleanup_errors = []
+        
         try:
             if os.path.exists(repo.temp_dir):
                 # Force remove with retry
                 for attempt in range(3):
                     try:
                         shutil.rmtree(repo.temp_dir)
+                        cleanup_success = True
+                        logger.debug(f"Cleanup successful on attempt {attempt + 1}")
                         break
-                    except PermissionError:
+                    except PermissionError as e:
                         import time
-                        time.sleep(0.1)
-                    except Exception:
+                        time.sleep(0.1 * (attempt + 1))  # Progressive backoff
+                        cleanup_errors.append(f"Attempt {attempt + 1}: {e}")
+                    except Exception as e:
+                        cleanup_errors.append(f"Attempt {attempt + 1}: {e}")
                         if attempt == 2:
-                            shutil.rmtree(repo.temp_dir, ignore_errors=True)
+                            # Final attempt with ignore_errors
+                            try:
+                                shutil.rmtree(repo.temp_dir, ignore_errors=True)
+                                cleanup_success = True
+                            except:
+                                pass
         except Exception as e:
-            print(f"Cleanup warning: {e}")
+            cleanup_errors.append(f"Critical error: {e}")
+        finally:
+            if not cleanup_success and cleanup_errors:
+                logger.warning(f"Cleanup incomplete: {len(cleanup_errors)} errors")
+                for error in cleanup_errors[:3]:  # Log first 3 errors
+                    logger.debug(error)
     
     def test_parse_github_url_empty(self, github_repo):
         """Test parsing empty URL."""
