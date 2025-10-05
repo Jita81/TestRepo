@@ -1,0 +1,176 @@
+.filter-panel {
+  background: var(--background);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  height: fit-content;
+  position: sticky;
+  top: 5rem;
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.filter-header h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.clear-filters-btn {
+  font-size: 0.875rem;
+  color: var(--primary-color);
+  background: none;
+  padding: 0.25rem 0.5rem;
+  transition: all 0.2s;
+}
+
+.clear-filters-btn:hover {
+  text-decoration: underline;
+}
+
+.filter-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.filter-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.filter-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.filter-select {
+  width: 100%;
+  padding: 0.625rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  background: var(--background);
+  transition: all 0.2s;
+}
+
+.filter-select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-option {
+  padding: 0.625rem 1rem;
+  background: var(--background-secondary);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  text-align: left;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  color: var(--text-primary);
+}
+
+.filter-option:hover {
+  background: var(--primary-color);
+  color: white;
+}
+
+.filter-option.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  font-weight: 600;
+}
+
+.price-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.price-input {
+  flex: 1;
+  padding: 0.625rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.price-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.price-inputs span {
+  color: var(--text-secondary);
+}
+
+.apply-price-btn {
+  width: 100%;
+  padding: 0.625rem;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.apply-price-btn:hover {
+  background-color: var(--primary-hover);
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+.filter-checkbox span {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+@media (max-width: 1024px) {
+  .filter-panel {
+    position: static;
+    margin-bottom: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .filter-panel {
+    padding: 1rem;
+  }
+
+  .filter-section {
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+  }
+}
