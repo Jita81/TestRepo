@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SearchBar from '../search/SearchBar';
+import CartIcon from '../cart/CartIcon';
 import './Header.css';
 
 const Header = () => {
@@ -15,9 +16,7 @@ const Header = () => {
             <SearchBar />
           </div>
           <nav className="header-nav">
-            <Link to="/cart" className="nav-link">
-              Cart
-            </Link>
+            <CartIcon />
           </nav>
         </div>
       </div>

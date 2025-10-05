@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useDispatch } from 'react-redux';
+import { addItemToCart } from '../../store/slices/cartSlice';
 import './ProductCard.css';
 
 const ProductCard = ({ product, onQuickView }) => {
+  const dispatch = useDispatch();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
   const cardRef = useRef(null);
 
   const {
@@ -65,6 +69,24 @@ const ProductCard = ({ product, onQuickView }) => {
     return <span dangerouslySetInnerHTML={{ __html: highlights[0] }} />;
   };
 
+  const handleAddToCart = async (e) => {
+    e.stopPropagation();
+    
+    if (inventory?.status === 'OUT_OF_STOCK') {
+      return;
+    }
+
+    setIsAdding(true);
+    
+    try {
+      await dispatch(addItemToCart({ productId: id, quantity: 1 })).unwrap();
+    } catch (error) {
+      alert(error || 'Failed to add item to cart');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
   return (
     <div className="product-card" ref={cardRef}>
       <div className="product-image-container">
@@ -105,9 +127,10 @@ const ProductCard = ({ product, onQuickView }) => {
           <span className="product-price">${parseFloat(price).toFixed(2)}</span>
           <button
             className="add-to-cart-btn"
-            disabled={inventory?.status === 'OUT_OF_STOCK'}
+            onClick={handleAddToCart}
+            disabled={inventory?.status === 'OUT_OF_STOCK' || isAdding}
           >
-            {inventory?.status === 'OUT_OF_STOCK' ? 'Out of Stock' : 'Add to Cart'}
+            {isAdding ? '...' : inventory?.status === 'OUT_OF_STOCK' ? 'Out of Stock' : 'Add to Cart'}
           </button>
         </div>
       </div>

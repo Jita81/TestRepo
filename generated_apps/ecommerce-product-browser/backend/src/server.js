@@ -10,6 +10,7 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const productRoutes = require('./routes/productRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const searchRoutes = require('./routes/searchRoutes');
+const cartRoutes = require('./routes/cartRoutes');
 const { initializeDatabase } = require('./config/database');
 const { initializeElasticsearch } = require('./config/elasticsearch');
 const { initializeRedis } = require('./config/redis');
@@ -51,6 +52,7 @@ const API_VERSION = process.env.API_VERSION || 'v1';
 app.use(`/api/${API_VERSION}/products`, productRoutes);
 app.use(`/api/${API_VERSION}/categories`, categoryRoutes);
 app.use(`/api/${API_VERSION}/search`, searchRoutes);
+app.use(`/api/${API_VERSION}/cart`, cartRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
