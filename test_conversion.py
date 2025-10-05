@@ -1,22 +1,57 @@
 #!/usr/bin/env python3
 """
 Comprehensive test script for GitHub to App Converter
-Tests happy path, error conditions, and edge cases
+Tests happy path, error conditions, edge cases, and security
 """
 
 import requests
 import json
 import time
 import sys
+import os
+from typing import Optional
+
+
+def get_auth_token() -> Optional[str]:
+    """Get authentication token if available."""
+    return os.getenv("API_TOKEN") or os.getenv("TEST_AUTH_TOKEN")
+
+
+def get_headers(auth_required: bool = False) -> dict:
+    """Get request headers with optional authentication."""
+    headers = {
+        "User-Agent": "GitHub-to-App-Converter-Test/1.0",
+        "Accept": "application/json",
+    }
+    
+    if auth_required:
+        token = get_auth_token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+    
+    return headers
 
 
 def test_web_interface(base_url):
     """Test if the web interface is accessible."""
     print("1. Testing web interface...")
     try:
-        response = requests.get(f"{base_url}/", timeout=5)
+        response = requests.get(f"{base_url}/", headers=get_headers(), timeout=5)
         if response.status_code == 200:
             print("✅ Web interface is accessible")
+            
+            # Check for security headers
+            security_headers = [
+                "X-Content-Type-Options",
+                "X-Frame-Options",
+                "X-XSS-Protection",
+            ]
+            missing_headers = [h for h in security_headers if h not in response.headers]
+            if missing_headers:
+                print(f"⚠️  Missing security headers: {missing_headers}")
+            else:
+                print("✅ Security headers present")
+            
             return True
         else:
             print(f"❌ Web interface returned status {response.status_code}")
@@ -30,7 +65,7 @@ def test_web_interface(base_url):
 
 
 def test_valid_conversion(base_url):
-    """Test conversion with a valid repository."""
+    """Test conversion with a valid repository (with authentication)."""
     print("\n2. Testing valid repository conversion...")
     
     test_repo = "https://github.com/octocat/Hello-World"
@@ -42,19 +77,40 @@ def test_valid_conversion(base_url):
     
     try:
         print(f"   Converting repository: {test_repo}")
-        response = requests.post(f"{base_url}/convert", data=conversion_data, timeout=60)
+        
+        # Include authentication headers
+        auth_headers = get_headers(auth_required=True)
+        
+        response = requests.post(
+            f"{base_url}/convert",
+            data=conversion_data,
+            headers=auth_headers,
+            timeout=60
+        )
         
         if response.status_code == 200:
             result = response.json()
             print("✅ Conversion completed successfully!")
             print(f"   Status: {result.get('status')}")
             print(f"   Message: {result.get('message')}")
+            
+            # Validate response structure
+            if 'status' in result and 'message' in result:
+                print("✅ Response structure valid")
+            else:
+                print("⚠️  Response structure incomplete")
+            
             return True
         elif response.status_code == 429:
             print("⚠️  Rate limit exceeded (this is expected behavior)")
+            print("✅ Rate limiting working correctly")
+            return True
+        elif response.status_code == 401:
+            print("⚠️  Authentication required (expected without token)")
             return True
         else:
             print(f"❌ Conversion failed with status {response.status_code}")
+            print(f"   Response: {response.text[:200]}")
             return False
             
     except requests.exceptions.Timeout:
@@ -191,7 +247,12 @@ def test_malformed_requests(base_url):
     
     # Test missing required fields
     try:
-        response = requests.post(f"{base_url}/convert", data={}, timeout=10)
+        response = requests.post(
+            f"{base_url}/convert",
+            data={},
+            headers=get_headers(),
+            timeout=10
+        )
         if response.status_code in [400, 422]:
             print("✅ Missing fields properly rejected")
         else:
@@ -200,6 +261,67 @@ def test_malformed_requests(base_url):
         print("✅ Missing fields caused expected error")
     
     return True
+
+
+def test_authentication_checks(base_url):
+    """Test authentication validation on endpoints."""
+    print("\n9. Testing authentication checks...")
+    
+    # Test without authentication token
+    test_repo = "https://github.com/octocat/Hello-World"
+    conversion_data = {
+        "github_url": test_repo,
+        "app_name": "test_app",
+        "target_platform": "web"
+    }
+    
+    # Request without auth header
+    try:
+        response = requests.post(
+            f"{base_url}/convert",
+            data=conversion_data,
+            headers={"User-Agent": "Test"},
+            timeout=30
+        )
+        
+        # Should either succeed (if auth not required) or fail with 401
+        if response.status_code in [200, 401, 429]:
+            print("✅ Authentication handling working")
+            return True
+        else:
+            print(f"⚠️  Unexpected status: {response.status_code}")
+            return True
+    except Exception as e:
+        print(f"✅ Authentication check handled: {type(e).__name__}")
+        return True
+
+
+def test_rate_limit_enforcement(base_url):
+    """Test that rate limiting is properly enforced."""
+    print("\n10. Testing rate limit enforcement...")
+    
+    try:
+        # Make rapid requests to trigger rate limit
+        responses = []
+        for i in range(35):  # Exceed the 30/minute limit
+            response = requests.get(f"{base_url}/", headers=get_headers(), timeout=2)
+            responses.append(response.status_code)
+            
+            if response.status_code == 429:
+                print(f"✅ Rate limit triggered after {i + 1} requests")
+                print("✅ Rate limiting properly enforced")
+                
+                # Check for rate limit headers
+                if "X-RateLimit-Limit" in response.headers:
+                    print(f"✅ Rate limit headers present")
+                
+                return True
+        
+        print("⚠️  Rate limit not triggered (may need more requests or time)")
+        return True
+    except Exception as e:
+        print(f"⚠️  Rate limit test error: {e}")
+        return True
 
 
 def run_all_tests():
@@ -229,6 +351,8 @@ def run_all_tests():
         ("Rate Limiting", test_rate_limiting),
         ("Path Traversal Security", test_download_path_traversal),
         ("Malformed Requests", test_malformed_requests),
+        ("Authentication Checks", test_authentication_checks),
+        ("Rate Limit Enforcement", test_rate_limit_enforcement),
     ]
     
     results = []

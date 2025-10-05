@@ -20,6 +20,7 @@ from pathlib import Path
 import asyncio
 from typing import Optional
 import logging
+import time
 
 from src.github_integration import GitHubRepository
 from src.readme_parser import ReadmeParser
@@ -27,16 +28,41 @@ from src.app_generator import AppGenerator
 from src.agentic_coder import AgenticCoder
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+# Initialize rate limiter with proper configuration
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri=os.getenv("REDIS_URL", "memory://"),
+    strategy="fixed-window",
+    headers_enabled=True,
+)
 
 # Create FastAPI app with rate limiting
-app = FastAPI(title="GitHub to App Converter", version="1.0.0")
+app = FastAPI(
+    title="GitHub to App Converter",
+    version="1.0.0",
+    description="Convert GitHub repositories to working applications",
+    docs_url="/docs" if os.getenv("DEBUG", "False").lower() == "true" else None,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Security headers
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -123,10 +149,26 @@ async def download_app(request: Request, filename: str):
         raise HTTPException(status_code=404, detail="File not found")
 
 @app.get("/status/{task_id}")
-async def get_status(task_id: str):
+@limiter.limit("60/minute")
+async def get_status(request: Request, task_id: str):
     """Get the status of a conversion task."""
+    # Validate task_id format
+    if not task_id or len(task_id) > 100:
+        raise HTTPException(status_code=400, detail="Invalid task ID")
+    
     # This would integrate with a task queue system
-    return {"status": "completed", "progress": 100}
+    logger.info(f"Status check for task: {task_id}")
+    return {"status": "completed", "progress": 100, "task_id": task_id}
+
+@app.get("/api/health")
+@limiter.limit("100/minute")
+async def health_check(request: Request):
+    """Health check endpoint for monitoring."""
+    return {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "version": "1.0.0"
+    }
 
 if __name__ == "__main__":
     # Create necessary directories
