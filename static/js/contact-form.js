@@ -24,7 +24,8 @@ class ContactForm {
         
         // Validation patterns
         this.EMAIL_PATTERN = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-        this.NAME_PATTERN = /^[\w\s'\-.]+$/u;
+        // More permissive pattern that allows Unicode letters, spaces, hyphens, apostrophes, and dots
+        this.NAME_PATTERN = /^[\p{L}\p{M}\s'\-.]+$/u;
         
         // Debounce timer
         this.validationTimer = null;
