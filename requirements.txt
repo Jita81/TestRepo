@@ -11,3 +11,6 @@ aiofiles
 beautifulsoup4
 markdown
 python-dotenv
+pytest
+pytest-asyncio
+httpx

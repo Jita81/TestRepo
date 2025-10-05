@@ -21,12 +21,16 @@ from src.github_integration import GitHubRepository
 from src.readme_parser import ReadmeParser
 from src.app_generator import AppGenerator
 from src.agentic_coder import AgenticCoder
+from src.contact_routes import router as contact_router
 
 app = FastAPI(title="GitHub to App Converter", version="1.0.0")
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+# Include contact form routes
+app.include_router(contact_router)
 
 # Initialize components
 github_repo = GitHubRepository()
@@ -37,7 +41,12 @@ agentic_coder = AgenticCoder()
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Main interface for the GitHub to App converter."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
+
+@app.get("/contact", response_class=HTMLResponse)
+async def contact_page(request: Request):
+    """Contact form page."""
+    return templates.TemplateResponse(request, "contact.html")
 
 @app.post("/convert")
 async def convert_repository(
