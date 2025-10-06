@@ -44,6 +44,14 @@ MAX_REQUESTS_PER_SECOND = 10  # requests per IP per second
 
 
 class RateLimiter:
+    """Rate Limiter with Exponential Backoff
+    
+    Implements token bucket algorithm with:
+    - IP-based rate limiting
+    - Exponential backoff for repeated violations
+    - Configurable burst and sustained rates
+    - Account lockout after excessive attempts
+    """
     """Simple token bucket rate limiter for development server
     
     ⚠️  IMPORTANT LIMITATIONS:

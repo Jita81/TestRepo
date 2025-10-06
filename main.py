@@ -36,30 +36,96 @@ csrf_tokens = {}  # In production, use Redis or database
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
-    """CSRF Protection Middleware
+    """CSRF Protection Middleware - Complete Implementation
     
     Protects against Cross-Site Request Forgery attacks by requiring
     a valid CSRF token for state-changing requests (POST, PUT, DELETE, PATCH).
+    
+    Features:
+    - Double-submit cookie pattern
+    - Timing-safe token comparison
+    - Token expiration
+    - Origin/Referer validation
     """
     
     async def dispatch(self, request: Request, call_next):
         # Skip CSRF check for safe methods and health check endpoints
-        if request.method in ["GET", "HEAD", "OPTIONS"] or request.url.path in ["/health", "/docs", "/openapi.json"]:
+        if request.method in ["GET", "HEAD", "OPTIONS"] or request.url.path in ["/health", "/docs", "/openapi.json", "/csrf-token"]:
             response = await call_next(request)
             return response
         
         # For state-changing requests, verify CSRF token
-        csrf_token = request.headers.get("X-CSRF-Token") or request.cookies.get("csrf_token")
+        csrf_token_header = request.headers.get("X-CSRF-Token")
+        csrf_token_cookie = request.cookies.get("csrf_token")
         
-        if not csrf_token or not self._validate_csrf_token(csrf_token):
+        # Both header and cookie must be present
+        if not csrf_token_header or not csrf_token_cookie:
             return Response(
-                content='{"detail": "CSRF token missing or invalid"}',
+                content='{"detail": "CSRF token missing - both header and cookie required"}',
+                status_code=403,
+                media_type="application/json"
+            )
+        
+        # Tokens must match (double-submit pattern)
+        if not secrets.compare_digest(csrf_token_header, csrf_token_cookie):
+            return Response(
+                content='{"detail": "CSRF token mismatch"}',
+                status_code=403,
+                media_type="application/json"
+            )
+        
+        # Validate token hasn't expired
+        if not self._validate_csrf_token(csrf_token_header):
+            return Response(
+                content='{"detail": "CSRF token expired or invalid"}',
+                status_code=403,
+                media_type="application/json"
+            )
+        
+        # Validate Origin/Referer headers
+        if not self._validate_origin(request):
+            return Response(
+                content='{"detail": "Invalid origin"}',
                 status_code=403,
                 media_type="application/json"
             )
         
         response = await call_next(request)
         return response
+    
+    def _validate_origin(self, request: Request) -> bool:
+        """Validate Origin or Referer header to prevent CSRF
+        
+        Uses timing-safe comparison for origin validation.
+        """
+        origin = request.headers.get("Origin")
+        referer = request.headers.get("Referer")
+        
+        # At least one should be present
+        if not origin and not referer:
+            return False
+        
+        # Allowed origins (configure based on deployment)
+        allowed_origins = [
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+            "http://localhost:8888",
+            "http://127.0.0.1:8888"
+        ]
+        
+        if origin:
+            # Use timing-safe comparison
+            for allowed in allowed_origins:
+                if len(origin) == len(allowed) and secrets.compare_digest(origin, allowed):
+                    return True
+        
+        if referer:
+            # Check if referer starts with allowed origin
+            for allowed in allowed_origins:
+                if referer.startswith(allowed):
+                    return True
+        
+        return False
     
     def _validate_csrf_token(self, token: str) -> bool:
         """Validate CSRF token using timing-safe comparison
