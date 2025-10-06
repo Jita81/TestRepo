@@ -1,0 +1,41 @@
+# POS to 3D Pipeline Configuration
+
+pipeline:
+  name: "pos_to_3d_pipeline"
+  version: "0.1.0"
+  max_concurrent_executions: 4
+
+storage:
+  base_path: "pipeline/storage"
+  input_path: "pipeline/storage/input"
+  output_path: "pipeline/storage/output"
+  temp_path: "pipeline/storage/temp"
+  retention_days: 7
+
+stages:
+  text_processor:
+    max_text_length: 5000
+    min_text_length: 10
+    enable_enhancement: true
+  
+  video_generator:
+    min_duration: 30  # seconds
+    default_duration: 30
+    fps: 24
+    resolution: [1920, 1080]
+    format: "mp4"
+  
+  model_converter:
+    output_format: "STL"
+    quality: "medium"  # low, medium, high
+    max_vertices: 1000000
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "json"  # json or text
+  log_file: "pipeline/logs/pipeline.log"
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
