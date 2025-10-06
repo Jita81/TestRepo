@@ -1,11 +1,13 @@
 """
-GitHub to App Converter
+GitHub to App Converter with User Registration
 A tool that converts any GitHub repository into a working application
 using README analysis and agentic coding.
+
+Now includes user authentication with registration endpoint.
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Depends
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
@@ -21,6 +23,10 @@ import asyncio
 from typing import Optional
 import secrets
 import time
+import hashlib
+import re
+import json
+from datetime import datetime, timedelta
 
 from src.github_integration import GitHubRepository
 from src.readme_parser import ReadmeParser
@@ -33,6 +39,14 @@ app = FastAPI(title="GitHub to App Converter", version="1.0.0")
 CSRF_TOKEN_LENGTH = 32
 CSRF_TOKEN_EXPIRY = 3600  # 1 hour in seconds
 csrf_tokens = {}  # In production, use Redis or database
+
+# User Storage (In production, use a proper database)
+users_db = {}  # {email: {password_hash: str, created_at: datetime, ...}}
+
+# Registration Rate Limiting
+registration_attempts = {}  # {ip: [timestamps]}
+REGISTRATION_RATE_LIMIT = 5  # Max registrations per IP per hour
+REGISTRATION_WINDOW = 3600  # 1 hour in seconds
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
@@ -175,6 +189,101 @@ def generate_csrf_token() -> str:
     return token
 
 
+def hash_password(password: str) -> str:
+    """
+    Hash password using SHA-256 with salt
+    In production, use bcrypt or argon2
+    """
+    salt = secrets.token_hex(16)
+    pwd_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+    return f"{salt}${pwd_hash}"
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Verify password against stored hash"""
+    try:
+        salt, pwd_hash = stored_hash.split('$')
+        computed_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+        return secrets.compare_digest(pwd_hash, computed_hash)
+    except:
+        return False
+
+
+def validate_email(email: str) -> tuple[bool, str]:
+    """
+    Validate email format
+    Returns: (is_valid, error_message)
+    """
+    if not email:
+        return False, "Email is required"
+    
+    # Basic email regex
+    email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    if not re.match(email_regex, email):
+        return False, "Invalid email format"
+    
+    # Check for special characters in local part
+    local_part = email.split('@')[0]
+    if any(char in '<>()[]\\,;:\s"' for char in local_part.replace('.', '')):
+        return False, "Email contains invalid characters"
+    
+    # Check length
+    if len(email) > 254:
+        return False, "Email is too long"
+    
+    return True, ""
+
+
+def validate_password(password: str) -> tuple[bool, list[str]]:
+    """
+    Validate password against requirements
+    Returns: (is_valid, list_of_errors)
+    """
+    errors = []
+    
+    if not password:
+        return False, ["Password is required"]
+    
+    if len(password) < 8:
+        errors.append("Password must be at least 8 characters")
+    
+    if not re.search(r'[A-Z]', password):
+        errors.append("Password must contain at least one uppercase letter")
+    
+    if not re.search(r'[a-z]', password):
+        errors.append("Password must contain at least one lowercase letter")
+    
+    if not re.search(r'[0-9]', password):
+        errors.append("Password must contain at least one number")
+    
+    if not re.search(r'[^A-Za-z0-9]', password):
+        errors.append("Password must contain at least one special character")
+    
+    return len(errors) == 0, errors
+
+
+def check_registration_rate_limit(ip_address: str) -> tuple[bool, str]:
+    """
+    Check if IP has exceeded registration rate limit
+    Returns: (is_allowed, error_message)
+    """
+    current_time = time.time()
+    
+    # Clean old attempts
+    if ip_address in registration_attempts:
+        registration_attempts[ip_address] = [
+            timestamp for timestamp in registration_attempts[ip_address]
+            if current_time - timestamp < REGISTRATION_WINDOW
+        ]
+    
+    # Check rate limit
+    attempts = registration_attempts.get(ip_address, [])
+    if len(attempts) >= REGISTRATION_RATE_LIMIT:
+        return False, "Too many registration attempts. Please try again later."
+    
+    return True, ""
+
+
 # Add CSRF middleware
 app.add_middleware(CSRFMiddleware)
 
@@ -187,6 +296,7 @@ github_repo = GitHubRepository()
 readme_parser = ReadmeParser()
 app_generator = AppGenerator()
 agentic_coder = AgenticCoder()
+
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -214,95 +324,92 @@ async def get_csrf_token():
     token = generate_csrf_token()
     return {"csrf_token": token}
 
-@app.post("/convert")
-async def convert_repository(
-    github_url: str = Form(...),
-    app_name: Optional[str] = Form(None),
-    target_platform: str = Form("executable"),
-    csrf_token: str = Form(...)
-):
+
+@app.post("/api/auth/register")
+async def register_user(request: Request):
     """
-    Convert a GitHub repository to a working application.
+    Register a new user
     
-    Args:
-        github_url: GitHub repository URL
-        app_name: Optional custom name for the generated app
-        target_platform: Target platform (executable, docker, web)
-        csrf_token: CSRF token for form protection (automatically validated by middleware)
+    Request body:
+    {
+        "email": "user@example.com",
+        "password": "SecurePass123!"
+    }
     
-    Note: CSRF token is validated by CSRFMiddleware before reaching this endpoint
+    Returns:
+    {
+        "success": true,
+        "message": "Registration successful",
+        "user_id": "..."
+    }
     """
+    # Get client IP for rate limiting
+    client_ip = request.client.host
+    
+    # Check rate limit
+    is_allowed, rate_limit_message = check_registration_rate_limit(client_ip)
+    if not is_allowed:
+        raise HTTPException(status_code=429, detail=rate_limit_message)
+    
+    # Parse request body
     try:
-        # Step 1: Clone and analyze repository
-        repo_path = await github_repo.clone_repository(github_url)
-        
-        # Step 2: Parse README for instructions
-        readme_data = await readme_parser.parse_readme(repo_path)
-        
-        # Step 3: Use agentic coding to understand the codebase
-        code_analysis = await agentic_coder.analyze_codebase(repo_path, readme_data)
-        
-        # Step 4: Generate working application
-        app_path = await app_generator.generate_app(
-            repo_path, 
-            readme_data, 
-            code_analysis, 
-            app_name or "generated_app",
-            target_platform
+        body = await request.json()
+        email = body.get('email', '').strip().lower()
+        password = body.get('password', '')
+    except:
+        raise HTTPException(status_code=400, detail="Invalid request body")
+    
+    # Validate email
+    email_valid, email_error = validate_email(email)
+    if not email_valid:
+        raise HTTPException(status_code=400, detail=email_error)
+    
+    # Validate password
+    password_valid, password_errors = validate_password(password)
+    if not password_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Password does not meet requirements",
+            headers={"X-Password-Errors": json.dumps(password_errors)}
         )
-        
-        return {
-            "status": "success",
-            "message": "Application generated successfully!",
-            "app_path": app_path,
-            "download_url": f"/download/{os.path.basename(app_path)}"
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+    
+    # Check if email already exists
+    if email in users_db:
+        raise HTTPException(
+            status_code=409,
+            detail="This email address is already registered"
+        )
+    
+    # Hash password
+    password_hash = hash_password(password)
+    
+    # Create user
+    user_id = secrets.token_urlsafe(16)
+    users_db[email] = {
+        'user_id': user_id,
+        'email': email,
+        'password_hash': password_hash,
+        'created_at': datetime.utcnow().isoformat(),
+        'status': 'active'
+    }
+    
+    # Record registration attempt
+    if client_ip not in registration_attempts:
+        registration_attempts[client_ip] = []
+    registration_attempts[client_ip].append(time.time())
+    
+    return {
+        "success": True,
+        "message": "Registration successful",
+        "user_id": user_id
+    }
 
-@app.get("/download/{filename}")
-async def download_app(filename: str):
-    """Download the generated application."""
-    # Input validation: prevent directory traversal attacks
-    if not filename or '..' in filename or '/' in filename or '\\' in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    
-    # Whitelist allowed file extensions
-    allowed_extensions = {'.zip', '.tar.gz', '.exe', '.app', '.deb', '.rpm'}
-    file_ext = ''.join(Path(filename).suffixes)
-    if file_ext not in allowed_extensions:
-        raise HTTPException(status_code=400, detail="Invalid file type")
-    
-    # Validate file size (prevent serving extremely large files)
-    MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
-    file_path = Path("generated_apps") / filename
-    
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    if file_path.stat().st_size > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="File too large")
-    
-    # Verify file is within generated_apps directory
-    try:
-        file_path.resolve().relative_to(Path("generated_apps").resolve())
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    return FileResponse(str(file_path), filename=filename)
 
-@app.get("/status/{task_id}")
-async def get_status(task_id: str):
-    """Get the status of a conversion task."""
-    # This would integrate with a task queue system
-    return {"status": "completed", "progress": 100}
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy"}
+
 
 if __name__ == "__main__":
-    # Create necessary directories
-    os.makedirs("generated_apps", exist_ok=True)
-    os.makedirs("temp_repos", exist_ok=True)
-    os.makedirs("static", exist_ok=True)
-    os.makedirs("templates", exist_ok=True)
-    
     uvicorn.run(app, host="0.0.0.0", port=8000)
