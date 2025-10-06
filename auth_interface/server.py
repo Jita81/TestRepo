@@ -27,6 +27,8 @@ import socketserver
 import os
 import sys
 import time
+import re
+import ipaddress
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -42,14 +44,38 @@ MAX_REQUESTS_PER_SECOND = 10  # requests per IP per second
 
 
 class RateLimiter:
-    """Simple token bucket rate limiter for development server"""
+    """Simple token bucket rate limiter for development server
+    
+    ⚠️  IMPORTANT LIMITATIONS:
+    - Rate limit state is stored in memory only
+    - State is lost when server restarts
+    - Not suitable for production use
+    - For production: Use Redis or persistent storage
+    
+    Production Implementation Example:
+        import redis
+        r = redis.Redis(host='localhost', port=6379, db=0)
+        # Store rate limit data in Redis with TTL
+        # Use Redis INCR and EXPIRE for atomic operations
+    """
     
     def __init__(self):
         self.requests = defaultdict(list)
         self.blocked = {}
     
     def is_allowed(self, ip_address):
-        """Check if request from IP is allowed"""
+        """Check if request from IP is allowed
+        
+        Args:
+            ip_address: IP address to check (validated)
+        
+        Returns:
+            tuple: (allowed: bool, message: str or None)
+        """
+        # Validate IP address format
+        if not self._is_valid_ip(ip_address):
+            return False, "Invalid IP address format"
+        
         now = datetime.now()
         
         # Check if IP is temporarily blocked
@@ -85,6 +111,21 @@ class RateLimiter:
         # Allow request and record it
         self.requests[ip_address].append(now)
         return True, None
+    
+    def _is_valid_ip(self, ip_address):
+        """Validate IP address format
+        
+        Args:
+            ip_address: IP address string to validate
+        
+        Returns:
+            bool: True if valid IPv4 or IPv6 address
+        """
+        try:
+            ipaddress.ip_address(ip_address)
+            return True
+        except ValueError:
+            return False
 
 
 class AuthHandler(http.server.SimpleHTTPRequestHandler):
@@ -267,8 +308,12 @@ def main():
             print(f"   • Use a proper web server (nginx, Apache, Caddy)")
             print(f"   • Implement proper authentication & authorization")
             print(f"   • Use HTTPS/TLS")
-            print(f"   • Configure production-grade rate limiting")
+            print(f"   • Configure production-grade rate limiting with Redis:")
+            print(f"     - pip install redis")
+            print(f"     - Store rate limit state in Redis with TTL")
+            print(f"     - Use Redis INCR/EXPIRE for atomic operations")
             print(f"   • Set up proper logging and monitoring")
+            print(f"   • Implement IP address validation and filtering")
             print("\n" + "="*60 + "\n")
             
             # Serve forever

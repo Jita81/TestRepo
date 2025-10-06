@@ -4,11 +4,14 @@ A tool that converts any GitHub repository into a working application
 using README analysis and agentic coding.
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Depends
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 import uvicorn
 import os
 import tempfile
@@ -16,6 +19,8 @@ import shutil
 from pathlib import Path
 import asyncio
 from typing import Optional
+import secrets
+import time
 
 from src.github_integration import GitHubRepository
 from src.readme_parser import ReadmeParser
@@ -23,6 +28,68 @@ from src.app_generator import AppGenerator
 from src.agentic_coder import AgenticCoder
 
 app = FastAPI(title="GitHub to App Converter", version="1.0.0")
+
+# CSRF Protection Configuration
+CSRF_TOKEN_LENGTH = 32
+CSRF_TOKEN_EXPIRY = 3600  # 1 hour in seconds
+csrf_tokens = {}  # In production, use Redis or database
+
+
+class CSRFMiddleware(BaseHTTPMiddleware):
+    """CSRF Protection Middleware
+    
+    Protects against Cross-Site Request Forgery attacks by requiring
+    a valid CSRF token for state-changing requests (POST, PUT, DELETE, PATCH).
+    """
+    
+    async def dispatch(self, request: Request, call_next):
+        # Skip CSRF check for safe methods and health check endpoints
+        if request.method in ["GET", "HEAD", "OPTIONS"] or request.url.path in ["/health", "/docs", "/openapi.json"]:
+            response = await call_next(request)
+            return response
+        
+        # For state-changing requests, verify CSRF token
+        csrf_token = request.headers.get("X-CSRF-Token") or request.cookies.get("csrf_token")
+        
+        if not csrf_token or not self._validate_csrf_token(csrf_token):
+            return Response(
+                content='{"detail": "CSRF token missing or invalid"}',
+                status_code=403,
+                media_type="application/json"
+            )
+        
+        response = await call_next(request)
+        return response
+    
+    def _validate_csrf_token(self, token: str) -> bool:
+        """Validate CSRF token"""
+        if token not in csrf_tokens:
+            return False
+        
+        # Check if token has expired
+        expiry_time = csrf_tokens[token]
+        if time.time() > expiry_time:
+            del csrf_tokens[token]
+            return False
+        
+        return True
+
+
+def generate_csrf_token() -> str:
+    """Generate a new CSRF token"""
+    token = secrets.token_urlsafe(CSRF_TOKEN_LENGTH)
+    csrf_tokens[token] = time.time() + CSRF_TOKEN_EXPIRY
+    
+    # Clean up expired tokens
+    expired_tokens = [t for t, expiry in csrf_tokens.items() if time.time() > expiry]
+    for t in expired_tokens:
+        del csrf_tokens[t]
+    
+    return token
+
+
+# Add CSRF middleware
+app.add_middleware(CSRFMiddleware)
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -37,13 +104,35 @@ agentic_coder = AgenticCoder()
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Main interface for the GitHub to App converter."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    # Generate CSRF token for forms
+    csrf_token = generate_csrf_token()
+    response = templates.TemplateResponse("index.html", {
+        "request": request,
+        "csrf_token": csrf_token
+    })
+    # Set CSRF token in cookie (HttpOnly, Secure in production)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=True,
+        samesite="strict",
+        max_age=CSRF_TOKEN_EXPIRY
+    )
+    return response
+
+
+@app.get("/csrf-token")
+async def get_csrf_token():
+    """Get a new CSRF token for AJAX requests"""
+    token = generate_csrf_token()
+    return {"csrf_token": token}
 
 @app.post("/convert")
 async def convert_repository(
     github_url: str = Form(...),
     app_name: Optional[str] = Form(None),
-    target_platform: str = Form("executable")
+    target_platform: str = Form("executable"),
+    csrf_token: str = Form(...)
 ):
     """
     Convert a GitHub repository to a working application.
@@ -52,6 +141,9 @@ async def convert_repository(
         github_url: GitHub repository URL
         app_name: Optional custom name for the generated app
         target_platform: Target platform (executable, docker, web)
+        csrf_token: CSRF token for form protection (automatically validated by middleware)
+    
+    Note: CSRF token is validated by CSRFMiddleware before reaching this endpoint
     """
     try:
         # Step 1: Clone and analyze repository
