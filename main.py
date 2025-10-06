@@ -62,14 +62,35 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return response
     
     def _validate_csrf_token(self, token: str) -> bool:
-        """Validate CSRF token"""
-        if token not in csrf_tokens:
+        """Validate CSRF token using timing-safe comparison
+        
+        Uses secrets.compare_digest() to prevent timing attacks
+        that could leak information about valid tokens.
+        """
+        if not token or len(token) == 0:
+            return False
+        
+        # Find matching token using timing-safe comparison
+        # This prevents timing attacks that could reveal valid tokens
+        valid_token_found = False
+        token_expiry = None
+        
+        for stored_token, expiry in csrf_tokens.items():
+            if secrets.compare_digest(token, stored_token):
+                valid_token_found = True
+                token_expiry = expiry
+                break
+        
+        if not valid_token_found:
             return False
         
         # Check if token has expired
-        expiry_time = csrf_tokens[token]
-        if time.time() > expiry_time:
-            del csrf_tokens[token]
+        if time.time() > token_expiry:
+            # Remove expired token (find it again with timing-safe comparison)
+            for stored_token in list(csrf_tokens.keys()):
+                if secrets.compare_digest(token, stored_token):
+                    del csrf_tokens[stored_token]
+                    break
             return False
         
         return True

@@ -7,6 +7,7 @@ import requests
 import json
 import time
 from pathlib import Path
+from urllib.parse import urljoin
 
 def test_conversion():
     """Test the conversion functionality."""
@@ -18,7 +19,8 @@ def test_conversion():
     # Test 1: Check if the web interface is accessible
     print("1. Testing web interface...")
     try:
-        response = requests.get(f"{base_url}/")
+        # Use urljoin for safe URL construction
+        response = requests.get(urljoin(base_url, "/"))
         if response.status_code == 200:
             print("✅ Web interface is accessible")
         else:
@@ -42,7 +44,9 @@ def test_conversion():
     
     try:
         print(f"   Converting repository: {test_repo}")
-        response = requests.post(f"{base_url}/convert", data=conversion_data, timeout=60)
+        # Use urljoin for safe URL construction to prevent path traversal
+        convert_url = urljoin(base_url, "/convert")
+        response = requests.post(convert_url, data=conversion_data, timeout=60)
         
         if response.status_code == 200:
             result = response.json()

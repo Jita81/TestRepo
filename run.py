@@ -27,17 +27,24 @@ def check_dependencies():
 def validate_environment_variables():
     """Validate required environment variables with security checks.
     
+    Uses secure comparison methods to prevent timing attacks and
+    implements comprehensive validation rules for API keys and tokens.
+    
     Returns:
         tuple: (is_valid: bool, errors: list)
     """
+    import secrets
+    
     errors = []
     warnings = []
     
-    # Required environment variables
+    # Required environment variables with enhanced security checks
     required_vars = {
         "OPENAI_API_KEY": {
             "required": True,
-            "min_length": 20,
+            "min_length": 40,  # OpenAI keys are typically 51+ characters (sk-...)
+            "max_length": 200,
+            "prefix": "sk-",  # OpenAI keys start with "sk-"
             "description": "OpenAI API key for AI features"
         }
     }
@@ -46,7 +53,9 @@ def validate_environment_variables():
     optional_vars = {
         "GITHUB_TOKEN": {
             "required": False,
-            "min_length": 20,
+            "min_length": 40,  # GitHub tokens are typically 40+ characters
+            "max_length": 255,
+            "prefix": ["ghp_", "github_pat_"],  # GitHub token prefixes
             "description": "GitHub personal access token for higher API rate limits"
         },
         "MAX_REPO_SIZE_MB": {
@@ -73,26 +82,75 @@ def validate_environment_variables():
             # Validate minimum length for security
             if "min_length" in config and len(value) < config["min_length"]:
                 errors.append(f"❌ {var_name} is too short (minimum {config['min_length']} characters)")
+                errors.append(f"   Expected minimum length: {config['min_length']}, got: {len(value)}")
             
-            # Check for common insecure values
-            insecure_values = ["test", "demo", "example", "placeholder", "your-key-here", "xxx"]
-            if value.lower() in insecure_values:
-                errors.append(f"❌ {var_name} appears to be a placeholder value")
+            # Validate maximum length to prevent buffer overflow attacks
+            if "max_length" in config and len(value) > config["max_length"]:
+                errors.append(f"❌ {var_name} is too long (maximum {config['max_length']} characters)")
+            
+            # Validate required prefix using timing-safe comparison
+            if "prefix" in config:
+                prefixes = config["prefix"] if isinstance(config["prefix"], list) else [config["prefix"]]
+                has_valid_prefix = False
+                
+                for prefix in prefixes:
+                    if len(value) >= len(prefix):
+                        # Use secrets.compare_digest for timing-safe comparison
+                        if secrets.compare_digest(value[:len(prefix)], prefix):
+                            has_valid_prefix = True
+                            break
+                
+                if not has_valid_prefix:
+                    expected = " or ".join(prefixes)
+                    errors.append(f"❌ {var_name} does not start with expected prefix: {expected}")
+            
+            # Check for common insecure values using timing-safe comparison
+            insecure_values = ["test", "demo", "example", "placeholder", "your-key-here", "xxx", "your_key", "change_me"]
+            for insecure_val in insecure_values:
+                if len(value) == len(insecure_val) and secrets.compare_digest(value.lower(), insecure_val):
+                    errors.append(f"❌ {var_name} appears to be a placeholder value")
+                    break
     
     # Validate optional variables
     for var_name, config in optional_vars.items():
         value = os.getenv(var_name)
         
         if value:
+            # Validate minimum length if specified
+            if "min_length" in config and len(value) < config["min_length"]:
+                warnings.append(f"⚠️  {var_name} is too short (minimum {config['min_length']} characters)")
+            
+            # Validate maximum length if specified
+            if "max_length" in config and len(value) > config["max_length"]:
+                warnings.append(f"⚠️  {var_name} is too long (maximum {config['max_length']} characters)")
+            
+            # Validate required prefix using timing-safe comparison
+            if "prefix" in config:
+                prefixes = config["prefix"] if isinstance(config["prefix"], list) else [config["prefix"]]
+                has_valid_prefix = False
+                
+                for prefix in prefixes:
+                    if len(value) >= len(prefix):
+                        if secrets.compare_digest(value[:len(prefix)], prefix):
+                            has_valid_prefix = True
+                            break
+                
+                if not has_valid_prefix:
+                    expected = " or ".join(prefixes)
+                    warnings.append(f"⚠️  {var_name} does not start with expected prefix: {expected}")
+            
+            # Check for placeholder values using timing-safe comparison
+            insecure_values = ["test", "demo", "example", "placeholder", "your_token", "change_me"]
+            for insecure_val in insecure_values:
+                if len(value) == len(insecure_val) and secrets.compare_digest(value.lower(), insecure_val):
+                    warnings.append(f"⚠️  {var_name} appears to be a placeholder value")
+                    break
+            
             # Validate using custom validator if provided
             if "validator" in config:
                 if not config["validator"](value):
                     warnings.append(f"⚠️  {var_name} has invalid format")
                     warnings.append(f"   Description: {config['description']}")
-            
-            # Validate minimum length if specified
-            if "min_length" in config and len(value) < config["min_length"]:
-                warnings.append(f"⚠️  {var_name} is too short (minimum {config['min_length']} characters)")
     
     # Display validation results
     if errors:

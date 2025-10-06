@@ -15,8 +15,11 @@ starlette>=0.27.0
 # Mocking and fixtures
 pytest-mock>=3.11.1
 
-# E2E testing (optional)
-playwright>=1.36.0
+# E2E testing - REQUIRED (not optional)
+# E2E tests will fail if Playwright is not installed
+# Install with: pip install playwright && playwright install
+playwright>=1.40.0
+pytest-playwright>=0.4.0
 
 # Code quality
 pytest-flake8>=1.1.1

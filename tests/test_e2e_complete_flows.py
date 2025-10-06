@@ -1,26 +1,26 @@
 """
 End-to-end tests for complete user workflows
 Tests complete flows including authentication, CSRF, and error handling
+
+IMPORTANT: Playwright is a required dependency for E2E tests.
+Install with: pip install playwright && playwright install
 """
 
 import pytest
 import time
 from pathlib import Path
 
-
-# These tests would normally use Playwright, but for compatibility
-# we'll create tests that can run with pytest-playwright if installed,
-# or skip if not available
-
+# Playwright is now a REQUIRED dependency for E2E tests
+# This ensures CI/CD pipelines fail if E2E infrastructure is not set up properly
 try:
     from playwright.sync_api import sync_playwright, expect
-    PLAYWRIGHT_AVAILABLE = True
-except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
-    pytest.skip("Playwright not installed", allow_module_level=True)
+except ImportError as e:
+    raise ImportError(
+        "Playwright is required for end-to-end tests. "
+        "Install with: pip install playwright && playwright install"
+    ) from e
 
 
-@pytest.mark.skipif(not PLAYWRIGHT_AVAILABLE, reason="Playwright not installed")
 class TestCompleteUserFlows:
     """Test complete user workflows end-to-end"""
     
