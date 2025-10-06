@@ -149,6 +149,40 @@
     <script src="../static/js/route-guard.js"></script>
     <script src="../static/js/auth.js"></script>
     
+    <!-- Display logout/redirect messages -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check for logout message
+            const logoutMessage = sessionStorage.getItem('logout_message');
+            if (logoutMessage) {
+                showAlert('success', logoutMessage);
+                sessionStorage.removeItem('logout_message');
+            }
+            
+            // Check for redirect message (session expired)
+            const redirectMessage = sessionStorage.getItem('redirect_message');
+            if (redirectMessage) {
+                showAlert('warning', redirectMessage);
+                sessionStorage.removeItem('redirect_message');
+            }
+            
+            function showAlert(type, message) {
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type}`;
+                alert.style.cssText = 'margin: 20px auto; max-width: 500px; padding: 15px; border-radius: 6px; text-align: center;';
+                alert.textContent = message;
+                
+                const container = document.querySelector('.container');
+                if (container) {
+                    container.insertBefore(alert, container.firstChild);
+                    
+                    // Auto-remove after 5 seconds
+                    setTimeout(() => alert.remove(), 5000);
+                }
+            }
+        });
+    </script>
+    
     <!-- Service Worker Registration (Progressive Web App) -->
     <script>
         // Register service worker for offline functionality

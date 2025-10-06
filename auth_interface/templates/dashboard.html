@@ -319,47 +319,330 @@
     
     <!-- Additional Dashboard Functionality -->
     <script>
-        // Handle logout
-        function handleLogout() {
-            if (typeof authService !== 'undefined') {
-                authService.logout();
-            } else {
-                window.location.href = 'login.html';
+        /**
+         * Dashboard Management
+         * Handles user data display, loading states, and session management
+         */
+        
+        // Dashboard state
+        const dashboardState = {
+            isLoading: true,
+            userData: null,
+            error: null
+        };
+        
+        /**
+         * Sanitize user input to prevent XSS attacks
+         * @param {string} input - User input to sanitize
+         * @returns {string} Sanitized text
+         */
+        function sanitizeText(input) {
+            if (!input) return '';
+            const div = document.createElement('div');
+            div.textContent = input;
+            return div.innerHTML;
+        }
+        
+        /**
+         * Display loading state
+         */
+        function showLoadingState() {
+            dashboardState.isLoading = true;
+            
+            // Add loading class to main content
+            const mainContent = document.querySelector('main');
+            if (mainContent) {
+                mainContent.classList.add('loading');
+            }
+            
+            // Show skeleton loaders for user info
+            const userDetails = document.querySelectorAll('.user-details h4, .user-details p');
+            userDetails.forEach(el => {
+                el.style.opacity = '0.5';
+                el.textContent = 'Loading...';
+            });
+        }
+        
+        /**
+         * Hide loading state
+         */
+        function hideLoadingState() {
+            dashboardState.isLoading = false;
+            
+            const mainContent = document.querySelector('main');
+            if (mainContent) {
+                mainContent.classList.remove('loading');
+            }
+            
+            const userDetails = document.querySelectorAll('.user-details h4, .user-details p');
+            userDetails.forEach(el => {
+                el.style.opacity = '1';
+            });
+        }
+        
+        /**
+         * Display error message
+         * @param {string} message - Error message to display
+         */
+        function showError(message) {
+            dashboardState.error = message;
+            
+            const mainContent = document.querySelector('main');
+            if (mainContent) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger';
+                errorDiv.style.cssText = 'margin: 20px; padding: 15px; background: #f8d7da; color: #721c24; border-radius: 6px;';
+                errorDiv.textContent = message;
+                
+                mainContent.insertBefore(errorDiv, mainContent.firstChild);
+                
+                // Auto-remove after 5 seconds
+                setTimeout(() => errorDiv.remove(), 5000);
             }
         }
         
-        // Display user information
-        function displayUserInfo() {
-            if (typeof authService !== 'undefined') {
+        /**
+         * Fetch user data from API or storage
+         * @returns {Promise<Object>} User data
+         */
+        async function fetchUserData() {
+            try {
+                // Check if authService is available
+                if (typeof authService === 'undefined') {
+                    throw new Error('Authentication service not available');
+                }
+                
+                // Get user data from authService
                 const user = authService.getCurrentUser();
-                if (user) {
-                    // Update user name in dashboard
-                    const userNameElements = document.querySelectorAll('.user-details h4');
-                    userNameElements.forEach(el => {
-                        if (user.name) el.textContent = user.name;
-                    });
-                    
-                    const userEmailElements = document.querySelectorAll('.user-details p');
-                    userEmailElements.forEach(el => {
-                        if (user.email) el.textContent = user.email;
-                    });
-                    
-                    // Update avatar with initials
-                    if (user.name) {
-                        const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
-                        const avatars = document.querySelectorAll('.user-avatar');
-                        avatars.forEach(avatar => {
-                            avatar.textContent = initials;
-                        });
+                
+                if (!user) {
+                    // If no user data in storage, try to fetch from API
+                    // For now, generate from token
+                    const token = authService.getToken();
+                    if (token) {
+                        try {
+                            const payload = authService.tokenStorage.decodeToken(token);
+                            return {
+                                name: payload.name || 'User',
+                                email: payload.email || 'user@example.com',
+                                sub: payload.sub,
+                                joinDate: payload.iat ? new Date(payload.iat * 1000).toLocaleDateString() : new Date().toLocaleDateString()
+                            };
+                        } catch (e) {
+                            console.error('Failed to decode token:', e);
+                        }
                     }
+                    throw new Error('No user data available');
+                }
+                
+                return user;
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+                throw error;
+            }
+        }
+        
+        /**
+         * Display user information on dashboard
+         * @param {Object} user - User data object
+         */
+        function displayUserInfo(user) {
+            if (!user) {
+                console.warn('No user data to display');
+                return;
+            }
+            
+            // Sanitize all user data
+            const sanitizedUser = {
+                name: sanitizeText(user.name || 'User'),
+                email: sanitizeText(user.email || ''),
+                joinDate: sanitizeText(user.joinDate || new Date().toLocaleDateString())
+            };
+            
+            // Update welcome message
+            const welcomeElement = document.querySelector('.dashboard-header h2');
+            if (welcomeElement) {
+                welcomeElement.textContent = `Welcome back, ${sanitizedUser.name}!`;
+            }
+            
+            // Update user name in navigation
+            const userNameElements = document.querySelectorAll('.user-details h4');
+            userNameElements.forEach(el => {
+                el.textContent = sanitizedUser.name;
+            });
+            
+            // Update user email
+            const userEmailElements = document.querySelectorAll('.user-details p');
+            userEmailElements.forEach(el => {
+                if (!el.textContent.includes('Member since')) {
+                    el.textContent = sanitizedUser.email;
+                }
+            });
+            
+            // Update avatar with initials
+            if (sanitizedUser.name) {
+                const initials = sanitizedUser.name
+                    .split(' ')
+                    .map(n => n[0])
+                    .join('')
+                    .toUpperCase()
+                    .substring(0, 2);
+                
+                const avatars = document.querySelectorAll('.user-avatar');
+                avatars.forEach(avatar => {
+                    avatar.textContent = initials;
+                    avatar.setAttribute('aria-label', `${sanitizedUser.name}'s avatar`);
+                });
+            }
+            
+            // Update account info section
+            const accountInfoSection = document.querySelector('.account-info');
+            if (accountInfoSection && sanitizedUser.joinDate) {
+                const joinDateElement = accountInfoSection.querySelector('p:last-child');
+                if (joinDateElement) {
+                    joinDateElement.textContent = `Member since ${sanitizedUser.joinDate}`;
+                }
+            }
+            
+            // Store user data in state
+            dashboardState.userData = sanitizedUser;
+            
+            console.log('Dashboard: User information displayed successfully');
+        }
+        
+        /**
+         * Handle logout action
+         */
+        function handleLogout() {
+            console.log('Dashboard: Logout initiated');
+            
+            try {
+                if (typeof authService !== 'undefined') {
+                    // Show confirmation dialog
+                    if (confirm('Are you sure you want to logout?')) {
+                        // Clear dashboard state
+                        dashboardState.userData = null;
+                        dashboardState.error = null;
+                        
+                        // Call authService logout (will redirect)
+                        authService.logout();
+                        
+                        // Show logout message
+                        sessionStorage.setItem('logout_message', 'You have been logged out successfully');
+                    }
+                } else {
+                    // Fallback logout
+                    sessionStorage.clear();
+                    localStorage.clear();
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                showError('Failed to logout. Please try again.');
+            }
+        }
+        
+        /**
+         * Validate session and redirect if invalid
+         */
+        async function validateSession() {
+            console.log('Dashboard: Validating session...');
+            
+            if (typeof authService === 'undefined') {
+                console.error('Auth service not available');
+                window.location.href = 'login.html';
+                return false;
+            }
+            
+            const isAuthenticated = authService.isAuthenticated();
+            
+            if (!isAuthenticated) {
+                console.log('Dashboard: Session invalid, redirecting to login');
+                sessionStorage.setItem('redirect_message', 'Your session has expired. Please log in again.');
+                window.location.href = 'login.html';
+                return false;
+            }
+            
+            console.log('Dashboard: Session valid');
+            return true;
+        }
+        
+        /**
+         * Initialize dashboard
+         */
+        async function initializeDashboard() {
+            console.log('Dashboard: Initializing...');
+            
+            try {
+                // Show loading state
+                showLoadingState();
+                
+                // Validate session first
+                const isValid = await validateSession();
+                if (!isValid) {
+                    return;
+                }
+                
+                // Fetch and display user data
+                const userData = await fetchUserData();
+                displayUserInfo(userData);
+                
+                // Hide loading state
+                hideLoadingState();
+                
+                // Announce to screen readers
+                const liveRegion = document.getElementById('live-region');
+                if (liveRegion) {
+                    liveRegion.textContent = 'Dashboard loaded successfully';
+                }
+                
+                console.log('Dashboard: Initialization complete');
+                
+            } catch (error) {
+                console.error('Dashboard initialization error:', error);
+                hideLoadingState();
+                showError('Failed to load dashboard. Please try refreshing the page.');
+                
+                // If critical error, redirect to login
+                if (error.message.includes('Authentication')) {
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 2000);
                 }
             }
         }
         
-        // Initialize dashboard-specific features
+        /**
+         * Handle visibility change (tab focus)
+         */
+        function handleVisibilityChange() {
+            if (!document.hidden) {
+                console.log('Dashboard: Tab became visible, validating session...');
+                validateSession();
+            }
+        }
+        
+        /**
+         * Handle storage events (multi-tab sync)
+         */
+        function handleStorageEvent(event) {
+            if (event.key === 'auth_token' && !event.newValue) {
+                console.log('Dashboard: Token removed in another tab, logging out...');
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // Initialize dashboard on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Display user information
-            displayUserInfo();
+            // Initialize dashboard
+            initializeDashboard();
+            
+            // Listen for visibility changes (tab switching)
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            
+            // Listen for storage events (multi-tab sync)
+            window.addEventListener('storage', handleStorageEvent);
+            
             // Set active navigation item based on current page
             const currentPath = window.location.pathname;
             const navLinks = document.querySelectorAll('.nav-link');
