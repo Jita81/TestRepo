@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Authentication Interface - Test Suite</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #667eea;
+            margin-top: 30px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        .test-case {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+        }
+        .test-case h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 16px;
+        }
+        .test-case p {
+            margin: 5px 0;
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .test-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status-pass {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-fail {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .test-instructions {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .test-instructions h4 {
+            margin: 0 0 10px 0;
+            color: #004085;
+        }
+        .iframe-container {
+            margin: 20px 0;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        iframe {
+            width: 100%;
+            border: none;
+        }
+        .viewport-controls {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .viewport-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .viewport-btn:hover {
+            background: #5568d3;
+        }
+        .viewport-btn.active {
+            background: #764ba2;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .metric-card {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+            margin: 10px 0;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+        .checklist li::before {
+            content: "☐";
+            position: absolute;
+            left: 0;
+            font-size: 18px;
+            color: #999;
+        }
+        .checklist li.checked::before {
+            content: "✓";
+            color: #28a745;
+        }
+        button {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Responsive Authentication Interface - Test Suite</h1>
+        <p style="color: #666; margin-bottom: 20px;">
+            Comprehensive testing suite for responsive behavior across all breakpoints
+        </p>
+        
+        <!-- Test Metrics -->
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-label">Total Tests</div>
+                <div class="metric-value" id="totalTests">7</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Passed</div>
+                <div class="metric-value" id="passedTests" style="color: #28a745;">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Current Viewport</div>
+                <div class="metric-value" id="currentViewport" style="font-size: 20px;">
+                    <span id="viewportWidth">-</span>px
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Instructions -->
+        <div class="test-instructions">
+            <h4>📋 Testing Instructions</h4>
+            <ol style="margin: 10px 0; padding-left: 20px;">
+                <li>Use the viewport buttons below to test different screen sizes</li>
+                <li>Manually verify each test case by interacting with the interface</li>
+                <li>Check off items in the checklist as you verify them</li>
+                <li>Test with both mouse/keyboard and touch input (if available)</li>
+                <li>Test device rotation (portrait/landscape) on mobile devices</li>
+            </ol>
+        </div>
+
+        <!-- Viewport Controls -->
+        <h2>📱 Viewport Testing</h2>
+        <div class="viewport-controls">
+            <button class="viewport-btn" onclick="setViewport(320, 568, this)">
+                📱 Mobile (320px)
+            </button>
+            <button class="viewport-btn" onclick="setViewport(375, 667, this)">
+                📱 iPhone (375px)
+            </button>
+            <button class="viewport-btn" onclick="setViewport(768, 1024, this)">
+                📱 Tablet (768px)
+            </button>
+            <button class="viewport-btn" onclick="setViewport(1024, 768, this)">
+                💻 Desktop (1024px)
+            </button>
+            <button class="viewport-btn" onclick="setViewport(1920, 1080, this)">
+                🖥️ Large Desktop (1920px)
+            </button>
+            <button class="viewport-btn" onclick="setViewport('100%', 800, this)">
+                ↔️ Full Width
+            </button>
+        </div>
+
+        <!-- Test Frame -->
+        <div class="iframe-container">
+            <iframe id="testFrame" src="../templates/login.html" style="height: 600px;"></iframe>
+        </div>
+
+        <!-- Page Selection -->
+        <div style="margin: 20px 0;">
+            <label for="pageSelect" style="font-weight: 600; margin-right: 10px;">Test Page:</label>
+            <select id="pageSelect" onchange="changePage(this.value)" style="padding: 8px; border-radius: 4px; border: 1px solid #dee2e6;">
+                <option value="login.html">Login Page</option>
+                <option value="register.html">Registration Page</option>
+                <option value="dashboard.html">Dashboard</option>
+                <option value="index.html">Home Page</option>
+            </select>
+        </div>
+
+        <!-- Test Cases -->
+        <h2>✅ Test Cases</h2>
+
+        <!-- Test 1: Mobile Login Form -->
+        <div class="test-case">
+            <h3>
+                Test 1: Login Form is Usable on Mobile Devices (320px width)
+                <span class="test-status status-pending" id="test1-status">Pending</span>
+            </h3>
+            <p><strong>Given:</strong> I am viewing the login page on a mobile device with 320px width</p>
+            <p><strong>When:</strong> The page loads</p>
+            <p><strong>Then:</strong> Verify the following:</p>
+            <ul class="checklist" id="test1-checklist">
+                <li onclick="toggleCheck(this)">All form elements are visible and properly sized</li>
+                <li onclick="toggleCheck(this)">Input fields are at least 44px tall</li>
+                <li onclick="toggleCheck(this)">Text is readable without zooming (minimum 16px)</li>
+                <li onclick="toggleCheck(this)">Submit button is easily tappable</li>
+                <li onclick="toggleCheck(this)">No horizontal scrolling occurs</li>
+                <li onclick="toggleCheck(this)">Spacing prevents accidental taps</li>
+            </ul>
+            <button class="viewport-btn" onclick="runTest(1, 320)" style="margin-top: 10px;">Run Test</button>
+        </div>
+
+        <!-- Test 2: Tablet Registration Form -->
+        <div class="test-case">
+            <h3>
+                Test 2: Registration Form Adapts to Tablet Screen (768px)
+                <span class="test-status status-pending" id="test2-status">Pending</span>
+            </h3>
+            <p><strong>Given:</strong> I am viewing the registration page on a tablet device</p>
+            <p><strong>When:</strong> The page loads in portrait mode (768px width)</p>
+            <p><strong>Then:</strong> Verify the following:</p>
+            <ul class="checklist" id="test2-checklist">
+                <li onclick="toggleCheck(this)">Form is centered with appropriate margins</li>
+                <li onclick="toggleCheck(this)">Form fields stack vertically with comfortable spacing</li>
+                <li onclick="toggleCheck(this)">Password requirements list is clearly visible</li>
+                <li onclick="toggleCheck(this)">All elements are proportionally sized</li>
+                <li onclick="toggleCheck(this)">Touch targets are appropriately sized</li>
+            </ul>
+            <button class="viewport-btn" onclick="runTest(2, 768)" style="margin-top: 10px;">Run Test</button>
+        </div>
+
+        <!-- Test 3: Dashboard Navigation -->
+        <div class="test-case">
+            <h3>
+                Test 3: Dashboard Navigation Collapses on Small Screens
+                <span class="test-status status-pending" id="test3-status">Pending</span>
+            </h3>
+            <p><strong>Given:</strong> I am logged in and viewing the dashboard on a mobile device</p>
+            <p><strong>When:</strong> The screen width is below 768px</p>
+            <p><strong>Then:</strong> Verify the following:</p>
+            <ul class="checklist" id="test3-checklist">
+                <li onclick="toggleCheck(this)">Main navigation collapses into hamburger menu</li>
+                <li onclick="toggleCheck(this)">Tapping menu icon reveals navigation options</li>
+                <li onclick="toggleCheck(this)">Menu can be dismissed by tapping outside or close button</li>
+                <li onclick="toggleCheck(this)">Menu items are easily selectable with touch</li>
+                <li onclick="toggleCheck(this)">Logout option is always accessible</li>
+            </ul>
+            <button class="viewport-btn" onclick="runTest(3, 375)" style="margin-top: 10px;">Run Test</button>
+        </div>
+
+        <!-- Test 4: Desktop View -->
+        <div class="test-case">
+            <h3>
+                Test 4: Desktop View Utilizes Available Space (1920px)
+                <span class="test-status status-pending" id="test4-status">Pending</span>
+            </h3>
+            <p><strong>Given:</strong> I am viewing any authentication page on a large desktop screen</p>
+            <p><strong>When:</strong> The screen width is 1920px or greater</p>
+            <p><strong>Then:</strong> Verify the following:</p>
+            <ul class="checklist" id="test4-checklist">
+                <li onclick="toggleCheck(this)">Forms are constrained to maximum readable width (600-800px)</li>
+                <li onclick="toggleCheck(this)">Content is centered horizontally</li>
+                <li onclick="toggleCheck(this)">White space is used effectively</li>
+                <li onclick="toggleCheck(this)">Text line length remains readable</li>
+                <li onclick="toggleCheck(this)">All elements maintain proper proportions</li>
+            </ul>
+            <button class="viewport-btn" onclick="runTest(4, 1920)" style="margin-top: 10px;">Run Test</button>
+        </div>
+
+        <!-- Test 5: Landscape Orientation -->
+        <div class="test-case">
+            <h3>
+                Test 5: Landscape Orientation on Mobile Works Correctly
+                <span class="test-status status-pending" id="test5-status">Pending</span>
+            </h3>
+            <p><strong>Given:</strong> I am viewing a form on a mobile device</p>
+            <p><strong>When:</strong> I rotate the device to landscape orientation</p>
+            <p><strong>Then:</strong> Verify the following:</p>
+            <ul class="checklist" id="test5-checklist">
+                <li onclick="toggleCheck(this)">Layout adjusts appropriately</li>
+                <li onclick="toggleCheck(this)">Form remains fully visible without excessive scrolling</li>
+                <li onclick="toggleCheck(this)">Submit buttons remain accessible</li>
+                <li onclick="toggleCheck(this)">Viewport meta tag prevents unwanted zooming</li>
+            </ul>
+            <button class="viewport-btn" onclick="runTest(5, 667, 375)" style="margin-top: 10px;">Run Test (Landscape)</button>
+        </div>
+
+        <!-- Test 6: Touch and Click Interactions -->
+        <div class="test-case">
+            <h3>
+                Test 6: Touch and Click Interactions Work Across Devices
+                <span class="test-status status-pending" id="test6-status">Pending</span>
+            </h3>
+            <p><strong>Given:</strong> I am using either touch or mouse input</p>
+            <p><strong>When:</strong> I interact with buttons, links, and form controls</p>
+            <p><strong>Then:</strong> Verify the following:</p>
+            <ul class="checklist" id="test6-checklist">
+                <li onclick="toggleCheck(this)">Touch targets are at least 44x44px on mobile</li>
+                <li onclick="toggleCheck(this)">Hover states work on desktop</li>
+                <li onclick="toggleCheck(this)">Active/pressed states visible on mobile</li>
+                <li onclick="toggleCheck(this)">Focus indicators visible for keyboard navigation</li>
+                <li onclick="toggleCheck(this)">No functionality exclusive to one input method</li>
+            </ul>
+            <button class="viewport-btn" onclick="runTest(6, 375)" style="margin-top: 10px;">Run Test</button>
+        </div>
+
+        <!-- Test 7: Images and Icons -->
+        <div class="test-case">
+            <h3>
+                Test 7: Images and Icons Scale Appropriately
+                <span class="test-status status-pending" id="test7-status">Pending</span>
+            </h3>
+            <p><strong>Given:</strong> The authentication pages include logos or icons</p>
+            <p><strong>When:</strong> I view pages at different screen sizes</p>
+            <p><strong>Then:</strong> Verify the following:</p>
+            <ul class="checklist" id="test7-checklist">
+                <li onclick="toggleCheck(this)">SVG icons scale without quality loss</li>
+                <li onclick="toggleCheck(this)">Logos are appropriately sized (larger on desktop, smaller on mobile)</li>
+                <li onclick="toggleCheck(this)">Images use responsive techniques (srcset, picture element)</li>
+                <li onclick="toggleCheck(this)">All images have appropriate alt text</li>
+            </ul>
+            <button class="viewport-btn" onclick="runTest(7, 320)" style="margin-top: 10px;">Run Test</button>
+        </div>
+
+        <!-- Summary -->
+        <div class="test-instructions" style="margin-top: 30px;">
+            <h4>📊 Test Summary</h4>
+            <p id="testSummary">Complete the tests above to see the summary.</p>
+        </div>
+    </div>
+
+    <script>
+        // Test state
+        let testsPassed = 0;
+        let currentWidth = window.innerWidth;
+
+        // Update viewport width display
+        function updateViewportDisplay() {
+            const width = document.getElementById('testFrame').offsetWidth;
+            document.getElementById('viewportWidth').textContent = width;
+            currentWidth = width;
+        }
+
+        // Set viewport size
+        function setViewport(width, height, button) {
+            const frame = document.getElementById('testFrame');
+            frame.style.width = typeof width === 'number' ? width + 'px' : width;
+            frame.style.height = height + 'px';
+            
+            // Update active button
+            document.querySelectorAll('.viewport-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            if (button) button.classList.add('active');
+            
+            setTimeout(updateViewportDisplay, 100);
+        }
+
+        // Change test page
+        function changePage(page) {
+            document.getElementById('testFrame').src = '../templates/' + page;
+        }
+
+        // Toggle checklist item
+        function toggleCheck(item) {
+            item.classList.toggle('checked');
+            updateTestStatus();
+        }
+
+        // Run specific test
+        function runTest(testNumber, width, height = 600) {
+            // Set viewport
+            setViewport(width, height);
+            
+            // Change to appropriate page
+            const pages = {
+                1: 'login.html',
+                2: 'register.html',
+                3: 'dashboard.html',
+                4: 'login.html',
+                5: 'login.html',
+                6: 'login.html',
+                7: 'index.html'
+            };
+            
+            if (pages[testNumber]) {
+                document.getElementById('pageSelect').value = pages[testNumber];
+                changePage(pages[testNumber]);
+            }
+            
+            // Scroll to test case
+            document.getElementById(`test${testNumber}-status`).scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center' 
+            });
+        }
+
+        // Update test status based on checklist
+        function updateTestStatus() {
+            let totalPassed = 0;
+            
+            for (let i = 1; i <= 7; i++) {
+                const checklist = document.getElementById(`test${i}-checklist`);
+                if (!checklist) continue;
+                
+                const items = checklist.querySelectorAll('li');
+                const checked = checklist.querySelectorAll('li.checked');
+                const status = document.getElementById(`test${i}-status`);
+                
+                if (checked.length === items.length && items.length > 0) {
+                    status.textContent = 'Passed';
+                    status.className = 'test-status status-pass';
+                    totalPassed++;
+                } else if (checked.length > 0) {
+                    status.textContent = `In Progress (${checked.length}/${items.length})`;
+                    status.className = 'test-status status-pending';
+                } else {
+                    status.textContent = 'Pending';
+                    status.className = 'test-status status-pending';
+                }
+            }
+            
+            testsPassed = totalPassed;
+            document.getElementById('passedTests').textContent = totalPassed;
+            
+            // Update summary
+            updateSummary();
+        }
+
+        // Update test summary
+        function updateSummary() {
+            const summary = document.getElementById('testSummary');
+            const percentage = Math.round((testsPassed / 7) * 100);
+            
+            if (testsPassed === 7) {
+                summary.innerHTML = `
+                    <strong style="color: #28a745;">🎉 All tests passed! (${percentage}%)</strong><br>
+                    The responsive authentication interface meets all requirements and is ready for production.
+                `;
+            } else if (testsPassed > 0) {
+                summary.innerHTML = `
+                    <strong style="color: #856404;">⚠️ ${testsPassed} of 7 tests passed (${percentage}%)</strong><br>
+                    Continue testing to verify all responsive features.
+                `;
+            } else {
+                summary.innerHTML = `
+                    Complete the tests above to see the summary. Use the "Run Test" buttons to automatically 
+                    set up each test scenario.
+                `;
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            updateViewportDisplay();
+            setViewport(375, 667, document.querySelector('.viewport-btn:nth-child(2)'));
+        });
+
+        // Update viewport display on resize
+        window.addEventListener('resize', updateViewportDisplay);
+    </script>
+</body>
+</html>

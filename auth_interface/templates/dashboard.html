@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="description" content="User Dashboard - Responsive Authentication Interface">
+    <meta name="theme-color" content="#667eea">
+    
+    <!-- Prevent unwanted zooming on iOS -->
+    <meta name="format-detection" content="telephone=no">
+    
+    <title>Dashboard - Authentication Interface</title>
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="../static/css/responsive-auth.css" as="style">
+    <link rel="preload" href="../static/js/auth.js" as="script">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="../static/css/responsive-auth.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+</head>
+<body class="dashboard">
+    <!-- Skip to main content link for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <!-- Navigation Bar -->
+    <nav class="navbar" role="navigation" aria-label="Main navigation">
+        <div class="navbar-container">
+            <!-- Brand/Logo -->
+            <a href="dashboard.html" class="navbar-brand">
+                <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" 
+                     alt="Dashboard Logo" 
+                     width="40" 
+                     height="40">
+                <span>Dashboard</span>
+            </a>
+            
+            <!-- Hamburger Menu Toggle (Mobile) -->
+            <button 
+                class="navbar-toggle" 
+                aria-label="Toggle navigation menu"
+                aria-expanded="false"
+                aria-controls="navbar-menu"
+            >
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            
+            <!-- Navigation Menu -->
+            <div id="navbar-menu" class="navbar-menu" role="menu">
+                <ul class="navbar-nav">
+                    <li class="nav-item" role="none">
+                        <a href="#" class="nav-link active" role="menuitem" aria-current="page">
+                            <i aria-hidden="true">🏠</i>
+                            <span>Home</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a href="#" class="nav-link" role="menuitem">
+                            <i aria-hidden="true">📊</i>
+                            <span>Analytics</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a href="#" class="nav-link" role="menuitem">
+                            <i aria-hidden="true">⚙️</i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a href="#" class="nav-link" role="menuitem">
+                            <i aria-hidden="true">👤</i>
+                            <span>Profile</span>
+                        </a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a href="#" class="nav-link" role="menuitem">
+                            <i aria-hidden="true">📧</i>
+                            <span>Messages</span>
+                        </a>
+                    </li>
+                </ul>
+                
+                <!-- User Profile Section (Mobile) -->
+                <div class="navbar-user">
+                    <div class="user-info">
+                        <div class="user-avatar" aria-label="User avatar">JD</div>
+                        <div class="user-details">
+                            <h4>John Doe</h4>
+                            <p>john.doe@example.com</p>
+                        </div>
+                    </div>
+                    <a href="login.html" class="btn btn-secondary btn-block">
+                        <i aria-hidden="true">🚪</i>
+                        Logout
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Menu Overlay (Mobile) -->
+            <div class="navbar-overlay" aria-hidden="true"></div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="dashboard-content" id="main-content" role="main">
+        <!-- Dashboard Header -->
+        <header class="dashboard-header">
+            <h1>Welcome Back, John! 👋</h1>
+            <p>Here's what's happening with your account today</p>
+        </header>
+        
+        <!-- Statistics Grid -->
+        <section aria-labelledby="stats-heading">
+            <h2 id="stats-heading" class="sr-only">Statistics Overview</h2>
+            <div class="dashboard-grid">
+                <!-- Stat Card 1 -->
+                <article class="dashboard-card stat-card">
+                    <div class="stat-icon primary" aria-hidden="true">👥</div>
+                    <div class="stat-content">
+                        <h4>2,543</h4>
+                        <p>Total Users</p>
+                    </div>
+                </article>
+                
+                <!-- Stat Card 2 -->
+                <article class="dashboard-card stat-card">
+                    <div class="stat-icon success" aria-hidden="true">📈</div>
+                    <div class="stat-content">
+                        <h4>+12.5%</h4>
+                        <p>Growth Rate</p>
+                    </div>
+                </article>
+                
+                <!-- Stat Card 3 -->
+                <article class="dashboard-card stat-card">
+                    <div class="stat-icon warning" aria-hidden="true">⏱️</div>
+                    <div class="stat-content">
+                        <h4>1.2hrs</h4>
+                        <p>Avg. Session</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+        
+        <!-- Recent Activity Section -->
+        <section aria-labelledby="activity-heading">
+            <h2 id="activity-heading" style="font-size: var(--font-size-xl); margin-bottom: var(--space-lg); color: var(--color-text);">
+                Recent Activity
+            </h2>
+            <div class="dashboard-grid">
+                <!-- Activity Card 1 -->
+                <article class="dashboard-card">
+                    <h3>Profile Updated</h3>
+                    <p style="margin-bottom: var(--space-md);">
+                        You recently updated your profile information and added a new profile picture.
+                    </p>
+                    <p style="font-size: var(--font-size-sm); color: var(--color-text-light);">
+                        <time datetime="2025-10-05">2 hours ago</time>
+                    </p>
+                </article>
+                
+                <!-- Activity Card 2 -->
+                <article class="dashboard-card">
+                    <h3>Security Alert</h3>
+                    <p style="margin-bottom: var(--space-md);">
+                        A new device logged into your account from New York, United States.
+                    </p>
+                    <a href="#" class="link">Review Activity →</a>
+                </article>
+                
+                <!-- Activity Card 3 -->
+                <article class="dashboard-card">
+                    <h3>New Message</h3>
+                    <p style="margin-bottom: var(--space-md);">
+                        You have 3 unread messages from team members awaiting your response.
+                    </p>
+                    <a href="#" class="link">View Messages →</a>
+                </article>
+            </div>
+        </section>
+        
+        <!-- Quick Actions Section -->
+        <section aria-labelledby="actions-heading" style="margin-top: var(--space-xl);">
+            <h2 id="actions-heading" style="font-size: var(--font-size-xl); margin-bottom: var(--space-lg); color: var(--color-text);">
+                Quick Actions
+            </h2>
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <h3>📝 Create New Post</h3>
+                    <p style="margin-bottom: var(--space-md);">
+                        Share your thoughts with your followers
+                    </p>
+                    <button class="btn btn-primary btn-block">
+                        Create Post
+                    </button>
+                </div>
+                
+                <div class="dashboard-card">
+                    <h3>📤 Upload Files</h3>
+                    <p style="margin-bottom: var(--space-md);">
+                        Upload documents, images, and videos
+                    </p>
+                    <button class="btn btn-primary btn-block">
+                        Upload Files
+                    </button>
+                </div>
+                
+                <div class="dashboard-card">
+                    <h3>👥 Invite Team</h3>
+                    <p style="margin-bottom: var(--space-md);">
+                        Invite colleagues to join your workspace
+                    </p>
+                    <button class="btn btn-primary btn-block">
+                        Send Invites
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Account Information Section -->
+        <section aria-labelledby="account-heading" style="margin-top: var(--space-xl);">
+            <h2 id="account-heading" style="font-size: var(--font-size-xl); margin-bottom: var(--space-lg); color: var(--color-text);">
+                Account Information
+            </h2>
+            <div class="dashboard-card">
+                <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-lg);">
+                    <!-- Account Detail Row -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-sm); padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-border);">
+                        <div>
+                            <h4 style="font-size: var(--font-size-base); margin-bottom: var(--space-xs);">Email Address</h4>
+                            <p style="color: var(--color-text-light); font-size: var(--font-size-sm);">john.doe@example.com</p>
+                        </div>
+                        <a href="#" class="link">Change</a>
+                    </div>
+                    
+                    <!-- Account Detail Row -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-sm); padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-border);">
+                        <div>
+                            <h4 style="font-size: var(--font-size-base); margin-bottom: var(--space-xs);">Password</h4>
+                            <p style="color: var(--color-text-light); font-size: var(--font-size-sm);">••••••••</p>
+                        </div>
+                        <a href="#" class="link">Change</a>
+                    </div>
+                    
+                    <!-- Account Detail Row -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-sm); padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-border);">
+                        <div>
+                            <h4 style="font-size: var(--font-size-base); margin-bottom: var(--space-xs);">Two-Factor Authentication</h4>
+                            <p style="color: var(--color-text-light); font-size: var(--font-size-sm);">Not enabled</p>
+                        </div>
+                        <a href="#" class="link">Enable</a>
+                    </div>
+                    
+                    <!-- Account Detail Row -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-sm);">
+                        <div>
+                            <h4 style="font-size: var(--font-size-base); margin-bottom: var(--space-xs);">Account Status</h4>
+                            <p style="color: var(--color-success); font-size: var(--font-size-sm); font-weight: 600;">✓ Active</p>
+                        </div>
+                        <span style="background: var(--color-bg-light); padding: var(--space-xs) var(--space-sm); border-radius: 20px; font-size: var(--font-size-sm); color: var(--color-text-light);">
+                            Premium Plan
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Responsive Image Example -->
+        <section aria-labelledby="banner-heading" style="margin-top: var(--space-xl);">
+            <h2 id="banner-heading" class="sr-only">Promotional Banner</h2>
+            <div class="dashboard-card" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); color: white; padding: var(--space-xl);">
+                <h3 style="color: white; font-size: var(--font-size-xl); margin-bottom: var(--space-sm);">
+                    📱 Responsive Design
+                </h3>
+                <p style="margin-bottom: var(--space-lg); opacity: 0.95; line-height: 1.6;">
+                    This dashboard is fully responsive and works seamlessly across all devices - from mobile phones (320px) to large desktop screens (1920px+).
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: var(--space-sm);">
+                    <span style="background: rgba(255, 255, 255, 0.2); padding: var(--space-xs) var(--space-md); border-radius: 20px; font-size: var(--font-size-sm);">
+                        ✓ Mobile-First
+                    </span>
+                    <span style="background: rgba(255, 255, 255, 0.2); padding: var(--space-xs) var(--space-md); border-radius: 20px; font-size: var(--font-size-sm);">
+                        ✓ Touch-Friendly
+                    </span>
+                    <span style="background: rgba(255, 255, 255, 0.2); padding: var(--space-xs) var(--space-md); border-radius: 20px; font-size: var(--font-size-sm);">
+                        ✓ Accessible
+                    </span>
+                    <span style="background: rgba(255, 255, 255, 0.2); padding: var(--space-xs) var(--space-md); border-radius: 20px; font-size: var(--font-size-sm);">
+                        ✓ Fast Loading
+                    </span>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer style="background: white; padding: var(--space-lg); text-align: center; margin-top: var(--space-xl); border-top: 1px solid var(--color-border);">
+        <p style="color: var(--color-text-light); font-size: var(--font-size-sm);">
+            © 2025 Authentication Interface. All rights reserved.
+        </p>
+        <div style="margin-top: var(--space-sm); display: flex; justify-content: center; gap: var(--space-md); flex-wrap: wrap;">
+            <a href="#" class="link">Privacy Policy</a>
+            <a href="#" class="link">Terms of Service</a>
+            <a href="#" class="link">Contact Support</a>
+        </div>
+    </footer>
+    
+    <!-- Live region for screen reader announcements -->
+    <div aria-live="polite" aria-atomic="true" class="sr-only" id="live-region"></div>
+    
+    <!-- JavaScript -->
+    <script src="../static/js/auth.js"></script>
+    
+    <!-- Additional Dashboard Functionality -->
+    <script>
+        // Initialize dashboard-specific features
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set active navigation item based on current page
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.nav-link');
+            
+            navLinks.forEach(link => {
+                if (link.href === window.location.href) {
+                    link.classList.add('active');
+                    link.setAttribute('aria-current', 'page');
+                } else {
+                    link.classList.remove('active');
+                    link.removeAttribute('aria-current');
+                }
+            });
+            
+            // Announce page load to screen readers
+            const liveRegion = document.getElementById('live-region');
+            if (liveRegion) {
+                liveRegion.textContent = 'Dashboard loaded successfully';
+                setTimeout(() => {
+                    liveRegion.textContent = '';
+                }, 1000);
+            }
+        });
+        
+        // Handle action buttons
+        const actionButtons = document.querySelectorAll('button');
+        actionButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                if (!this.closest('form') && this.type !== 'submit') {
+                    e.preventDefault();
+                    
+                    // Show loading state
+                    this.classList.add('btn-loading');
+                    this.disabled = true;
+                    
+                    // Simulate action
+                    setTimeout(() => {
+                        this.classList.remove('btn-loading');
+                        this.disabled = false;
+                        
+                        // Show success message
+                        const liveRegion = document.getElementById('live-region');
+                        if (liveRegion) {
+                            liveRegion.textContent = 'Action completed successfully';
+                            setTimeout(() => {
+                                liveRegion.textContent = '';
+                            }, 3000);
+                        }
+                    }, 1500);
+                }
+            });
+        });
+    </script>
+    
+    <!-- Service Worker Registration (Progressive Web App) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {
+                    // Service worker registration failed, continue without it
+                });
+            });
+        }
+    </script>
+</body>
+</html>

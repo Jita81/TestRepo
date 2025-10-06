@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="description" content="Responsive Authentication Interface - Secure login and registration system">
+    <meta name="theme-color" content="#667eea">
+    
+    <!-- Prevent unwanted zooming on iOS -->
+    <meta name="format-detection" content="telephone=no">
+    
+    <title>Responsive Authentication Interface</title>
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="../static/css/responsive-auth.css" as="style">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="../static/css/responsive-auth.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
+</head>
+<body>
+    <!-- Skip to main content link for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <!-- Main Container -->
+    <main class="auth-container" id="main-content" role="main">
+        <div class="auth-card">
+            <!-- Card Header -->
+            <header class="auth-header">
+                <picture>
+                    <source media="(min-width: 768px)" 
+                            srcset="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+                    <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" 
+                         alt="Welcome Icon" 
+                         class="auth-logo" 
+                         width="80" 
+                         height="80">
+                </picture>
+                
+                <h1>Authentication Interface</h1>
+                <p>Secure, Responsive, and Accessible</p>
+            </header>
+            
+            <!-- Card Body -->
+            <div class="auth-body">
+                <div style="text-align: center;">
+                    <h2 style="font-size: var(--font-size-xl); margin-bottom: var(--space-lg); color: var(--color-text);">
+                        Welcome! 👋
+                    </h2>
+                    
+                    <p style="color: var(--color-text-light); margin-bottom: var(--space-xl); line-height: 1.6;">
+                        A fully responsive authentication interface built with mobile-first design principles. 
+                        Works seamlessly on devices from 320px to 1920px+ width.
+                    </p>
+                    
+                    <!-- Feature Grid -->
+                    <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-md); margin-bottom: var(--space-xl); text-align: left;">
+                        <div style="display: flex; gap: var(--space-sm); align-items: flex-start;">
+                            <span style="font-size: var(--font-size-xl); flex-shrink: 0;">📱</span>
+                            <div>
+                                <h3 style="font-size: var(--font-size-base); font-weight: 600; margin-bottom: var(--space-xs);">
+                                    Mobile-First Design
+                                </h3>
+                                <p style="font-size: var(--font-size-sm); color: var(--color-text-light);">
+                                    Optimized for mobile devices with touch-friendly interfaces
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: var(--space-sm); align-items: flex-start;">
+                            <span style="font-size: var(--font-size-xl); flex-shrink: 0;">♿</span>
+                            <div>
+                                <h3 style="font-size: var(--font-size-base); font-weight: 600; margin-bottom: var(--space-xs);">
+                                    Fully Accessible
+                                </h3>
+                                <p style="font-size: var(--font-size-sm); color: var(--color-text-light);">
+                                    WCAG compliant with keyboard navigation and screen reader support
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: var(--space-sm); align-items: flex-start;">
+                            <span style="font-size: var(--font-size-xl); flex-shrink: 0;">🔒</span>
+                            <div>
+                                <h3 style="font-size: var(--font-size-base); font-weight: 600; margin-bottom: var(--space-xs);">
+                                    Secure by Default
+                                </h3>
+                                <p style="font-size: var(--font-size-sm); color: var(--color-text-light);">
+                                    Built-in validation and security best practices
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: var(--space-sm); align-items: flex-start;">
+                            <span style="font-size: var(--font-size-xl); flex-shrink: 0;">⚡</span>
+                            <div>
+                                <h3 style="font-size: var(--font-size-base); font-weight: 600; margin-bottom: var(--space-xs);">
+                                    Fast Performance
+                                </h3>
+                                <p style="font-size: var(--font-size-sm); color: var(--color-text-light);">
+                                    Optimized for speed with lazy loading and efficient code
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Call to Action Buttons -->
+                    <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-md);">
+                        <a href="login.html" class="btn btn-primary btn-block">
+                            Login to Your Account
+                        </a>
+                        <a href="register.html" class="btn btn-secondary btn-block">
+                            Create New Account
+                        </a>
+                    </div>
+                    
+                    <!-- Divider -->
+                    <div style="text-align: center; margin: var(--space-xl) 0; color: var(--color-text-light); position: relative;">
+                        <span style="background: white; padding: 0 var(--space-sm); position: relative; z-index: 1;">or</span>
+                        <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--color-border); z-index: 0;"></div>
+                    </div>
+                    
+                    <!-- Demo Link -->
+                    <a href="dashboard.html" class="link">
+                        View Dashboard Demo →
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Technical Specifications -->
+        <div class="auth-card mt-lg">
+            <div class="auth-body">
+                <h2 style="font-size: var(--font-size-xl); margin-bottom: var(--space-lg); color: var(--color-text); text-align: center;">
+                    Technical Specifications
+                </h2>
+                
+                <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-lg);">
+                    <!-- Spec Item -->
+                    <div style="padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-border);">
+                        <h3 style="font-size: var(--font-size-base); font-weight: 600; margin-bottom: var(--space-xs); color: var(--color-text);">
+                            📐 Responsive Breakpoints
+                        </h3>
+                        <p style="font-size: var(--font-size-sm); color: var(--color-text-light); line-height: 1.6;">
+                            Mobile: 320px | Tablet: 768px | Desktop: 1920px+
+                        </p>
+                    </div>
+                    
+                    <!-- Spec Item -->
+                    <div style="padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-border);">
+                        <h3 style="font-size: var(--font-size-base); font-weight: 600; margin-bottom: var(--space-xs); color: var(--color-text);">
+                            🎯 Touch Targets
+                        </h3>
+                        <p style="font-size: var(--font-size-sm); color: var(--color-text-light); line-height: 1.6;">
+                            Minimum 44x44px on all interactive elements (WCAG 2.1 Level AAA)
+                        </p>
+                    </div>
+                    
+                    <!-- Spec Item -->
+                    <div style="padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-border);">
+                        <h3 style="font-size: var(--font-size-base); font-weight: 600; margin-bottom: var(--space-xs); color: var(--color-text);">
+                            🔤 Typography
+                        </h3>
+                        <p style="font-size: var(--font-size-sm); color: var(--color-text-light); line-height: 1.6;">
+                            Minimum 16px font size on mobile to prevent unwanted zoom
+                        </p>
+                    </div>
+                    
+                    <!-- Spec Item -->
+                    <div style="padding-bottom: var(--space-md); border-bottom: 1px solid var(--color-border);">
+                        <h3 style="font-size: var(--font-size-base); font-weight: 600; margin-bottom: var(--space-xs); color: var(--color-text);">
+                            🖼️ Responsive Images
+                        </h3>
+                        <p style="font-size: var(--font-size-sm); color: var(--color-text-light); line-height: 1.6;">
+                            Using srcset, picture elements, and lazy loading for optimal performance
+                        </p>
+                    </div>
+                    
+                    <!-- Spec Item -->
+                    <div>
+                        <h3 style="font-size: var(--font-size-base); font-weight: 600; margin-bottom: var(--space-xs); color: var(--color-text);">
+                            ♿ Accessibility
+                        </h3>
+                        <p style="font-size: var(--font-size-sm); color: var(--color-text-light); line-height: 1.6;">
+                            ARIA labels, keyboard navigation, focus indicators, and screen reader support
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Browser Compatibility -->
+        <div class="text-center mt-lg" style="background: rgba(255, 255, 255, 0.95); padding: var(--space-lg); border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);">
+            <h3 style="font-size: var(--font-size-lg); margin-bottom: var(--space-md); color: var(--color-text);">
+                Browser Compatibility
+            </h3>
+            <div style="display: flex; justify-content: center; gap: var(--space-lg); flex-wrap: wrap; font-size: var(--font-size-sm); color: var(--color-text-light);">
+                <span>✓ Chrome 90+</span>
+                <span>✓ Firefox 88+</span>
+                <span>✓ Safari 14+</span>
+                <span>✓ Edge 90+</span>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Live region for screen reader announcements -->
+    <div aria-live="polite" aria-atomic="true" class="sr-only" id="live-region"></div>
+    
+    <!-- Service Worker Registration (Progressive Web App) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {
+                    // Service worker registration failed, continue without it
+                });
+            });
+        }
+    </script>
+</body>
+</html>
