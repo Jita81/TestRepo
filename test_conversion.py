@@ -6,6 +6,7 @@ Test script for GitHub to App Converter
 import requests
 import json
 import time
+from pathlib import Path
 
 def test_conversion():
     """Test the conversion functionality."""
@@ -50,14 +51,37 @@ def test_conversion():
             print(f"   Message: {result.get('message')}")
             if 'download_url' in result:
                 print(f"   Download URL: {result.get('download_url')}")
+        elif response.status_code == 403:
+            print("⚠️  GitHub API rate limit exceeded")
+            print("   Please wait an hour or configure a GitHub token")
+            try:
+                error_data = response.json()
+                if 'detail' in error_data:
+                    print(f"   Details: {error_data['detail']}")
+            except:
+                pass
+        elif response.status_code == 422:
+            print("❌ Invalid repository URL or request data")
+            try:
+                error_data = response.json()
+                print(f"   Details: {error_data}")
+            except:
+                pass
         else:
             print(f"❌ Conversion failed with status {response.status_code}")
             print(f"   Response: {response.text}")
             
     except requests.exceptions.Timeout:
         print("⏰ Conversion timed out (this is normal for large repositories)")
+    except requests.exceptions.ConnectionError as e:
+        print(f"❌ Network connection error: {e}")
+        print("   Make sure the server is running and accessible")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Request error: {e}")
+    except json.JSONDecodeError:
+        print("❌ Invalid JSON response from server")
     except Exception as e:
-        print(f"❌ Conversion failed: {e}")
+        print(f"❌ Unexpected error: {type(e).__name__}: {e}")
     
     print("\n" + "=" * 50)
     print("🎉 Test completed!")

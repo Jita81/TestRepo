@@ -85,11 +85,33 @@ async def convert_repository(
 @app.get("/download/{filename}")
 async def download_app(filename: str):
     """Download the generated application."""
-    file_path = f"generated_apps/{filename}"
-    if os.path.exists(file_path):
-        return FileResponse(file_path, filename=filename)
-    else:
+    # Input validation: prevent directory traversal attacks
+    if not filename or '..' in filename or '/' in filename or '\\' in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Whitelist allowed file extensions
+    allowed_extensions = {'.zip', '.tar.gz', '.exe', '.app', '.deb', '.rpm'}
+    file_ext = ''.join(Path(filename).suffixes)
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    
+    # Validate file size (prevent serving extremely large files)
+    MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
+    file_path = Path("generated_apps") / filename
+    
+    if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
+    
+    if file_path.stat().st_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large")
+    
+    # Verify file is within generated_apps directory
+    try:
+        file_path.resolve().relative_to(Path("generated_apps").resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    return FileResponse(str(file_path), filename=filename)
 
 @app.get("/status/{task_id}")
 async def get_status(task_id: str):
