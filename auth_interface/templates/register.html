@@ -17,6 +17,7 @@
     
     <!-- Stylesheets -->
     <link rel="stylesheet" href="../static/css/responsive-auth.css">
+    <link rel="stylesheet" href="../static/css/registration.css">
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
@@ -49,24 +50,6 @@
             <div class="auth-body">
                 <!-- Registration Form -->
                 <form id="registerForm" class="auth-form" novalidate aria-label="Registration form">
-                    <!-- Full Name Field -->
-                    <div class="form-group">
-                        <label for="fullName" class="form-label required">Full Name</label>
-                        <input 
-                            type="text" 
-                            id="fullName" 
-                            name="fullName" 
-                            class="form-input"
-                            placeholder="John Doe"
-                            autocomplete="name"
-                            required
-                            aria-required="true"
-                            aria-describedby="fullName-error"
-                            minlength="2"
-                            maxlength="100"
-                        >
-                        <div id="fullName-error" class="form-error" role="alert"></div>
-                    </div>
                     
                     <!-- Email Field -->
                     <div class="form-group">
