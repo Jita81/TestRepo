@@ -1,34 +1,23 @@
 {
   "name": "responsive-auth-interface",
-  "version": "1.0.0",
-  "description": "Responsive Authentication Interface with comprehensive testing",
+  "version": "2.0.0",
+  "description": "Comprehensive responsive authentication interface with secure dashboard",
   "scripts": {
-    "test": "jest --coverage",
-    "test:watch": "jest --watch",
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
-    "test:all": "npm test && npm run test:e2e",
-    "test:visual": "playwright test --grep @visual",
-    "test:accessibility": "playwright test --grep @accessibility",
-    "server": "python3 server.py",
-    "server:test": "python3 server.py 8888"
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e"
   },
-  "keywords": [
-    "authentication",
-    "responsive",
-    "accessibility",
-    "testing"
-  ],
-  "author": "",
+  "keywords": ["authentication", "dashboard", "responsive", "security"],
+  "author": "Development Team",
   "license": "MIT",
   "devDependencies": {
     "@playwright/test": "^1.40.0",
-    "@testing-library/dom": "^9.3.3",
-    "@testing-library/jest-dom": "^6.1.5",
-    "axe-core": "^4.8.3",
-    "axe-playwright": "^1.2.3",
-    "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0"
+    "@types/jest": "^29.5.0",
+    "jest": "^29.5.0",
+    "jest-environment-jsdom": "^29.5.0"
   }
 }
