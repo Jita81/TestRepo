@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Management - Implementation Validation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .test-result {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border-left: 4px solid #ccc;
+        }
+        .test-result.pass {
+            background: #d4edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+        .test-result.fail {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        .summary {
+            background: #e7f3ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .metric {
+            display: inline-block;
+            margin: 0 20px;
+            font-weight: 600;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 Token Management - Implementation Validation</h1>
+        <p>Validates the token management implementation and security features</p>
+
+        <div class="section">
+            <h2>Quick Actions</h2>
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="clearStorage()">Clear Storage</button>
+            <button onclick="inspectStorage()">Inspect Storage</button>
+        </div>
+
+        <div id="results"></div>
+
+        <div class="summary" id="summary">
+            <h3>Test Summary</h3>
+            <p>Click "Run All Tests" to begin validation</p>
+        </div>
+
+        <div class="section">
+            <h2>Manual Verification</h2>
+            <div style="display: grid; gap: 15px;">
+                <div>
+                    <h3>Test Token Storage</h3>
+                    <button onclick="testTokenStorage()">Test Storage</button>
+                    <pre id="storage-output">Click button to test</pre>
+                </div>
+                
+                <div>
+                    <h3>Test Token Validation</h3>
+                    <button onclick="testTokenValidation()">Test Validation</button>
+                    <pre id="validation-output">Click button to test</pre>
+                </div>
+                
+                <div>
+                    <h3>Test Authentication State</h3>
+                    <button onclick="testAuthState()">Test Auth State</button>
+                    <pre id="auth-output">Click button to test</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load auth services -->
+    <script src="../static/js/auth-service.js"></script>
+    <script src="../static/js/route-guard.js"></script>
+
+    <script>
+        const results = [];
+        
+        function logTest(name, passed, message = '') {
+            results.push({ name, passed, message });
+            const resultsDiv = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${passed ? 'pass' : 'fail'}`;
+            div.innerHTML = `
+                <strong>${passed ? '✅ PASS' : '❌ FAIL'}: ${name}</strong>
+                ${message ? `<br><small>${message}</small>` : ''}
+            `;
+            resultsDiv.appendChild(div);
+        }
+
+        function clearResults() {
+            results.length = 0;
+            document.getElementById('results').innerHTML = '';
+        }
+
+        function updateSummary() {
+            const passed = results.filter(r => r.passed).length;
+            const failed = results.filter(r => !r.passed).length;
+            const total = results.length;
+            const percentage = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+            const summary = document.getElementById('summary');
+            summary.innerHTML = `
+                <h3>Test Summary</h3>
+                <p>
+                    <span class="metric">Total: ${total}</span>
+                    <span class="metric" style="color: #28a745;">Passed: ${passed}</span>
+                    <span class="metric" style="color: #dc3545;">Failed: ${failed}</span>
+                    <span class="metric">Coverage: ${percentage}%</span>
+                </p>
+                ${failed === 0 && total > 0 ? '<p style="color: #28a745; font-weight: 600;">🎉 All tests passed!</p>' : ''}
+            `;
+        }
+
+        function runAllTests() {
+            clearResults();
+            clearStorage();
+
+            // Test 1: TokenStorage exists
+            try {
+                assert(typeof TokenStorage !== 'undefined', 'TokenStorage class should exist');
+                logTest('TokenStorage class exists', true);
+            } catch (e) {
+                logTest('TokenStorage class exists', false, e.message);
+            }
+
+            // Test 2: AuthService exists
+            try {
+                assert(typeof AuthService !== 'undefined', 'AuthService class should exist');
+                logTest('AuthService class exists', true);
+            } catch (e) {
+                logTest('AuthService class exists', false, e.message);
+            }
+
+            // Test 3: RouteGuard exists
+            try {
+                assert(typeof RouteGuard !== 'undefined', 'RouteGuard class should exist');
+                logTest('RouteGuard class exists', true);
+            } catch (e) {
+                logTest('RouteGuard class exists', false, e.message);
+            }
+
+            // Test 4: Validate JWT structure - valid token
+            try {
+                const tokenStorage = new TokenStorage();
+                const validToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+                const result = tokenStorage.validateTokenStructure(validToken);
+                assert(result === true, 'Should validate correct JWT');
+                logTest('Validates correct JWT structure', true);
+            } catch (e) {
+                logTest('Validates correct JWT structure', false, e.message);
+            }
+
+            // Test 5: Validate JWT structure - invalid token
+            try {
+                const tokenStorage = new TokenStorage();
+                const result = tokenStorage.validateTokenStructure('invalid.token');
+                assert(result === false, 'Should reject invalid JWT');
+                logTest('Rejects invalid JWT structure', true);
+            } catch (e) {
+                logTest('Rejects invalid JWT structure', false, e.message);
+            }
+
+            // Test 6: Store token in sessionStorage
+            try {
+                const tokenStorage = new TokenStorage();
+                const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+                tokenStorage.setToken(token, false);
+                const stored = sessionStorage.getItem('auth_token');
+                assert(stored === token, 'Token should be in sessionStorage');
+                logTest('Stores token in sessionStorage', true);
+            } catch (e) {
+                logTest('Stores token in sessionStorage', false, e.message);
+            }
+
+            // Test 7: Store token in localStorage with rememberMe
+            try {
+                clearStorage();
+                const tokenStorage = new TokenStorage();
+                const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+                tokenStorage.setToken(token, true);
+                const stored = localStorage.getItem('auth_token');
+                const rememberFlag = localStorage.getItem('remember_me');
+                assert(stored === token, 'Token should be in localStorage');
+                assert(rememberFlag === 'true', 'Remember me flag should be set');
+                logTest('Stores token in localStorage with remember me', true);
+            } catch (e) {
+                logTest('Stores token in localStorage with remember me', false, e.message);
+            }
+
+            // Test 8: Detect expired token
+            try {
+                const tokenStorage = new TokenStorage();
+                const expiredTime = Math.floor(Date.now() / 1000) - 3600;
+                const header = btoa(JSON.stringify({ alg: 'HS256' }));
+                const payload = btoa(JSON.stringify({ sub: '123', exp: expiredTime }));
+                const signature = btoa('signature');
+                const expiredToken = `${header}.${payload}.${signature}`;
+                
+                const result = tokenStorage.isTokenExpired(expiredToken);
+                assert(result === true, 'Should detect expired token');
+                logTest('Detects expired tokens', true);
+            } catch (e) {
+                logTest('Detects expired tokens', false, e.message);
+            }
+
+            // Test 9: Detect valid token
+            try {
+                const tokenStorage = new TokenStorage();
+                const futureTime = Math.floor(Date.now() / 1000) + 3600;
+                const header = btoa(JSON.stringify({ alg: 'HS256' }));
+                const payload = btoa(JSON.stringify({ sub: '123', exp: futureTime }));
+                const signature = btoa('signature');
+                const validToken = `${header}.${payload}.${signature}`;
+                
+                const result = tokenStorage.isTokenExpired(validToken);
+                assert(result === false, 'Should not consider valid token expired');
+                logTest('Recognizes valid (not expired) tokens', true);
+            } catch (e) {
+                logTest('Recognizes valid (not expired) tokens', false, e.message);
+            }
+
+            // Test 10: Remove tokens
+            try {
+                clearStorage();
+                const tokenStorage = new TokenStorage();
+                sessionStorage.setItem('auth_token', 'session_token');
+                localStorage.setItem('auth_token', 'local_token');
+                
+                tokenStorage.removeTokens();
+                
+                assert(sessionStorage.getItem('auth_token') === null, 'SessionStorage should be cleared');
+                assert(localStorage.getItem('auth_token') === null, 'LocalStorage should be cleared');
+                logTest('Removes tokens from storage', true);
+            } catch (e) {
+                logTest('Removes tokens from storage', false, e.message);
+            }
+
+            // Test 11: Decode token payload
+            try {
+                const tokenStorage = new TokenStorage();
+                const payloadData = { sub: '123', name: 'Test User', exp: Math.floor(Date.now() / 1000) + 3600 };
+                const header = btoa(JSON.stringify({ alg: 'HS256' }));
+                const payload = btoa(JSON.stringify(payloadData));
+                const signature = btoa('signature');
+                const token = `${header}.${payload}.${signature}`;
+                
+                const decoded = tokenStorage.decodeToken(token);
+                assert(decoded.sub === '123', 'Should decode sub correctly');
+                assert(decoded.name === 'Test User', 'Should decode name correctly');
+                logTest('Decodes token payload correctly', true);
+            } catch (e) {
+                logTest('Decodes token payload correctly', false, e.message);
+            }
+
+            // Test 12: AuthService isAuthenticated
+            try {
+                clearStorage();
+                const service = new AuthService();
+                const result = service.isAuthenticated();
+                assert(result === false, 'Should return false when no token');
+                logTest('AuthService.isAuthenticated() works without token', true);
+            } catch (e) {
+                logTest('AuthService.isAuthenticated() works without token', false, e.message);
+            }
+
+            // Test 13: Store and retrieve user data
+            try {
+                clearStorage();
+                const tokenStorage = new TokenStorage();
+                const userData = { id: '123', name: 'Test User', email: 'test@example.com' };
+                
+                tokenStorage.setUserData(userData);
+                const retrieved = tokenStorage.getUserData();
+                
+                assert(retrieved !== null, 'User data should be retrieved');
+                assert(retrieved.id === userData.id, 'User ID should match');
+                assert(retrieved.email === userData.email, 'Email should match');
+                logTest('Stores and retrieves user data', true);
+            } catch (e) {
+                logTest('Stores and retrieves user data', false, e.message);
+            }
+
+            // Test 14: Detect token expiring soon
+            try {
+                const tokenStorage = new TokenStorage();
+                const soonTime = Math.floor(Date.now() / 1000) + 120; // 2 minutes
+                const header = btoa(JSON.stringify({ alg: 'HS256' }));
+                const payload = btoa(JSON.stringify({ sub: '123', exp: soonTime }));
+                const signature = btoa('signature');
+                const soonToken = `${header}.${payload}.${signature}`;
+                
+                const result = tokenStorage.isTokenExpiringSoon(soonToken, 5);
+                assert(result === true, 'Should detect token expiring in 2 min (< 5 min threshold)');
+                logTest('Detects tokens expiring soon', true);
+            } catch (e) {
+                logTest('Detects tokens expiring soon', false, e.message);
+            }
+
+            // Test 15: Reject invalid token on store
+            try {
+                clearStorage();
+                const tokenStorage = new TokenStorage();
+                let errorThrown = false;
+                
+                try {
+                    tokenStorage.setToken('invalid.token');
+                } catch (err) {
+                    errorThrown = true;
+                }
+                
+                assert(errorThrown === true, 'Should throw error for invalid token');
+                logTest('Rejects invalid tokens on storage', true);
+            } catch (e) {
+                logTest('Rejects invalid tokens on storage', false, e.message);
+            }
+
+            updateSummary();
+        }
+
+        function assert(condition, message) {
+            if (!condition) {
+                throw new Error(message || 'Assertion failed');
+            }
+        }
+
+        function clearStorage() {
+            sessionStorage.clear();
+            localStorage.clear();
+            console.log('Storage cleared');
+        }
+
+        function inspectStorage() {
+            const session = {
+                auth_token: sessionStorage.getItem('auth_token'),
+                refresh_token: sessionStorage.getItem('refresh_token'),
+                user_data: sessionStorage.getItem('user_data')
+            };
+
+            const local = {
+                auth_token: localStorage.getItem('auth_token'),
+                refresh_token: localStorage.getItem('refresh_token'),
+                remember_me: localStorage.getItem('remember_me'),
+                user_data: localStorage.getItem('user_data')
+            };
+
+            console.log('SessionStorage:', session);
+            console.log('LocalStorage:', local);
+            alert('Check console for storage contents');
+        }
+
+        function testTokenStorage() {
+            const output = document.getElementById('storage-output');
+            clearStorage();
+
+            const tokenStorage = new TokenStorage();
+            const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+
+            // Test sessionStorage
+            tokenStorage.setToken(token, false);
+            const retrieved = tokenStorage.getToken();
+
+            output.textContent = `
+✅ Token stored successfully
+Storage: sessionStorage
+Retrieved: ${retrieved ? 'Yes' : 'No'}
+Token matches: ${retrieved === token}
+
+SessionStorage contents:
+${JSON.stringify({
+  auth_token: sessionStorage.getItem('auth_token'),
+  present: sessionStorage.getItem('auth_token') !== null
+}, null, 2)}
+            `;
+        }
+
+        function testTokenValidation() {
+            const output = document.getElementById('validation-output');
+            const tokenStorage = new TokenStorage();
+
+            const tests = {
+                'Valid JWT': tokenStorage.validateTokenStructure('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature'),
+                'Invalid (2 parts)': tokenStorage.validateTokenStructure('part1.part2'),
+                'Invalid (empty)': tokenStorage.validateTokenStructure(''),
+                'Invalid (null)': tokenStorage.validateTokenStructure(null)
+            };
+
+            // Expiration tests
+            const expiredToken = createToken({ exp: Math.floor(Date.now() / 1000) - 3600 });
+            const validToken = createToken({ exp: Math.floor(Date.now() / 1000) + 3600 });
+
+            tests['Expired token'] = !tokenStorage.isTokenExpired(expiredToken);
+            tests['Valid token'] = !tokenStorage.isTokenExpired(validToken);
+
+            output.textContent = `
+Validation Results:
+${Object.entries(tests).map(([name, passed]) => 
+  `${passed ? '✅' : '❌'} ${name}: ${passed}`
+).join('\n')}
+            `;
+        }
+
+        function testAuthState() {
+            const output = document.getElementById('auth-output');
+            clearStorage();
+
+            const service = new AuthService();
+
+            // Test not authenticated
+            const notAuth = !service.isAuthenticated();
+
+            // Store valid token
+            const validToken = createToken({ exp: Math.floor(Date.now() / 1000) + 3600 });
+            sessionStorage.setItem('auth_token', validToken);
+
+            // Test authenticated
+            const isAuth = service.isAuthenticated();
+
+            // Store expired token
+            clearStorage();
+            const expiredToken = createToken({ exp: Math.floor(Date.now() / 1000) - 3600 });
+            sessionStorage.setItem('auth_token', expiredToken);
+
+            // Test expired (should auto-logout)
+            const expiredAuth = !service.isAuthenticated();
+
+            output.textContent = `
+Authentication State Tests:
+
+${notAuth ? '✅' : '❌'} No token → Not authenticated
+${isAuth ? '✅' : '❌'} Valid token → Authenticated
+${expiredAuth ? '✅' : '❌'} Expired token → Not authenticated (auto-logout)
+
+Current State:
+- Authenticated: ${service.isAuthenticated()}
+- Token: ${service.getToken() ? 'Present' : 'None'}
+- User: ${JSON.stringify(service.getCurrentUser(), null, 2)}
+            `;
+        }
+
+        function createToken(payload) {
+            const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+            const payloadStr = btoa(JSON.stringify({ sub: '123', ...payload }));
+            const signature = btoa('signature');
+            return `${header}.${payloadStr}.${signature}`;
+        }
+
+        // Auto-run tests on page load
+        window.addEventListener('load', () => {
+            console.log('Token Management Validation Loaded');
+            console.log('Run tests by clicking "Run All Tests" button');
+        });
+    </script>
+</body>
+</html>

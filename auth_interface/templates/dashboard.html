@@ -93,10 +93,10 @@
                             <p>john.doe@example.com</p>
                         </div>
                     </div>
-                    <a href="login.html" class="btn btn-secondary btn-block">
+                    <button type="button" onclick="handleLogout()" class="btn btn-secondary btn-block">
                         <i aria-hidden="true">🚪</i>
                         Logout
-                    </a>
+                    </button>
                 </div>
             </div>
             
@@ -313,12 +313,53 @@
     <div aria-live="polite" aria-atomic="true" class="sr-only" id="live-region"></div>
     
     <!-- JavaScript -->
+    <script src="../static/js/auth-service.js"></script>
+    <script src="../static/js/route-guard.js"></script>
     <script src="../static/js/auth.js"></script>
     
     <!-- Additional Dashboard Functionality -->
     <script>
+        // Handle logout
+        function handleLogout() {
+            if (typeof authService !== 'undefined') {
+                authService.logout();
+            } else {
+                window.location.href = 'login.html';
+            }
+        }
+        
+        // Display user information
+        function displayUserInfo() {
+            if (typeof authService !== 'undefined') {
+                const user = authService.getCurrentUser();
+                if (user) {
+                    // Update user name in dashboard
+                    const userNameElements = document.querySelectorAll('.user-details h4');
+                    userNameElements.forEach(el => {
+                        if (user.name) el.textContent = user.name;
+                    });
+                    
+                    const userEmailElements = document.querySelectorAll('.user-details p');
+                    userEmailElements.forEach(el => {
+                        if (user.email) el.textContent = user.email;
+                    });
+                    
+                    // Update avatar with initials
+                    if (user.name) {
+                        const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
+                        const avatars = document.querySelectorAll('.user-avatar');
+                        avatars.forEach(avatar => {
+                            avatar.textContent = initials;
+                        });
+                    }
+                }
+            }
+        }
+        
         // Initialize dashboard-specific features
         document.addEventListener('DOMContentLoaded', function() {
+            // Display user information
+            displayUserInfo();
             // Set active navigation item based on current page
             const currentPath = window.location.pathname;
             const navLinks = document.querySelectorAll('.nav-link');

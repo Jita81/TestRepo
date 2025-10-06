@@ -350,31 +350,32 @@ class FormValidator {
   
   async submitForm(data) {
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // TODO: Replace with actual API call
-      console.log('Form submitted:', data);
-      
-      // Show success message
-      this.showAlert('success', 'Form submitted successfully!');
-      
-      // Redirect or handle success (e.g., for login)
+      // Handle login form
       if (this.form.id === 'loginForm') {
-        setTimeout(() => {
-          window.location.href = 'dashboard.html';
-        }, 1000);
+        await this.handleLogin(data);
       }
-      
-      if (this.form.id === 'registerForm') {
-        setTimeout(() => {
-          window.location.href = 'login.html';
-        }, 1000);
+      // Handle registration form
+      else if (this.form.id === 'registerForm') {
+        await this.handleRegistration(data);
+      }
+      // Generic form submission
+      else {
+        await this.handleGenericSubmit(data);
       }
       
     } catch (error) {
       console.error('Form submission error:', error);
-      this.showAlert('danger', 'An error occurred. Please try again.');
+      
+      // Handle specific error types
+      if (error.message === 'SESSION_EXPIRED') {
+        this.showAlert('warning', 'Your session has expired. Please log in again.');
+      } else if (error.message === 'INVALID_CREDENTIALS') {
+        this.showAlert('danger', 'Invalid email or password. Please try again.');
+      } else if (error.message === 'USER_EXISTS') {
+        this.showAlert('danger', 'An account with this email already exists.');
+      } else {
+        this.showAlert('danger', 'An error occurred. Please try again.');
+      }
     } finally {
       // Remove loading state
       if (this.submitButton) {
@@ -382,6 +383,61 @@ class FormValidator {
         this.submitButton.disabled = false;
       }
     }
+  }
+  
+  async handleLogin(data) {
+    console.log('Attempting login...');
+    
+    // Use authService if available
+    if (typeof authService !== 'undefined') {
+      try {
+        const result = await authService.login({
+          email: data.email,
+          password: data.password,
+          rememberMe: data.rememberMe === 'on'
+        });
+        
+        this.showAlert('success', 'Login successful!');
+        
+        // Redirect to return URL or dashboard
+        setTimeout(() => {
+          if (typeof routeGuard !== 'undefined') {
+            routeGuard.redirectToReturnUrl();
+          } else {
+            window.location.href = 'dashboard.html';
+          }
+        }, 1000);
+      } catch (error) {
+        throw new Error('INVALID_CREDENTIALS');
+      }
+    } else {
+      // Fallback to simulation
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      this.showAlert('success', 'Login successful!');
+      setTimeout(() => {
+        window.location.href = 'dashboard.html';
+      }, 1000);
+    }
+  }
+  
+  async handleRegistration(data) {
+    console.log('Attempting registration...');
+    
+    // TODO: Replace with actual API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    this.showAlert('success', 'Registration successful! Please log in.');
+    
+    setTimeout(() => {
+      window.location.href = 'login.html';
+    }, 1000);
+  }
+  
+  async handleGenericSubmit(data) {
+    // Generic form submission
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    console.log('Form submitted:', data);
+    this.showAlert('success', 'Form submitted successfully!');
   }
   
   getFieldLabel(input) {
