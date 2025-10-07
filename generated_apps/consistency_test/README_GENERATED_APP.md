@@ -1,6 +1,6 @@
-# Test - Generated Application
+# Test Project - Generated Application
 
-A test project
+This is a test project for testing purposes.
 
 ## Generated App Information
 
@@ -19,9 +19,9 @@ This application was automatically generated from a GitHub repository using the 
 
 ### Original Repository Information
 
-- **Title**: Test
-- **Description**: A test project
-- **Project Type**: python
+- **Title**: Test Project
+- **Description**: This is a test project for testing purposes.
+- **Project Type**: nodejs
 
 ### Troubleshooting
 

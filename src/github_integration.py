@@ -5,6 +5,7 @@ Handles cloning repositories and extracting metadata.
 
 import git
 import os
+import shutil
 import tempfile
 import requests
 from urllib.parse import urlparse

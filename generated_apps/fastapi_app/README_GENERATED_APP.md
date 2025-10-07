@@ -1,6 +1,6 @@
-# Test - Generated Application
+# FastAPI Project - Generated Application
 
-A test project
+A simple FastAPI application.
 
 ## Generated App Information
 
@@ -19,8 +19,8 @@ This application was automatically generated from a GitHub repository using the 
 
 ### Original Repository Information
 
-- **Title**: Test
-- **Description**: A test project
+- **Title**: FastAPI Project
+- **Description**: A simple FastAPI application.
 - **Project Type**: python
 
 ### Troubleshooting

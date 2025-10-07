@@ -1,27 +1,33 @@
-# Test - Generated Application
+# Test Project - Generated Application
 
-A test project
+This is a test project for testing purposes.
 
 ## Generated App Information
 
 This application was automatically generated from a GitHub repository using the GitHub-to-App converter.
 
-### Platform: WEB
+### Platform: DOCKER
 
 ### How to Use
 
 
-1. Install Python 3.7+ and pip
-2. Install dependencies: `pip install -r requirements.txt`
-3. Run the web app: `python web_app.py`
-4. Open http://localhost:8000 in your browser
+1. Install Docker and Docker Compose
+2. Build and run: `docker-compose up --build`
+3. Access the application at http://localhost:8000
+
+### Manual Docker Commands
+
+```bash
+docker build -t {app_name} .
+docker run -p 8000:8000 {app_name}
+```
 
 
 ### Original Repository Information
 
-- **Title**: Test
-- **Description**: A test project
-- **Project Type**: python
+- **Title**: Test Project
+- **Description**: This is a test project for testing purposes.
+- **Project Type**: nodejs
 
 ### Troubleshooting
 
