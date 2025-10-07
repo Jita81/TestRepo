@@ -1,0 +1,58 @@
+# Logging Configuration for GitHub to App Converter
+# 
+# This YAML file can be used to customize logging behavior.
+# Copy this file and modify the values as needed.
+
+# Application name (used in log file names)
+app_name: github_to_app
+
+# Directory where log files will be stored
+log_dir: logs
+
+# Minimum log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+log_level: INFO
+
+# Console logging settings
+console_output:
+  enabled: true
+  # Use structured JSON format for console (false = human-readable with colors)
+  json_format: false
+
+# File logging settings
+file_output:
+  enabled: true
+  # Use JSON format for log files (recommended for log aggregation)
+  json_format: true
+
+# Log rotation settings
+rotation:
+  # Maximum size of a single log file (in bytes)
+  # 10485760 = 10 MB
+  max_bytes: 10485760
+  
+  # Number of backup files to keep
+  backup_count: 5
+
+# Log file structure:
+# - {app_name}.log          : All logs (INFO and above)
+# - {app_name}_error.log    : Error logs only (ERROR and CRITICAL)
+# - {app_name}_access.log   : HTTP access logs
+
+# Example log structure (JSON format):
+# {
+#   "timestamp": "2025-10-07T12:34:56.789Z",
+#   "level": "INFO",
+#   "logger": "main",
+#   "message": "Application started",
+#   "module": "main",
+#   "function": "startup",
+#   "line": 42,
+#   "process": 12345,
+#   "thread": 67890,
+#   "thread_name": "MainThread",
+#   "context": {
+#     "request_id": "uuid-here",
+#     "method": "POST",
+#     "url": "/convert"
+#   }
+# }

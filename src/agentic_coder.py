@@ -10,17 +10,26 @@ from typing import Dict, List, Any, Optional
 from pathlib import Path
 import openai
 from dotenv import load_dotenv
+from src.logger_config import get_logger
 
 # Load environment variables
 load_dotenv()
+
+# Setup logger
+logger = get_logger(__name__)
 
 class AgenticCoder:
     """AI-powered code analysis and application generation."""
     
     def __init__(self):
-        self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("OpenAI API key not found in environment variables")
+        
+        self.client = openai.OpenAI(api_key=api_key)
         self.max_tokens = 4000
         self.model = "gpt-4"
+        logger.info(f"AgenticCoder initialized with model: {self.model}")
     
     async def analyze_codebase(self, repo_path: str, readme_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -33,14 +42,28 @@ class AgenticCoder:
         Returns:
             AI analysis of the codebase
         """
+        logger.info(f"Starting codebase analysis for: {repo_path}")
+        
         try:
             # Get project files and structure
+            logger.debug("Getting project structure")
             project_files = self._get_project_structure(repo_path)
+            logger.info(
+                f"Project structure analyzed",
+                extra={
+                    "total_files": len(project_files['files']),
+                    "extensions": project_files['extensions'],
+                    "total_size_bytes": project_files['size']
+                }
+            )
             
             # Read key files for analysis
+            logger.debug("Reading key files for analysis")
             key_files_content = self._read_key_files(repo_path, project_files)
+            logger.info(f"Read {len(key_files_content)} key files for analysis")
             
             # Create analysis prompt
+            logger.debug("Creating AI analysis prompt")
             analysis_prompt = self._create_analysis_prompt(
                 readme_data, 
                 project_files, 
@@ -48,18 +71,40 @@ class AgenticCoder:
             )
             
             # Get AI analysis
+            logger.info("Requesting AI analysis from OpenAI")
             analysis = await self._get_ai_analysis(analysis_prompt)
+            logger.info("AI analysis completed successfully")
+            
+            # Extract information
+            entry_points = self._identify_entry_points(key_files_content)
+            dependencies = self._extract_ai_dependencies(analysis)
+            build_instructions = self._extract_build_instructions(analysis)
+            runtime_requirements = self._extract_runtime_requirements(analysis)
+            
+            logger.info(
+                "Codebase analysis complete",
+                extra={
+                    "entry_points": entry_points,
+                    "dependencies_count": len(dependencies),
+                    "build_steps": len(build_instructions)
+                }
+            )
             
             return {
                 'project_structure': project_files,
                 'ai_analysis': analysis,
-                'entry_points': self._identify_entry_points(key_files_content),
-                'dependencies': self._extract_ai_dependencies(analysis),
-                'build_instructions': self._extract_build_instructions(analysis),
-                'runtime_requirements': self._extract_runtime_requirements(analysis)
+                'entry_points': entry_points,
+                'dependencies': dependencies,
+                'build_instructions': build_instructions,
+                'runtime_requirements': runtime_requirements
             }
             
         except Exception as e:
+            logger.error(
+                f"Codebase analysis failed for {repo_path}",
+                exc_info=True,
+                extra={"repo_path": repo_path}
+            )
             return {"error": f"AI analysis failed: {str(e)}"}
     
     async def generate_app_wrapper(self, analysis: Dict[str, Any], target_platform: str) -> str:
@@ -73,16 +118,36 @@ class AgenticCoder:
         Returns:
             Generated wrapper code
         """
+        logger.info(f"Generating app wrapper for platform: {target_platform}")
+        
         try:
+            logger.debug("Creating generation prompt")
             generation_prompt = self._create_generation_prompt(analysis, target_platform)
+            
+            logger.info("Requesting wrapper code generation from AI")
             wrapper_code = await self._get_ai_generation(generation_prompt)
+            
+            logger.info(
+                f"Wrapper code generated successfully",
+                extra={
+                    "platform": target_platform,
+                    "code_length": len(wrapper_code)
+                }
+            )
             return wrapper_code
             
         except Exception as e:
+            logger.error(
+                f"Failed to generate wrapper for {target_platform}",
+                exc_info=True,
+                extra={"platform": target_platform}
+            )
             return f"# Error generating wrapper: {str(e)}"
     
     def _get_project_structure(self, repo_path: str) -> Dict[str, Any]:
         """Get the project file structure."""
+        logger.debug(f"Analyzing project structure for: {repo_path}")
+        
         structure = {
             'files': [],
             'directories': [],
@@ -111,6 +176,7 @@ class AgenticCoder:
                 structure['size'] += os.path.getsize(file_path)
         
         structure['extensions'] = list(structure['extensions'])
+        logger.debug(f"Found {len(structure['files'])} files with {len(structure['extensions'])} extensions")
         return structure
     
     def _read_key_files(self, repo_path: str, project_files: Dict[str, Any]) -> Dict[str, str]:
@@ -218,6 +284,8 @@ class AgenticCoder:
     async def _get_ai_analysis(self, prompt: str) -> Dict[str, Any]:
         """Get AI analysis using OpenAI API."""
         try:
+            logger.debug(f"Sending analysis request to {self.model}")
+            
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -230,19 +298,41 @@ class AgenticCoder:
             
             content = response.choices[0].message.content
             
+            logger.info(
+                "AI analysis response received",
+                extra={
+                    "model": self.model,
+                    "tokens_used": response.usage.total_tokens if hasattr(response, 'usage') else None,
+                    "response_length": len(content)
+                }
+            )
+            
             # Try to parse as JSON
             try:
-                return json.loads(content)
-            except json.JSONDecodeError:
+                result = json.loads(content)
+                logger.debug("Successfully parsed AI response as JSON")
+                return result
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"AI response is not valid JSON, returning as text",
+                    extra={"parse_error": str(e)}
+                )
                 # If not JSON, return as text
                 return {"analysis": content}
                 
         except Exception as e:
+            logger.error(
+                "AI analysis request failed",
+                exc_info=True,
+                extra={"model": self.model}
+            )
             return {"error": f"AI analysis failed: {str(e)}"}
     
     async def _get_ai_generation(self, prompt: str) -> str:
         """Get AI-generated code using OpenAI API."""
         try:
+            logger.debug(f"Sending code generation request to {self.model}")
+            
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -253,9 +343,25 @@ class AgenticCoder:
                 temperature=0.2
             )
             
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            
+            logger.info(
+                "AI code generation response received",
+                extra={
+                    "model": self.model,
+                    "tokens_used": response.usage.total_tokens if hasattr(response, 'usage') else None,
+                    "code_length": len(content)
+                }
+            )
+            
+            return content
             
         except Exception as e:
+            logger.error(
+                "AI code generation failed",
+                exc_info=True,
+                extra={"model": self.model}
+            )
             return f"# Error generating code: {str(e)}"
     
     def _identify_entry_points(self, key_files_content: Dict[str, str]) -> List[str]:

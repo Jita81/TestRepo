@@ -11,11 +11,17 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 import markdown
 from bs4 import BeautifulSoup
+from src.logger_config import get_logger
+
+# Setup logger
+logger = get_logger(__name__)
 
 class ReadmeParser:
     """Parses README files to extract actionable information."""
     
     def __init__(self):
+        logger.info("ReadmeParser initialized")
+        
         self.installation_patterns = [
             r'install.*?(\w+)',
             r'pip install',
@@ -66,38 +72,90 @@ class ReadmeParser:
         Returns:
             Dictionary containing parsed README information
         """
+        logger.info(f"Starting README parsing for: {repo_path}")
+        
         readme_path = self._find_readme_file(repo_path)
         if not readme_path:
+            logger.warning(f"No README file found in: {repo_path}")
             return {"error": "No README file found"}
         
+        logger.info(f"README file found: {readme_path}")
+        
         # Read and parse the README
+        logger.debug("Reading README file content")
         with open(readme_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
         
+        logger.info(f"README content length: {len(content)} characters")
+        
         # Convert markdown to HTML for better parsing
+        logger.debug("Converting markdown to HTML")
         html_content = markdown.markdown(content)
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Extract structured information
+        logger.debug("Extracting title")
+        title = self._extract_title(soup)
+        
+        logger.debug("Extracting description")
+        description = self._extract_description(soup)
+        
+        logger.debug("Extracting installation instructions")
+        installation_instructions = self._extract_installation_instructions(content)
+        
+        logger.debug("Extracting dependencies")
+        dependencies = self._extract_dependencies(content, repo_path)
+        
+        logger.debug("Extracting usage instructions")
+        usage_instructions = self._extract_usage_instructions(content)
+        
+        logger.debug("Extracting configuration")
+        configuration = self._extract_configuration(content)
+        
+        logger.debug("Extracting examples")
+        examples = self._extract_examples(content)
+        
+        logger.debug("Extracting troubleshooting info")
+        troubleshooting = self._extract_troubleshooting(content)
+        
+        logger.debug("Detecting project type")
+        project_type = self._detect_project_type(repo_path)
+        
+        logger.debug("Identifying main files")
+        main_files = self._identify_main_files(repo_path)
+        
         parsed_data = {
             'raw_content': content,
             'html_content': html_content,
-            'title': self._extract_title(soup),
-            'description': self._extract_description(soup),
-            'installation_instructions': self._extract_installation_instructions(content),
-            'dependencies': self._extract_dependencies(content, repo_path),
-            'usage_instructions': self._extract_usage_instructions(content),
-            'configuration': self._extract_configuration(content),
-            'examples': self._extract_examples(content),
-            'troubleshooting': self._extract_troubleshooting(content),
-            'project_type': self._detect_project_type(repo_path),
-            'main_files': self._identify_main_files(repo_path)
+            'title': title,
+            'description': description,
+            'installation_instructions': installation_instructions,
+            'dependencies': dependencies,
+            'usage_instructions': usage_instructions,
+            'configuration': configuration,
+            'examples': examples,
+            'troubleshooting': troubleshooting,
+            'project_type': project_type,
+            'main_files': main_files
         }
+        
+        logger.info(
+            "README parsing completed",
+            extra={
+                "title": title,
+                "project_type": project_type,
+                "dependencies_count": len(dependencies.get('packages', [])),
+                "installation_steps": len(installation_instructions),
+                "main_files": len(main_files)
+            }
+        )
         
         return parsed_data
     
     def _find_readme_file(self, repo_path: str) -> Optional[str]:
         """Find the README file in the repository."""
+        logger.debug(f"Searching for README file in: {repo_path}")
+        
         readme_files = [
             "README.md",
             "README.rst",
@@ -110,8 +168,10 @@ class ReadmeParser:
         for readme_file in readme_files:
             readme_path = os.path.join(repo_path, readme_file)
             if os.path.exists(readme_path):
+                logger.debug(f"Found README: {readme_file}")
                 return readme_path
         
+        logger.debug("No README file found")
         return None
     
     def _extract_title(self, soup: BeautifulSoup) -> str:
@@ -260,27 +320,33 @@ class ReadmeParser:
     
     def _detect_project_type(self, repo_path: str) -> str:
         """Detect the type of project based on files present."""
+        logger.debug(f"Detecting project type for: {repo_path}")
+        
         files = os.listdir(repo_path)
         
+        project_type = 'unknown'
         if 'package.json' in files:
-            return 'nodejs'
+            project_type = 'nodejs'
         elif 'requirements.txt' in files or any(f.endswith('.py') for f in files):
-            return 'python'
+            project_type = 'python'
         elif 'Cargo.toml' in files:
-            return 'rust'
+            project_type = 'rust'
         elif 'pom.xml' in files:
-            return 'java'
+            project_type = 'java'
         elif 'Dockerfile' in files:
-            return 'docker'
+            project_type = 'docker'
         elif any(f.endswith('.go') for f in files):
-            return 'go'
+            project_type = 'go'
         elif any(f.endswith('.rs') for f in files):
-            return 'rust'
-        else:
-            return 'unknown'
+            project_type = 'rust'
+        
+        logger.info(f"Detected project type: {project_type}")
+        return project_type
     
     def _identify_main_files(self, repo_path: str) -> List[str]:
         """Identify main entry point files."""
+        logger.debug(f"Identifying main files in: {repo_path}")
+        
         main_files = []
         
         # Common main file patterns
@@ -295,7 +361,9 @@ class ReadmeParser:
             file_path = os.path.join(repo_path, pattern)
             if os.path.exists(file_path):
                 main_files.append(pattern)
+                logger.debug(f"Found main file: {pattern}")
         
+        logger.info(f"Identified {len(main_files)} main files")
         return main_files
     
     def _extract_section(self, content: str, section_names: List[str]) -> str:
@@ -326,12 +394,16 @@ class ReadmeParser:
     
     def _parse_dependency_file(self, file_path: str) -> List[str]:
         """Parse a specific dependency file."""
+        logger.debug(f"Parsing dependency file: {file_path}")
+        
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
             if file_path.endswith('requirements.txt'):
-                return [line.strip() for line in content.split('\n') if line.strip() and not line.startswith('#')]
+                deps = [line.strip() for line in content.split('\n') if line.strip() and not line.startswith('#')]
+                logger.info(f"Parsed {len(deps)} dependencies from requirements.txt")
+                return deps
             elif file_path.endswith('package.json'):
                 import json
                 data = json.loads(content)
@@ -340,10 +412,14 @@ class ReadmeParser:
                     deps.extend(data['dependencies'].keys())
                 if 'devDependencies' in data:
                     deps.extend(data['devDependencies'].keys())
+                logger.info(f"Parsed {len(deps)} dependencies from package.json")
                 return deps
             # Add more parsers for other file types as needed
             
         except Exception as e:
-            print(f"Error parsing dependency file {file_path}: {e}")
+            logger.warning(
+                f"Failed to parse dependency file: {file_path}",
+                extra={"file_path": file_path, "error": str(e)}
+            )
         
         return []

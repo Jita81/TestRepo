@@ -12,6 +12,10 @@ from typing import Dict, List, Any, Optional
 import tempfile
 import zipfile
 import tarfile
+from src.logger_config import get_logger
+
+# Setup logger
+logger = get_logger(__name__)
 
 class AppGenerator:
     """Generates working applications from codebases."""
@@ -19,6 +23,7 @@ class AppGenerator:
     def __init__(self):
         self.output_dir = "generated_apps"
         os.makedirs(self.output_dir, exist_ok=True)
+        logger.info(f"AppGenerator initialized with output directory: {self.output_dir}")
     
     async def generate_app(self, repo_path: str, readme_data: Dict[str, Any], 
                           code_analysis: Dict[str, Any], app_name: str, 
@@ -36,34 +41,68 @@ class AppGenerator:
         Returns:
             Path to the generated application
         """
+        logger.info(
+            f"Starting app generation: {app_name} for platform {target_platform}",
+            extra={
+                "app_name": app_name,
+                "platform": target_platform,
+                "repo_path": repo_path
+            }
+        )
+        
         try:
             # Create app directory
             app_dir = os.path.join(self.output_dir, app_name)
             if os.path.exists(app_dir):
+                logger.debug(f"Removing existing app directory: {app_dir}")
                 shutil.rmtree(app_dir)
+            
+            logger.debug(f"Creating app directory: {app_dir}")
             os.makedirs(app_dir, exist_ok=True)
             
             # Copy source code
+            logger.info("Copying source code to app directory")
             self._copy_source_code(repo_path, app_dir)
+            logger.info("Source code copied successfully")
             
             # Generate platform-specific wrapper
+            logger.info(f"Generating {target_platform} wrapper")
             if target_platform == "executable":
-                return await self._generate_executable(app_dir, readme_data, code_analysis, app_name)
+                result = await self._generate_executable(app_dir, readme_data, code_analysis, app_name)
             elif target_platform == "docker":
-                return await self._generate_docker(app_dir, readme_data, code_analysis, app_name)
+                result = await self._generate_docker(app_dir, readme_data, code_analysis, app_name)
             elif target_platform == "web":
-                return await self._generate_web_app(app_dir, readme_data, code_analysis, app_name)
+                result = await self._generate_web_app(app_dir, readme_data, code_analysis, app_name)
             else:
+                logger.error(f"Unsupported target platform: {target_platform}")
                 raise ValueError(f"Unsupported target platform: {target_platform}")
+            
+            logger.info(
+                f"App generation completed successfully",
+                extra={"app_path": result, "platform": target_platform}
+            )
+            return result
                 
         except Exception as e:
+            logger.error(
+                f"Failed to generate app: {app_name}",
+                exc_info=True,
+                extra={
+                    "app_name": app_name,
+                    "platform": target_platform,
+                    "repo_path": repo_path
+                }
+            )
             raise Exception(f"Failed to generate app: {str(e)}")
     
     def _copy_source_code(self, repo_path: str, app_dir: str):
         """Copy source code to app directory."""
+        logger.debug(f"Copying source code from {repo_path} to {app_dir}")
+        
         # Copy all files except common non-essential directories
         exclude_dirs = {'.git', '__pycache__', 'node_modules', 'target', 'build', 'dist', 'venv', 'env'}
         
+        files_copied = 0
         for root, dirs, files in os.walk(repo_path):
             # Filter out excluded directories
             dirs[:] = [d for d in dirs if d not in exclude_dirs]
@@ -82,128 +121,189 @@ class AppGenerator:
                     src_file = os.path.join(root, file)
                     dst_file = os.path.join(target_dir, file)
                     shutil.copy2(src_file, dst_file)
+                    files_copied += 1
+        
+        logger.info(f"Copied {files_copied} files to app directory")
     
     async def _generate_executable(self, app_dir: str, readme_data: Dict[str, Any], 
                                  code_analysis: Dict[str, Any], app_name: str) -> str:
         """Generate a standalone executable."""
+        logger.info(f"Generating executable for {app_name}")
+        
         try:
             # Create main wrapper script
+            logger.debug("Creating executable wrapper script")
             wrapper_script = self._create_executable_wrapper(readme_data, code_analysis)
             wrapper_path = os.path.join(app_dir, f"{app_name}_wrapper.py")
             
             with open(wrapper_path, 'w') as f:
                 f.write(wrapper_script)
+            logger.debug(f"Wrapper script created: {wrapper_path}")
             
             # Create requirements.txt
+            logger.debug("Extracting requirements")
             requirements = self._extract_requirements(readme_data, code_analysis)
             req_path = os.path.join(app_dir, "requirements.txt")
             with open(req_path, 'w') as f:
                 f.write('\n'.join(requirements))
+            logger.info(f"Created requirements.txt with {len(requirements)} dependencies")
             
             # Create build script
+            logger.debug("Creating build script")
             build_script = self._create_build_script(app_name)
             build_path = os.path.join(app_dir, "build.py")
             with open(build_path, 'w') as f:
                 f.write(build_script)
+            logger.debug(f"Build script created: {build_path}")
             
             # Create README for the generated app
+            logger.debug("Creating generated app README")
             app_readme = self._create_app_readme(readme_data, code_analysis, "executable")
             readme_path = os.path.join(app_dir, "README_GENERATED_APP.md")
             with open(readme_path, 'w') as f:
                 f.write(app_readme)
+            logger.debug(f"README created: {readme_path}")
             
             # Try to build the executable
+            logger.info("Attempting to build executable with PyInstaller")
             try:
                 result = subprocess.run([
                     "python", build_path
                 ], cwd=app_dir, capture_output=True, text=True, timeout=300)
                 
                 if result.returncode == 0:
+                    logger.info("Build completed successfully")
                     # Look for generated executable
                     exe_files = [f for f in os.listdir(app_dir) if f.endswith('.exe') or (os.path.isfile(os.path.join(app_dir, f)) and os.access(os.path.join(app_dir, f), os.X_OK))]
                     if exe_files:
-                        return os.path.join(app_dir, exe_files[0])
+                        exe_path = os.path.join(app_dir, exe_files[0])
+                        logger.info(f"Executable created: {exe_path}")
+                        return exe_path
+                else:
+                    logger.warning(
+                        f"Build failed with return code {result.returncode}",
+                        extra={"stdout": result.stdout, "stderr": result.stderr}
+                    )
                 
+            except subprocess.TimeoutExpired:
+                logger.error("Build timed out after 300 seconds")
             except Exception as e:
-                print(f"Build failed, but app structure created: {e}")
+                logger.warning(f"Build failed, but app structure created: {e}")
             
             # Return the app directory if build failed
+            logger.info(f"Returning app directory: {app_dir}")
             return app_dir
             
         except Exception as e:
+            logger.error(
+                f"Failed to generate executable for {app_name}",
+                exc_info=True,
+                extra={"app_name": app_name}
+            )
             raise Exception(f"Failed to generate executable: {str(e)}")
     
     async def _generate_docker(self, app_dir: str, readme_data: Dict[str, Any], 
                              code_analysis: Dict[str, Any], app_name: str) -> str:
         """Generate Docker container."""
+        logger.info(f"Generating Docker container for {app_name}")
+        
         try:
             # Create Dockerfile
+            logger.debug("Creating Dockerfile")
             dockerfile = self._create_dockerfile(readme_data, code_analysis)
             dockerfile_path = os.path.join(app_dir, "Dockerfile")
             with open(dockerfile_path, 'w') as f:
                 f.write(dockerfile)
+            logger.debug(f"Dockerfile created: {dockerfile_path}")
             
             # Create docker-compose.yml
+            logger.debug("Creating docker-compose.yml")
             compose_file = self._create_docker_compose(readme_data, code_analysis, app_name)
             compose_path = os.path.join(app_dir, "docker-compose.yml")
             with open(compose_path, 'w') as f:
                 f.write(compose_file)
+            logger.debug(f"docker-compose.yml created: {compose_path}")
             
             # Create startup script
+            logger.debug("Creating startup script")
             startup_script = self._create_docker_startup_script(readme_data, code_analysis)
             startup_path = os.path.join(app_dir, "start.sh")
             with open(startup_path, 'w') as f:
                 f.write(startup_script)
             os.chmod(startup_path, 0o755)
+            logger.debug(f"Startup script created: {startup_path}")
             
             # Create README for the generated app
+            logger.debug("Creating generated app README")
             app_readme = self._create_app_readme(readme_data, code_analysis, "docker")
             readme_path = os.path.join(app_dir, "README_GENERATED_APP.md")
             with open(readme_path, 'w') as f:
                 f.write(app_readme)
             
+            logger.info(f"Docker app generated successfully at {app_dir}")
             return app_dir
             
         except Exception as e:
+            logger.error(
+                f"Failed to generate Docker app for {app_name}",
+                exc_info=True,
+                extra={"app_name": app_name}
+            )
             raise Exception(f"Failed to generate Docker app: {str(e)}")
     
     async def _generate_web_app(self, app_dir: str, readme_data: Dict[str, Any], 
                               code_analysis: Dict[str, Any], app_name: str) -> str:
         """Generate web application."""
+        logger.info(f"Generating web application for {app_name}")
+        
         try:
             # Create web wrapper
+            logger.debug("Creating web wrapper")
             web_wrapper = self._create_web_wrapper(readme_data, code_analysis)
             web_path = os.path.join(app_dir, "web_app.py")
             with open(web_path, 'w') as f:
                 f.write(web_wrapper)
+            logger.debug(f"Web wrapper created: {web_path}")
             
             # Create HTML template
+            logger.debug("Creating HTML template")
             html_template = self._create_html_template(readme_data, code_analysis)
             template_path = os.path.join(app_dir, "templates")
             os.makedirs(template_path, exist_ok=True)
             with open(os.path.join(template_path, "index.html"), 'w') as f:
                 f.write(html_template)
+            logger.debug(f"HTML template created in: {template_path}")
             
             # Create static files directory
             static_path = os.path.join(app_dir, "static")
             os.makedirs(static_path, exist_ok=True)
+            logger.debug(f"Static files directory created: {static_path}")
             
             # Create requirements.txt
+            logger.debug("Creating requirements.txt")
             requirements = self._extract_requirements(readme_data, code_analysis)
             requirements.extend(['fastapi', 'uvicorn', 'jinja2'])
             req_path = os.path.join(app_dir, "requirements.txt")
             with open(req_path, 'w') as f:
                 f.write('\n'.join(requirements))
+            logger.info(f"Created requirements.txt with {len(requirements)} dependencies")
             
             # Create README for the generated app
+            logger.debug("Creating generated app README")
             app_readme = self._create_app_readme(readme_data, code_analysis, "web")
             readme_path = os.path.join(app_dir, "README_GENERATED_APP.md")
             with open(readme_path, 'w') as f:
                 f.write(app_readme)
             
+            logger.info(f"Web app generated successfully at {app_dir}")
             return app_dir
             
         except Exception as e:
+            logger.error(
+                f"Failed to generate web app for {app_name}",
+                exc_info=True,
+                extra={"app_name": app_name}
+            )
             raise Exception(f"Failed to generate web app: {str(e)}")
     
     def _create_executable_wrapper(self, readme_data: Dict[str, Any], 
