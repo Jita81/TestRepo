@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # RabbitMQ message queue
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: pipeline_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pipeline_network
+
+  # API Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: pipeline_api
+    ports:
+      - "8000:8000"
+    environment:
+      - QUEUE_HOST=rabbitmq
+      - QUEUE_PORT=5672
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - pipeline_network
+    restart: unless-stopped
+
+  # Video Generator Service
+  video_generator:
+    build:
+      context: .
+      dockerfile: Dockerfile.video
+    container_name: pipeline_video_generator
+    environment:
+      - QUEUE_HOST=rabbitmq
+      - QUEUE_PORT=5672
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - pipeline_network
+    restart: unless-stopped
+
+  # Model Converter Service
+  model_converter:
+    build:
+      context: .
+      dockerfile: Dockerfile.model
+    container_name: pipeline_model_converter
+    environment:
+      - QUEUE_HOST=rabbitmq
+      - QUEUE_PORT=5672
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - pipeline_network
+    restart: unless-stopped
+
+  # Orchestrator Service
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.orchestrator
+    container_name: pipeline_orchestrator
+    environment:
+      - QUEUE_HOST=rabbitmq
+      - QUEUE_PORT=5672
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - pipeline_network
+    restart: unless-stopped
+
+networks:
+  pipeline_network:
+    driver: bridge
+
+volumes:
+  storage:
+  logs:
