@@ -144,18 +144,67 @@ workspace/
 ├── main.py                 # FastAPI application
 ├── run.py                  # Startup script
 ├── requirements.txt        # Python dependencies
+├── requirements-dev.txt    # Development dependencies
 ├── .env.example           # Environment template
+├── pytest.ini             # Test configuration
+├── Makefile              # Convenient shortcuts
+├── TESTING.md            # Testing guide
 ├── src/                   # Core modules
 │   ├── github_integration.py
 │   ├── readme_parser.py
 │   ├── agentic_coder.py
 │   └── app_generator.py
+├── tests/                # Comprehensive test suite
+│   ├── conftest.py       # Test fixtures
+│   ├── test_readme_parser.py
+│   ├── test_github_integration.py
+│   ├── test_agentic_coder.py
+│   ├── test_app_generator.py
+│   ├── test_integration.py
+│   └── test_utils.py
 ├── templates/             # HTML templates
 │   └── index.html
 ├── static/               # Static files
 ├── generated_apps/       # Generated applications
 └── temp_repos/          # Temporary repository clones
 ```
+
+### Running Tests
+
+The project includes a comprehensive test suite with 165+ tests covering all functionality:
+
+```bash
+# Install test dependencies
+pip install -r requirements.txt
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=src --cov-report=html
+
+# Run specific test categories
+pytest -m unit           # Unit tests only
+pytest -m integration    # Integration tests only
+pytest -m smoke          # Quick validation
+
+# Using Make commands
+make test               # Run all tests
+make test-unit          # Unit tests
+make coverage           # Coverage report
+make test-smoke         # Smoke tests
+```
+
+For detailed testing documentation, see [TESTING.md](TESTING.md).
+
+### Test Coverage
+
+- ✅ **165+ comprehensive tests**
+- ✅ **Unit tests** for all core modules
+- ✅ **Integration tests** for end-to-end workflows
+- ✅ **70%+ code coverage** target
+- ✅ **Automated CI/CD** integration
+- ✅ **Mock support** for external APIs
 
 ### Adding New Platforms
 
