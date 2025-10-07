@@ -44,13 +44,48 @@ class TestTextInput:
     
     def test_whitespace_stripping(self):
         """Test whitespace is stripped."""
-        input_data = TextInput(description="  Test description  ")
-        assert input_data.description == "Test description"
+        input_data = TextInput(description="  Test description with enough length  ")
+        assert input_data.description == "Test description with enough length"
     
     def test_default_metadata(self):
         """Test default metadata is empty dict."""
-        input_data = TextInput(description="Test description")
+        input_data = TextInput(description="Test description with length")
         assert input_data.metadata == {}
+    
+    def test_edge_case_exact_min_length(self):
+        """Test input with exact minimum length."""
+        input_data = TextInput(description="1234567890")  # Exactly 10 chars
+        assert len(input_data.description) == 10
+    
+    def test_edge_case_exact_max_length(self):
+        """Test input with exact maximum length."""
+        desc = "x" * 1000  # Exactly 1000 chars
+        input_data = TextInput(description=desc)
+        assert len(input_data.description) == 1000
+    
+    def test_null_byte_in_description(self):
+        """Test that null bytes are rejected."""
+        with pytest.raises(ValidationError):
+            TextInput(description="Test\x00description with null byte")
+    
+    def test_unicode_characters(self):
+        """Test that valid unicode characters are accepted."""
+        input_data = TextInput(description="Display with émojis 🎨 and spëcial chars")
+        assert "émojis" in input_data.description
+    
+    def test_empty_metadata(self):
+        """Test that empty metadata is handled."""
+        input_data = TextInput(description="Test description", metadata={})
+        assert input_data.metadata == {}
+    
+    def test_nested_metadata(self):
+        """Test that nested metadata is preserved."""
+        metadata = {
+            "customer": {"id": "123", "name": "Test"},
+            "project": "retail"
+        }
+        input_data = TextInput(description="Test description", metadata=metadata)
+        assert input_data.metadata["customer"]["id"] == "123"
 
 
 class TestGenerateResponse:
