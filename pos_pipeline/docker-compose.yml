@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Main API Service
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - API_KEY=${API_KEY:-dev-key-change-in-production}
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_HOST=redis
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    depends_on:
+      - rabbitmq
+      - redis
+    restart: unless-stopped
+    networks:
+      - pipeline-network
+
+  # RabbitMQ Message Queue
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    restart: unless-stopped
+    networks:
+      - pipeline-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - pipeline-network
+
+volumes:
+  rabbitmq-data:
+  redis-data:
+
+networks:
+  pipeline-network:
+    driver: bridge
