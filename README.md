@@ -2,7 +2,8 @@
 
 MVP implementation of the **Automated Agile — Context Engineering Platform** process: work items, context packages (business / technical / testing sections), **D7** three-role sign-offs, **D9** manufacturing submission, **D10** Q1/Q2/Q3 triage, context gaps, and a meetings registry.
 
-Full process specification: [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md).
+- Process specification: [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md)  
+- **GitHub issue roadmap** (epics A–I, copy-paste issue bodies): [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
 
 ## Quick start
 
