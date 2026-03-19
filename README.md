@@ -79,6 +79,10 @@ GitHub to App Converter
 └── 📦 App Generator (Create Applications)
 ```
 
+### Context engineering (reference)
+
+This repo also carries the **Automated Agile — Context Engineering Platform process architecture** (v1.0, March 2026): primitives (inputs / decisions / outputs), the twelve decision types (D1–D12), seven meeting types (M1–M7), self-curating context, integrations, and the output & sign-off matrix. See [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md).
+
 ### Core Components
 
 - **`github_integration.py`**: Handles repository cloning and metadata extraction
@@ -145,6 +149,8 @@ workspace/
 ├── run.py                  # Startup script
 ├── requirements.txt        # Python dependencies
 ├── .env.example           # Environment template
+├── docs/                  # Reference documentation
+│   └── context-platform-process-architecture.md
 ├── src/                   # Core modules
 │   ├── github_integration.py
 │   ├── readme_parser.py
