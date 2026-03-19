@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 venv/
 data/*.db
+generated_apps/
+temp_repos/
