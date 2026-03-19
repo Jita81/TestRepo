@@ -7,7 +7,9 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
-class Phase(str, Enum):
+class PhaseKind(str, Enum):
+    """Delivery phase within a roadmap cycle (inception / discovery / delivery)."""
+
     inception = "inception"
     discovery = "discovery"
     delivery = "delivery"
@@ -23,6 +25,7 @@ class PackageStatus(str, Enum):
 class SignOffRole(str, Enum):
     context_engineer = "context_engineer"
     tech_lead = "tech_lead"
+    developer = "developer"
     product_owner = "product_owner"
 
 
@@ -38,25 +41,80 @@ class ManufacturingStatus(str, Enum):
     completed = "completed"
 
 
-class WorkItemCreate(BaseModel):
-    title: str = Field(..., min_length=1, max_length=500)
-    description: str = ""
-    phase: Phase = Phase.discovery
+# --- Roadmap hierarchy (A1) ---
 
 
-class WorkItemRead(BaseModel):
+class RoadmapCycleCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+class RoadmapCycleRead(BaseModel):
     id: str
-    title: str
-    description: str
-    phase: Phase
+    name: str
     created_at: datetime
 
 
+class DeliveryPhaseCreate(BaseModel):
+    roadmap_cycle_id: str
+    name: str = Field(..., min_length=1, max_length=200)
+    phase_kind: PhaseKind = PhaseKind.discovery
+    sort_order: int = 0
+
+
+class DeliveryPhaseRead(BaseModel):
+    id: str
+    roadmap_cycle_id: str
+    name: str
+    phase_kind: PhaseKind
+    sort_order: int
+    created_at: datetime
+
+
+class FeatureCreate(BaseModel):
+    delivery_phase_id: str
+    title: str = Field(..., min_length=1, max_length=500)
+    description: str = ""
+    sort_order: int = 0
+
+
+class FeatureRead(BaseModel):
+    id: str
+    delivery_phase_id: str
+    title: str
+    description: str
+    sort_order: int
+    created_at: datetime
+
+
+class StoryCreate(BaseModel):
+    feature_id: str
+    title: str = Field(..., min_length=1, max_length=500)
+    description: str = ""
+
+
+class StoryQuickCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    description: str = ""
+
+
+class StoryRead(BaseModel):
+    id: str
+    feature_id: str
+    title: str
+    description: str
+    created_at: datetime
+
+
+# --- Context package ---
+
+
 class ContextPackageCreate(BaseModel):
-    work_item_id: str
+    story_id: str
 
 
 class ContextPackageSections(BaseModel):
+    """API body: three JSON objects (validated as v2 sections on write)."""
+
     business_context: dict[str, Any] = Field(default_factory=dict)
     technical_approach: dict[str, Any] = Field(default_factory=dict)
     testing_contract: dict[str, Any] = Field(default_factory=dict)
@@ -80,19 +138,23 @@ class SignOffRead(BaseModel):
 
 class ContextPackageRead(BaseModel):
     id: str
-    work_item_id: str
+    story_id: str
     version: int
     status: PackageStatus
     readiness_score: float
+    package_schema_version: int = 2
     business_context: dict[str, Any]
     technical_approach: dict[str, Any]
     testing_contract: dict[str, Any]
+    gap_analysis: dict[str, Any] = Field(default_factory=dict)
+    content_hash: Optional[str] = None
+    approved_at: Optional[datetime] = None
     created_at: datetime
     sign_offs: list[SignOffRead] = Field(default_factory=list)
 
 
 class ContextGapCreate(BaseModel):
-    work_item_id: str
+    story_id: str
     context_package_id: Optional[str] = None
     description: str = Field(..., min_length=1)
     gap_type: str = ""
@@ -102,7 +164,7 @@ class ContextGapCreate(BaseModel):
 
 class ContextGapRead(BaseModel):
     id: str
-    work_item_id: str
+    story_id: str
     context_package_id: Optional[str]
     description: str
     gap_type: str
@@ -119,6 +181,7 @@ class ManufacturingSubmit(BaseModel):
 class ManufacturingRead(BaseModel):
     id: str
     context_package_id: str
+    package_content_hash: Optional[str] = None
     submitted_by: str
     submitted_at: datetime
     status: ManufacturingStatus

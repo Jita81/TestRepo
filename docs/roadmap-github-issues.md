@@ -1,5 +1,7 @@
 # Roadmap — GitHub issue breakdown
 
+**Progress (repo):** **A1** (hierarchy + `story_id`), **B1** (structured sections in `package_models.py`), and **B2** (approval snapshot + hash + manufacturing hash pin) have a first implementation. Remaining issues below still apply for auth, graph, meetings, integrations, etc.
+
 Use this document to create **Epics** (GitHub Milestones or parent Issues) and **child Issues**. Each block below is intended as **one issue**: title = first line; body = the rest of the block.
 
 Suggested **labels** (create in the repo if missing): `epic`, `domain-model`, `context-graph`, `d7`, `d8`, `d9`, `d10`, `d11`, `meetings`, `integrations`, `codebase-intel`, `manufacturing`, `auth`, `docs`, `tech-debt`.

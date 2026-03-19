@@ -1,4 +1,4 @@
-"""HTTP API and HTML dashboard for the Context Engineering Platform MVP."""
+"""HTTP API and HTML dashboard for the Context Engineering Platform."""
 
 from __future__ import annotations
 
@@ -14,15 +14,19 @@ from src.context_platform.schemas import (
     ContextPackageCreate,
     ContextPackageSections,
     ContextPackageUpdate,
+    DeliveryPhaseCreate,
+    FeatureCreate,
     ManufacturingSubmit,
     MeetingCreate,
     MeetingTypeRef,
-    Phase,
+    PhaseKind,
+    RoadmapCycleCreate,
     SignOffCreate,
     SignOffRole,
+    StoryCreate,
+    StoryQuickCreate,
     TriageQueue,
     TriageSubmit,
-    WorkItemCreate,
 )
 from src.context_platform.store import get_store
 
@@ -36,40 +40,90 @@ def _dump(m: Any) -> dict:
     return m.model_dump(mode="json")
 
 
-# --- JSON API ---
+# --- Roadmap & stories ---
 
 
-@api_router.post("/work-items")
-def api_create_work_item(body: WorkItemCreate):
+@api_router.post("/roadmap-cycles")
+def api_create_cycle(body: RoadmapCycleCreate):
+    return _dump(get_store().create_roadmap_cycle(body))
+
+
+@api_router.get("/roadmap-cycles")
+def api_list_cycles():
+    return [_dump(x) for x in get_store().list_roadmap_cycles()]
+
+
+@api_router.post("/delivery-phases")
+def api_create_phase(body: DeliveryPhaseCreate):
     try:
-        return _dump(get_store().create_work_item(body))
-    except Exception as e:
-        raise HTTPException(400, str(e)) from e
-
-
-@api_router.get("/work-items")
-def api_list_work_items():
-    return [_dump(x) for x in get_store().list_work_items()]
-
-
-@api_router.get("/work-items/{work_item_id}")
-def api_get_work_item(work_item_id: str):
-    try:
-        return _dump(get_store().get_work_item(work_item_id))
+        return _dump(get_store().create_delivery_phase(body))
     except KeyError:
-        raise HTTPException(404, "Work item not found") from None
+        raise HTTPException(404, "Roadmap cycle not found") from None
 
 
-@api_router.post("/work-items/{work_item_id}/context-packages")
-def api_create_package(work_item_id: str):
+@api_router.get("/delivery-phases")
+def api_list_phases(cycle_id: str):
+    return [_dump(x) for x in get_store().list_delivery_phases(cycle_id)]
+
+
+@api_router.post("/features")
+def api_create_feature(body: FeatureCreate):
+    try:
+        return _dump(get_store().create_feature(body))
+    except KeyError:
+        raise HTTPException(404, "Delivery phase not found") from None
+
+
+@api_router.get("/features")
+def api_list_features(delivery_phase_id: str):
+    return [_dump(x) for x in get_store().list_features(delivery_phase_id)]
+
+
+@api_router.post("/stories")
+def api_create_story(body: StoryCreate):
+    try:
+        return _dump(get_store().create_story(body))
+    except KeyError:
+        raise HTTPException(404, "Feature not found") from None
+
+
+@api_router.post("/stories/quick")
+def api_create_story_quick(body: StoryQuickCreate):
+    """Create a story on the default backlog feature (no roadmap navigation)."""
+    return _dump(
+        get_store().create_story_on_default_backlog(body.title, body.description)
+    )
+
+
+@api_router.get("/stories")
+def api_list_stories(feature_id: Optional[str] = None):
+    return [_dump(x) for x in get_store().list_stories(feature_id)]
+
+
+@api_router.get("/stories/{story_id}")
+def api_get_story(story_id: str):
+    try:
+        return _dump(get_store().get_story(story_id))
+    except KeyError:
+        raise HTTPException(404, "Story not found") from None
+
+
+@api_router.get("/roadmap-tree")
+def api_roadmap_tree():
+    return get_store().roadmap_tree()
+
+
+# --- Context packages, gaps, manufacturing ---
+
+
+@api_router.post("/stories/{story_id}/context-packages")
+def api_create_package(story_id: str):
     try:
         return _dump(
-            get_store().create_context_package(
-                ContextPackageCreate(work_item_id=work_item_id)
-            )
+            get_store().create_context_package(ContextPackageCreate(story_id=story_id))
         )
     except KeyError:
-        raise HTTPException(404, "Work item not found") from None
+        raise HTTPException(404, "Story not found") from None
 
 
 @api_router.get("/context-packages/{package_id}")
@@ -105,16 +159,14 @@ def api_create_gap(body: ContextGapCreate):
     try:
         return _dump(get_store().create_gap(body))
     except KeyError:
-        raise HTTPException(404, "Work item or package not found") from None
+        raise HTTPException(404, "Story or package not found") from None
 
 
 @api_router.get("/context-gaps")
-def api_list_gaps(work_item_id: Optional[str] = None, unresolved_only: bool = False):
+def api_list_gaps(story_id: Optional[str] = None, unresolved_only: bool = False):
     return [
         _dump(x)
-        for x in get_store().list_gaps(
-            work_item_id=work_item_id, unresolved_only=unresolved_only
-        )
+        for x in get_store().list_gaps(story_id=story_id, unresolved_only=unresolved_only)
     ]
 
 
@@ -154,15 +206,15 @@ def api_create_meeting(body: MeetingCreate):
     return _dump(get_store().create_meeting(body))
 
 
-# --- HTML dashboard (form posts) ---
+# --- HTML dashboard ---
 
 
 def _dashboard_context(request: Request) -> dict[str, Any]:
     store = get_store()
-    items = store.list_work_items()
-    work_blocks = []
-    for wi in items:
-        pkgs = store.list_packages_for_work_item(wi.id)
+    tree = store.roadmap_tree()
+    story_blocks = []
+    for s in store.list_stories():
+        pkgs = store.list_packages_for_story(s.id)
         pkg_views = []
         for p in pkgs:
             mfg = store.list_manufacturing_for_package(p.id)
@@ -179,16 +231,46 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
                     "testing_json": json.dumps(p.testing_contract, indent=2),
                 }
             )
-        work_blocks.append({"item": wi, "packages": pkg_views})
+        story_blocks.append({"story": s, "packages": pkg_views})
     return {
         "request": request,
-        "work_blocks": work_blocks,
+        "roadmap_tree": tree,
+        "story_blocks": story_blocks,
         "gaps": store.list_gaps(unresolved_only=True),
         "meetings": store.list_meetings(),
-        "phases": [e.value for e in Phase],
+        "phase_kinds": [e.value for e in PhaseKind],
         "roles": [e.value for e in SignOffRole],
         "queues": [e.value for e in TriageQueue],
         "meeting_types": [e.value for e in MeetingTypeRef],
+        "package_json_example": json.dumps(
+            {
+                "business_context": {
+                    "summary": "User can reset password",
+                    "business_rules": ["Token expires in 1h"],
+                    "user_stories": [
+                        {
+                            "title": "Reset password",
+                            "given_when_then": "Given logged out...",
+                        }
+                    ],
+                },
+                "technical_approach": {
+                    "components": [{"name": "AuthService", "responsibility": "tokens"}],
+                    "files_to_touch": ["src/auth.py"],
+                    "patterns": ["repository"],
+                    "error_handling": "Map 401 to login",
+                },
+                "testing_contract": {
+                    "preconditions": ["User exists"],
+                    "postconditions": ["Password changed"],
+                    "invariants": ["Session invalidated"],
+                    "scenarios": [
+                        {"name": "happy path", "scenario_type": "happy_path", "steps": "..."}
+                    ],
+                },
+            },
+            indent=2,
+        ),
     }
 
 
@@ -197,28 +279,81 @@ def dashboard(request: Request):
     return templates.TemplateResponse("context_dashboard.html", _dashboard_context(request))
 
 
-@page_router.post("/work-items")
-def form_create_work_item(
-    request: Request,
-    title: str = Form(...),
-    description: str = Form(""),
-    phase: str = Form("discovery"),
-):
-    try:
-        get_store().create_work_item(
-            WorkItemCreate(title=title, description=description, phase=Phase(phase))
-        )
-    except ValueError:
-        raise HTTPException(400, "Invalid phase") from None
+@page_router.post("/roadmap-cycles")
+def form_create_cycle(request: Request, name: str = Form(...)):
+    get_store().create_roadmap_cycle(RoadmapCycleCreate(name=name))
     return RedirectResponse(url="/context", status_code=303)
 
 
-@page_router.post("/work-items/{work_item_id}/packages")
-def form_create_package(request: Request, work_item_id: str):
+@page_router.post("/delivery-phases")
+def form_create_phase(
+    request: Request,
+    roadmap_cycle_id: str = Form(...),
+    name: str = Form(...),
+    phase_kind: str = Form("discovery"),
+    sort_order: int = Form(0),
+):
     try:
-        get_store().create_context_package(ContextPackageCreate(work_item_id=work_item_id))
+        get_store().create_delivery_phase(
+            DeliveryPhaseCreate(
+                roadmap_cycle_id=roadmap_cycle_id,
+                name=name,
+                phase_kind=PhaseKind(phase_kind),
+                sort_order=sort_order,
+            )
+        )
+    except ValueError:
+        raise HTTPException(400, "Invalid phase kind") from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/features")
+def form_create_feature(
+    request: Request,
+    delivery_phase_id: str = Form(...),
+    title: str = Form(...),
+    description: str = Form(""),
+):
+    get_store().create_feature(
+        FeatureCreate(
+            delivery_phase_id=delivery_phase_id, title=title, description=description
+        )
+    )
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/stories")
+def form_create_story(
+    request: Request,
+    feature_id: str = Form(...),
+    title: str = Form(...),
+    description: str = Form(""),
+):
+    try:
+        get_store().create_story(
+            StoryCreate(feature_id=feature_id, title=title, description=description)
+        )
     except KeyError:
-        raise HTTPException(404, "Work item not found") from None
+        raise HTTPException(404, "Feature not found") from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/stories/quick")
+def form_story_quick(
+    request: Request,
+    title: str = Form(...),
+    description: str = Form(""),
+):
+    get_store().create_story_on_default_backlog(title, description)
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/stories/{story_id}/packages")
+def form_create_package(request: Request, story_id: str):
+    try:
+        get_store().create_context_package(ContextPackageCreate(story_id=story_id))
+    except KeyError:
+        raise HTTPException(404, "Story not found") from None
     return RedirectResponse(url="/context", status_code=303)
 
 
@@ -308,7 +443,7 @@ def form_triage(
 @page_router.post("/gaps")
 def form_create_gap(
     request: Request,
-    work_item_id: str = Form(...),
+    story_id: str = Form(...),
     description: str = Form(...),
     meeting_hint: str = Form(""),
     severity: str = Form("medium"),
@@ -316,14 +451,14 @@ def form_create_gap(
     try:
         get_store().create_gap(
             ContextGapCreate(
-                work_item_id=work_item_id,
+                story_id=story_id,
                 description=description,
                 meeting_hint=meeting_hint,
                 severity=severity,
             )
         )
     except KeyError:
-        raise HTTPException(404, "Work item not found") from None
+        raise HTTPException(404, "Story not found") from None
     return RedirectResponse(url="/context", status_code=303)
 
 

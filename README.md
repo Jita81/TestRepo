@@ -1,9 +1,9 @@
 # Context Engineering Platform
 
-MVP implementation of the **Automated Agile — Context Engineering Platform** process: work items, context packages (business / technical / testing sections), **D7** three-role sign-offs, **D9** manufacturing submission, **D10** Q1/Q2/Q3 triage, context gaps, and a meetings registry.
+MVP for the **Automated Agile — Context Engineering Platform**: **roadmap hierarchy** (cycle → delivery phase → feature → **story**), **v2 structured context packages** (validated business / technical / testing sections), **D7** sign-offs with **immutable approval snapshot** + content hash, **D9** manufacturing (records package hash), **D10** triage, context gaps, meetings registry.
 
 - Process specification: [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md)  
-- **GitHub issue roadmap** (epics A–I, copy-paste issue bodies): [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
+- GitHub issue roadmap: [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
 
 ## Quick start
 
@@ -12,9 +12,20 @@ pip install -r requirements.txt
 python run.py
 ```
 
-- **Dashboard:** [http://localhost:8000/context](http://localhost:8000/context) (root `/` redirects here)
+- **Dashboard:** [http://localhost:8000/context](http://localhost:8000/context) (root `/` redirects here)  
 - **OpenAPI:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **JSON API:** `/api/context/...`
+
+## API highlights
+
+| Area | Endpoints |
+|------|-----------|
+| Roadmap | `POST/GET /api/context/roadmap-cycles`, `POST/GET /api/context/delivery-phases?cycle_id=`, `POST/GET /api/context/features?delivery_phase_id=`, `GET /api/context/roadmap-tree` |
+| Stories | `POST /api/context/stories`, `POST /api/context/stories/quick` (default backlog), `GET /api/context/stories` |
+| Package | `POST /api/context/stories/{id}/context-packages`, `PATCH /api/context/context-packages/{id}`, sign-offs, manufacturing, triage (unchanged paths) |
+
+**D7:** requires **context_engineer**, **product_owner**, and **either** **tech_lead** or **developer**. On completion, an **approved JSON snapshot** and **SHA-256 hash** are stored; the live package rows are no longer editable.
+
+**SQLite migration:** existing DBs that used `work_items` are migrated on startup into cycles/phases/features/stories; `context_packages` gains `story_id` and approval columns.
 
 ## Configuration
 
@@ -29,13 +40,17 @@ Copy `.env.example` to `.env` if you want to override defaults.
 ## Project layout
 
 ```
-├── main.py                 # FastAPI app
-├── run.py                  # `uvicorn` entry
+├── main.py
+├── run.py
 ├── requirements.txt
 ├── docs/
-│   └── context-platform-process-architecture.md
-├── src/
-│   └── context_platform/   # Schemas, SQLite store, HTTP API + dashboard
+│   ├── context-platform-process-architecture.md
+│   └── roadmap-github-issues.md
+├── src/context_platform/
+│   ├── api.py
+│   ├── package_models.py   # v2 section schemas + readiness / gap_analysis
+│   ├── schemas.py
+│   └── store.py
 └── templates/
     └── context_dashboard.html
 ```

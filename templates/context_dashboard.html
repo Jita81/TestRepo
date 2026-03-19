@@ -89,27 +89,81 @@
   <div class="grid">
     <header>
       <h1>Context Engineering Platform</h1>
-      <p class="sub">D7 gate (three sign-offs) → manufacturing (D9) → triage Q1/Q2/Q3 (D10). JSON API under <code>/api/context</code>.</p>
+      <p class="sub">Roadmap → story → context package (v2 JSON sections) → D7 (Context Engineer + <strong>Tech lead or Developer</strong> + Product Owner) → D9 → D10. API <code>/api/context</code> · <code>/api/context/roadmap-tree</code>.</p>
     </header>
 
     <div class="card">
-      <h2>New work item</h2>
-      <form method="post" action="/context/work-items">
+      <h2>Roadmap (cycle → phase → feature)</h2>
+      <form method="post" action="/context/roadmap-cycles" class="row" style="margin-bottom:1rem">
+        <div><label>New cycle name</label><input name="name" required placeholder="2026 Q1"></div>
+        <button type="submit">Add cycle</button>
+      </form>
+      <form method="post" action="/context/delivery-phases" class="row" style="margin-bottom:1rem">
+        <div>
+          <label>Cycle</label>
+          <select name="roadmap_cycle_id" required>
+            {% for block in roadmap_tree %}
+            <option value="{{ block.cycle.id }}">{{ block.cycle.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div><label>Phase name</label><input name="name" required placeholder="Discovery 1"></div>
+        <div>
+          <label>Kind</label>
+          <select name="phase_kind">{% for pk in phase_kinds %}<option value="{{ pk }}">{{ pk }}</option>{% endfor %}</select>
+        </div>
+        <div><label>Sort</label><input name="sort_order" type="number" value="0"></div>
+        <button type="submit">Add phase</button>
+      </form>
+      <form method="post" action="/context/features" style="margin-bottom:1rem">
         <div class="row">
           <div>
-            <label for="title">Title</label>
-            <input id="title" name="title" required placeholder="Feature / story group">
-          </div>
-          <div>
-            <label for="phase">Phase</label>
-            <select id="phase" name="phase">
-              {% for p in phases %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+            <label>Delivery phase</label>
+            <select name="delivery_phase_id" required>
+              {% for block in roadmap_tree %}
+              {% for pw in block.phases %}
+              <option value="{{ pw.phase.id }}">{{ block.cycle.name }} — {{ pw.phase.name }} ({{ pw.phase.phase_kind.value }})</option>
+              {% endfor %}
+              {% endfor %}
             </select>
           </div>
+          <div><label>Feature title</label><input name="title" required placeholder="Password reset"></div>
+          <button type="submit">Add feature</button>
         </div>
-        <label for="description">Description</label>
-        <textarea id="description" name="description" rows="2" placeholder="Optional"></textarea>
-        <div style="margin-top:0.75rem"><button type="submit">Create work item</button></div>
+        <label>Feature description</label>
+        <textarea name="description" rows="2" placeholder="Optional"></textarea>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>New story</h2>
+      <form method="post" action="/context/stories">
+        <div class="row">
+          <div>
+            <label for="feature_id">Feature</label>
+            <select id="feature_id" name="feature_id" required>
+              {% for block in roadmap_tree %}
+              {% for pw in block.phases %}
+              {% for fw in pw.features %}
+              <option value="{{ fw.feature.id }}">{{ block.cycle.name }} › {{ pw.phase.name }} › {{ fw.feature.title }}</option>
+              {% endfor %}
+              {% endfor %}
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="stitle">Story title</label>
+            <input id="stitle" name="title" required placeholder="As a user…">
+          </div>
+        </div>
+        <label for="sdesc">Description</label>
+        <textarea id="sdesc" name="description" rows="2"></textarea>
+        <div style="margin-top:0.75rem"><button type="submit">Create story</button></div>
+      </form>
+      <p class="muted" style="margin-top:1rem">Or drop a story on the <strong>default backlog</strong> (auto-created):</p>
+      <form method="post" action="/context/stories/quick" class="row">
+        <div><input name="title" required placeholder="Quick story title"></div>
+        <button type="submit" class="secondary">Quick story</button>
       </form>
     </div>
 
@@ -118,11 +172,11 @@
       <form method="post" action="/context/gaps">
         <div class="row">
           <div>
-            <label for="wi_gap">Work item</label>
-            <select id="wi_gap" name="work_item_id" required>
+            <label for="story_gap">Story</label>
+            <select id="story_gap" name="story_id" required>
               <option value="">— select —</option>
-              {% for b in work_blocks %}
-              <option value="{{ b.item.id }}">{{ b.item.title }}</option>
+              {% for b in story_blocks %}
+              <option value="{{ b.story.id }}">{{ b.story.title }}</option>
               {% endfor %}
             </select>
           </div>
@@ -181,11 +235,11 @@
       {% endif %}
     </div>
 
-    {% for b in work_blocks %}
+    {% for b in story_blocks %}
     <div class="card">
-      <h2>{{ b.item.title }}</h2>
-      <p class="muted">Phase: {{ b.item.phase.value }} · id: <code>{{ b.item.id }}</code></p>
-      <form method="post" action="/context/work-items/{{ b.item.id }}/packages" style="margin:0.75rem 0">
+      <h2>{{ b.story.title }}</h2>
+      <p class="muted">Story id <code>{{ b.story.id }}</code> · feature <code>{{ b.story.feature_id }}</code></p>
+      <form method="post" action="/context/stories/{{ b.story.id }}/packages" style="margin:0.75rem 0">
         <button type="submit" class="secondary">New context package version</button>
       </form>
 
@@ -196,7 +250,13 @@
           <span>Package v{{ p.version }}</span>
           <span class="badge badge-{{ p.status.value }}">{{ p.status.value }}</span>
           <span class="muted">readiness {{ p.readiness_score }}%</span>
+          {% if p.content_hash %}<span class="muted">· hash <code>{{ p.content_hash[:12] }}…</code></span>{% endif %}
         </div>
+        {% if p.status.value == 'approved' %}
+        <p class="muted" style="margin:0.35rem 0">Approved snapshot frozen. {% if p.approved_at %}<span>{{ p.approved_at }}</span>{% endif %}</p>
+        {% elif p.gap_analysis and p.gap_analysis.get('gaps') %}
+        <p class="muted" style="margin:0.35rem 0">Gaps: {{ p.gap_analysis.get('gaps') | join(', ') }}</p>
+        {% endif %}
         {% if p.sign_offs %}
         <div class="signoffs">Sign-offs:
           {% for s in p.sign_offs %}
@@ -205,6 +265,9 @@
         </div>
         {% endif %}
 
+        <details class="muted" style="margin:0.5rem 0"><summary>Example v2 section shape</summary>
+        <pre style="margin-top:0.5rem;font-size:0.75rem;overflow:auto;max-height:12rem">{{ package_json_example }}</pre>
+        </details>
         <form method="post" action="/context/packages/{{ p.id }}/sections">
           <label>Business context (JSON)</label>
           <textarea name="business_json">{{ pv.business_json }}</textarea>
@@ -215,7 +278,7 @@
           <div style="margin-top:0.5rem"><button type="submit" class="secondary">Save sections &amp; recompute readiness</button></div>
         </form>
 
-        <p class="muted" style="margin:1rem 0 0.35rem">D7 — sign-offs (Context Engineer · Tech Lead · Product Owner)</p>
+        <p class="muted" style="margin:1rem 0 0.35rem">D7 — Context Engineer · <strong>Tech lead or Developer</strong> · Product Owner</p>
         <form method="post" action="/context/packages/{{ p.id }}/sign-off" class="row">
           <div>
             <label>Role</label>
@@ -241,7 +304,7 @@
 
         {% for mv in pv.manufacturing %}
         <div style="margin-top:0.75rem;padding:0.75rem;background:var(--bg);border-radius:6px">
-          <span class="muted">Mfg {{ mv.m.id[:8] }}… · {{ mv.m.status.value }} · by {{ mv.m.submitted_by }}</span>
+          <span class="muted">Mfg {{ mv.m.id[:8] }}… · {{ mv.m.status.value }} · by {{ mv.m.submitted_by }}{% if mv.m.package_content_hash %} · pkg hash {{ mv.m.package_content_hash[:10] }}…{% endif %}</span>
           {% if mv.triage %}
           <p style="margin-top:0.35rem">Triage: <strong>{{ mv.triage.queue.value }}</strong> — {{ mv.triage.feedback[:200] }}{% if mv.triage.feedback|length > 200 %}…{% endif %}</p>
           {% else %}
@@ -269,8 +332,8 @@
     </div>
     {% endfor %}
 
-    {% if not work_blocks %}
-    <p class="muted">No work items yet. Create one above.</p>
+    {% if not story_blocks %}
+    <p class="muted">No stories yet. Add a cycle/phase/feature (or use quick story), then create a story.</p>
     {% endif %}
   </div>
 </body>
