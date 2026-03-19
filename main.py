@@ -4,6 +4,8 @@ A tool that converts any GitHub repository into a working application
 using README analysis and agentic coding.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,12 +23,34 @@ from src.github_integration import GitHubRepository
 from src.readme_parser import ReadmeParser
 from src.app_generator import AppGenerator
 from src.agentic_coder import AgenticCoder
+from src.context_platform.store import init_store
+from src.context_platform import api as context_platform_api
 
-app = FastAPI(title="GitHub to App Converter", version="1.0.0")
+Path("static").mkdir(exist_ok=True)
+Path("data").mkdir(exist_ok=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_store(os.environ.get("CONTEXT_DB_PATH", "data/context_platform.db"))
+    yield
+
+
+app = FastAPI(
+    title="GitHub to App Converter",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+app.include_router(
+    context_platform_api.api_router,
+    tags=["Context Platform API"],
+)
+app.include_router(context_platform_api.page_router)
 
 # Initialize components
 github_repo = GitHubRepository()

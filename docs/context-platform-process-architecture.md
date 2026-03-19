@@ -360,6 +360,12 @@ The entire architecture rests on a single principle: AI accelerates every part o
 
 ---
 
+## Reference implementation (this repository)
+
+An MVP aligned with gates **D7** (context package approval via three sign-offs), **D9** (manufacturing submission), and **D10** (Q1/Q2/Q3 triage) ships in `src/context_platform/`: SQLite persistence, REST API under `/api/context`, and a dashboard at `/context` when the FastAPI app is running. See the project README for URLs and `CONTEXT_DB_PATH`.
+
+---
+
 *Learn more: [contextengineering.team](https://contextengineering.team/) · [softwaremanufacturing.team](https://softwaremanufacturing.team/)*  
 *Contact: Paul@AutomatedAgile.co.uk*  
 *Version 1.0 · March 2026 · Part of the Automated Agile Framework*

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Context Engineering Platform</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4d;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3db8a6;
+      --warn: #e6a23c;
+      --danger: #e05d5d;
+      --ok: #5cb85c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 1.5rem;
+      min-height: 100vh;
+    }
+    a { color: var(--accent); }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .grid { display: grid; gap: 1.25rem; max-width: 1100px; margin: 0 auto; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .card h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.35rem; }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    textarea { font-family: ui-monospace, monospace; min-height: 100px; resize: vertical; }
+    button, .btn {
+      background: var(--accent);
+      color: #04221e;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      width: auto;
+      padding: 0.5rem 1rem;
+    }
+    button.secondary { background: var(--border); color: var(--text); }
+    button.small { padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 0.75rem; }
+    .row > * { flex: 1; min-width: 120px; }
+    .row button { flex: 0; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-draft { background: #3d4a5c; color: #c5d0e0; }
+    .badge-in_review { background: #5c4a2d; color: #f0d9a8; }
+    .badge-approved { background: #1e4d2e; color: #a8f0b8; }
+    .badge-rejected { background: #4d1e1e; color: #f0a8a8; }
+    .pkg { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
+    .pkg-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    .signoffs { font-size: 0.85rem; margin: 0.5rem 0; }
+    .gap-item { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+    .topnav { max-width: 1100px; margin: 0 auto 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+    code { font-size: 0.85em; background: var(--bg); padding: 0.1rem 0.35rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <nav class="topnav">
+    <span class="muted">Automated Agile · MVP</span>
+    <a href="/">GitHub Converter</a>
+  </nav>
+  <div class="grid">
+    <header>
+      <h1>Context Engineering Platform</h1>
+      <p class="sub">D7 gate (three sign-offs) → manufacturing (D9) → triage Q1/Q2/Q3 (D10). JSON API under <code>/api/context</code>.</p>
+    </header>
+
+    <div class="card">
+      <h2>New work item</h2>
+      <form method="post" action="/context/work-items">
+        <div class="row">
+          <div>
+            <label for="title">Title</label>
+            <input id="title" name="title" required placeholder="Feature / story group">
+          </div>
+          <div>
+            <label for="phase">Phase</label>
+            <select id="phase" name="phase">
+              {% for p in phases %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <label for="description">Description</label>
+        <textarea id="description" name="description" rows="2" placeholder="Optional"></textarea>
+        <div style="margin-top:0.75rem"><button type="submit">Create work item</button></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Context gap (self-curation)</h2>
+      <form method="post" action="/context/gaps">
+        <div class="row">
+          <div>
+            <label for="wi_gap">Work item</label>
+            <select id="wi_gap" name="work_item_id" required>
+              <option value="">— select —</option>
+              {% for b in work_blocks %}
+              <option value="{{ b.item.id }}">{{ b.item.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="severity">Severity</label>
+            <select id="severity" name="severity">
+              <option>low</option>
+              <option selected>medium</option>
+              <option>high</option>
+            </select>
+          </div>
+        </div>
+        <label for="meeting_hint">Meeting hint (M1–M7)</label>
+        <input id="meeting_hint" name="meeting_hint" placeholder="e.g. M3">
+        <label for="gdesc">Gap description</label>
+        <textarea id="gdesc" name="description" required rows="2"></textarea>
+        <div style="margin-top:0.75rem"><button type="submit">Record gap</button></div>
+      </form>
+      {% if gaps %}
+      <div style="margin-top:1rem">
+        <p class="muted" style="margin-bottom:0.5rem">Unresolved gaps</p>
+        {% for g in gaps %}
+        <div class="gap-item">
+          <strong>{{ g.description[:80] }}{% if g.description|length > 80 %}…{% endif %}</strong>
+          <span class="muted"> · {{ g.severity }} {% if g.meeting_hint %}· {{ g.meeting_hint }}{% endif %}</span>
+          <form method="post" action="/context/gaps/{{ g.id }}/resolve" style="display:inline;margin-left:0.5rem">
+            <button type="submit" class="small secondary">Resolve</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Meetings registry</h2>
+      <form method="post" action="/context/meetings" class="row">
+        <div>
+          <label for="mt">Type</label>
+          <select id="mt" name="meeting_type">
+            {% for m in meeting_types %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="mtitle">Title</label>
+          <input id="mtitle" name="title" placeholder="Optional label">
+        </div>
+        <button type="submit">Add</button>
+      </form>
+      {% if meetings %}
+      <ul class="muted" style="margin-top:0.75rem;list-style:none">
+        {% for m in meetings %}
+        <li>{{ m.meeting_type.value }} — {{ m.title or "(no title)" }} · {{ m.status }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+
+    {% for b in work_blocks %}
+    <div class="card">
+      <h2>{{ b.item.title }}</h2>
+      <p class="muted">Phase: {{ b.item.phase.value }} · id: <code>{{ b.item.id }}</code></p>
+      <form method="post" action="/context/work-items/{{ b.item.id }}/packages" style="margin:0.75rem 0">
+        <button type="submit" class="secondary">New context package version</button>
+      </form>
+
+      {% for pv in b.packages %}
+      {% set p = pv.pkg %}
+      <div class="pkg">
+        <div class="pkg-head">
+          <span>Package v{{ p.version }}</span>
+          <span class="badge badge-{{ p.status.value }}">{{ p.status.value }}</span>
+          <span class="muted">readiness {{ p.readiness_score }}%</span>
+        </div>
+        {% if p.sign_offs %}
+        <div class="signoffs">Sign-offs:
+          {% for s in p.sign_offs %}
+          <span class="muted">{{ s.role.value }} ({{ s.signed_by }})</span>{% if not loop.last %} · {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <form method="post" action="/context/packages/{{ p.id }}/sections">
+          <label>Business context (JSON)</label>
+          <textarea name="business_json">{{ pv.business_json }}</textarea>
+          <label>Technical approach (JSON)</label>
+          <textarea name="technical_json">{{ pv.technical_json }}</textarea>
+          <label>Testing contract (JSON)</label>
+          <textarea name="testing_json">{{ pv.testing_json }}</textarea>
+          <div style="margin-top:0.5rem"><button type="submit" class="secondary">Save sections &amp; recompute readiness</button></div>
+        </form>
+
+        <p class="muted" style="margin:1rem 0 0.35rem">D7 — sign-offs (Context Engineer · Tech Lead · Product Owner)</p>
+        <form method="post" action="/context/packages/{{ p.id }}/sign-off" class="row">
+          <div>
+            <label>Role</label>
+            <select name="role">
+              {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label>Name</label>
+            <input name="signed_by" required placeholder="Signer name">
+          </div>
+          <button type="submit">Sign</button>
+        </form>
+
+        <p class="muted" style="margin:1rem 0 0.35rem">D9 — manufacturing submission (requires approved package)</p>
+        <form method="post" action="/context/packages/{{ p.id }}/manufacturing" class="row">
+          <div>
+            <label>Developer</label>
+            <input name="submitted_by" required placeholder="Who submits">
+          </div>
+          <button type="submit">Submit to manufacturing</button>
+        </form>
+
+        {% for mv in pv.manufacturing %}
+        <div style="margin-top:0.75rem;padding:0.75rem;background:var(--bg);border-radius:6px">
+          <span class="muted">Mfg {{ mv.m.id[:8] }}… · {{ mv.m.status.value }} · by {{ mv.m.submitted_by }}</span>
+          {% if mv.triage %}
+          <p style="margin-top:0.35rem">Triage: <strong>{{ mv.triage.queue.value }}</strong> — {{ mv.triage.feedback[:200] }}{% if mv.triage.feedback|length > 200 %}…{% endif %}</p>
+          {% else %}
+          <form method="post" action="/context/manufacturing/{{ mv.m.id }}/triage" class="row" style="margin-top:0.5rem">
+            <div>
+              <label>Queue</label>
+              <select name="queue">
+                {% for q in queues %}<option value="{{ q }}">{{ q }}</option>{% endfor %}
+              </select>
+            </div>
+            <div style="flex:2;min-width:200px">
+              <label>Feedback</label>
+              <input name="feedback" required placeholder="Q1/Q2/Q3 rationale">
+            </div>
+            <button type="submit">Triage</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+      {% if not b.packages %}
+      <p class="muted">No context packages yet.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if not work_blocks %}
+    <p class="muted">No work items yet. Create one above.</p>
+    {% endif %}
+  </div>
+</body>
+</html>

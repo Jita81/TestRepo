@@ -79,9 +79,17 @@ GitHub to App Converter
 └── 📦 App Generator (Create Applications)
 ```
 
-### Context engineering (reference)
+### Context engineering (reference + MVP)
 
-This repo also carries the **Automated Agile — Context Engineering Platform process architecture** (v1.0, March 2026): primitives (inputs / decisions / outputs), the twelve decision types (D1–D12), seven meeting types (M1–M7), self-curating context, integrations, and the output & sign-off matrix. See [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md).
+This repo carries the **Automated Agile — Context Engineering Platform process architecture** (v1.0, March 2026) in [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md).
+
+A **runnable MVP** is included: SQLite-backed work items, context packages (business / technical / testing JSON sections), **D7** three-role sign-offs (Context Engineer, Tech Lead, Product Owner) before approval, **D9** manufacturing submissions, **D10** Q1/Q2/Q3 triage, context gaps, and a meetings registry.
+
+- **Dashboard:** after `python run.py`, open [http://localhost:8000/context](http://localhost:8000/context)
+- **JSON API:** `http://localhost:8000/api/context` (see OpenAPI at `/docs`)
+- **Database file:** `data/context_platform.db` (override with env `CONTEXT_DB_PATH`)
+
+Implementation lives under `src/context_platform/`.
 
 ### Core Components
 
@@ -152,12 +160,14 @@ workspace/
 ├── docs/                  # Reference documentation
 │   └── context-platform-process-architecture.md
 ├── src/                   # Core modules
+│   ├── context_platform/  # Context Engineering Platform MVP (API + persistence)
 │   ├── github_integration.py
 │   ├── readme_parser.py
 │   ├── agentic_coder.py
 │   └── app_generator.py
 ├── templates/             # HTML templates
-│   └── index.html
+│   ├── index.html
+│   └── context_dashboard.html
 ├── static/               # Static files
 ├── generated_apps/       # Generated applications
 └── temp_repos/          # Temporary repository clones

@@ -29,9 +29,10 @@ def setup_environment():
     # Create necessary directories
     directories = [
         "generated_apps",
-        "temp_repos", 
+        "temp_repos",
         "static",
-        "templates"
+        "templates",
+        "data",
     ]
     
     for directory in directories:
