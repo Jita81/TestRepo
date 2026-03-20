@@ -112,6 +112,10 @@ docker build -t context-platform .
 docker run -p 8000:8000 -v context_data:/app/data -e CONTEXT_API_KEY=secret context-platform
 ```
 
+### CI
+
+The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml): each push runs **`docker build`** so the image stays buildable (no registry push unless you extend the workflow).
+
 ### Platform examples
 
 - **Fly.io / Railway / Render:** Dockerfile deploy; set `PORT` if the platform injects it; bind `0.0.0.0` (default). Mount persistent disk for `/app/data`.
@@ -162,6 +166,7 @@ See [.env.example](.env.example).
 ├── Dockerfile              # Container image (uvicorn)
 ├── docker-compose.yml      # Volume-backed SQLite + port 8000
 ├── .dockerignore
+├── .github/workflows/      # Docker build CI
 ├── docs/
 │   ├── context-platform-process-architecture.md
 │   └── roadmap-github-issues.md
