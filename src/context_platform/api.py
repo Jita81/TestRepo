@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from src.context_platform.manufacturing_worker import run_stub_manufacturing_job
+from src.context_platform.context_project import get_project_id
 from src.context_platform.schemas import (
     ContextGapCreate,
     ContextPackageCreate,
@@ -20,6 +21,7 @@ from src.context_platform.schemas import (
     FeatureCreate,
     ManufacturingSubmit,
     MeetingCreate,
+    ProjectCreate,
     ExtractionItemReviewBody,
     MeetingExtractionConfirm,
     MeetingTranscriptUpdate,
@@ -46,6 +48,19 @@ page_router = APIRouter(prefix="/context", tags=["context-platform-ui"])
 
 def _dump(m: Any) -> dict:
     return m.model_dump(mode="json")
+
+
+# --- Projects ---
+
+
+@api_router.get("/projects")
+def api_list_projects():
+    return [_dump(x) for x in get_store().list_projects()]
+
+
+@api_router.post("/projects")
+def api_create_project(body: ProjectCreate):
+    return _dump(get_store().create_project(body))
 
 
 # --- Roadmap & stories ---
@@ -437,6 +452,8 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         story_blocks.append({"story": s, "packages": pkg_views})
     return {
         "request": request,
+        "projects": store.list_projects(),
+        "current_project_id": get_project_id(),
         "roadmap_tree": tree,
         "story_blocks": story_blocks,
         "gaps": store.list_gaps(unresolved_only=True),
@@ -487,6 +504,29 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
 @page_router.get("", response_class=HTMLResponse)
 def dashboard(request: Request):
     return templates.TemplateResponse("context_dashboard.html", _dashboard_context(request))
+
+
+@page_router.post("/set-project")
+def form_set_project(request: Request, project_id: str = Form(...)):
+    try:
+        get_store().get_project(project_id)
+    except KeyError:
+        raise HTTPException(404, "Project not found") from None
+    resp = RedirectResponse(url="/context", status_code=303)
+    resp.set_cookie(
+        "context_project_id",
+        project_id,
+        max_age=365 * 24 * 3600,
+        httponly=True,
+        samesite="lax",
+    )
+    return resp
+
+
+@page_router.post("/projects")
+def form_create_project(request: Request, name: str = Form(...)):
+    get_store().create_project(ProjectCreate(name=name))
+    return RedirectResponse(url="/context", status_code=303)
 
 
 @page_router.post("/roadmap-cycles")

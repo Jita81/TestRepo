@@ -1,6 +1,6 @@
 # Context Engineering Platform
 
-MVP for the **Automated Agile — Context Engineering Platform**: **roadmap hierarchy**, **v2 structured context packages**, **D7** frozen approval snapshot + hash, **D8 sprints** (commit stories with D7 gate + optional override), **stub manufacturing** + on-disk artifact, **D10 triage**, **D11 improvement backlog** (auto from **Q2/Q3** triage), **append-only audit trail**, **`decision_records`** (typed **D7 / D8 / D10 / D4** entries) + **`artifacts`** (approved package, triage, meeting extraction, sprint commitment), **meeting extraction** (optional OpenAI or pattern stub) with **per-item accept/reject**, context gaps, meetings registry.
+MVP for the **Automated Agile — Context Engineering Platform**: **projects** (workspace scope for all roadmap/story/meeting/sprint data), **roadmap hierarchy**, **v2 structured context packages**, **D7** frozen approval snapshot + hash, **D8 sprints** (commit stories with D7 gate + optional override), **stub manufacturing** + on-disk artifact, **D10 triage**, **D11 improvement backlog** (auto from **Q2/Q3** triage), **append-only audit trail**, **`decision_records`** (typed **D7 / D8 / D10 / D4** entries) + **`artifacts`** (approved package, triage, meeting extraction, sprint commitment), **meeting extraction** (optional OpenAI or pattern stub) with **per-item accept/reject**, context gaps, meetings registry.
 
 - Process specification: [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md)  
 - GitHub issue roadmap: [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
@@ -19,6 +19,7 @@ python run.py
 
 | Area | Endpoints |
 |------|-----------|
+| Projects | `GET/POST /api/context/projects` — isolate data per project (header **`X-Context-Project`**, cookie **`context_project_id`**, or env **`CONTEXT_PROJECT_ID`**) |
 | Roadmap | `POST/GET /api/context/roadmap-cycles`, `POST/GET /api/context/delivery-phases?cycle_id=`, `POST/GET /api/context/features?delivery_phase_id=`, `GET /api/context/roadmap-tree` |
 | Stories | `POST /api/context/stories`, `POST /api/context/stories/quick` (default backlog), `GET /api/context/stories` |
 | D8 Sprints | `POST/GET /api/context/sprints`, `GET /api/context/sprints/{id}` (board + commitments), `POST …/sprints/{id}/commitments`, `DELETE …/commitments/{story_id}` |
@@ -53,6 +54,7 @@ python run.py
 | `OPENAI_MODEL` | `gpt-4o-mini` | Chat model for extraction |
 | `MANUFACTURING_OUTPUT_DIR` | `data/manufacturing_outputs` | Stub manufacturing artifacts |
 | `CONTEXT_ACTOR` | `anonymous` | Default actor; override per request with **`X-Context-Actor`** |
+| `CONTEXT_PROJECT_ID` | `prj_default` | Default project id when no **`X-Context-Project`** / cookie (UI switcher sets `context_project_id`) |
 | `CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT` | unset | If `1` / `true`, allow D8 sprint commits without an approved package |
 | `CONTEXT_API_KEY` | unset | If set, **REST `/api/*`** requires `X-Context-API-Key` or `Authorization: Bearer` (HTML dashboard not gated) |
 | `HOST` | `0.0.0.0` | Bind address |
@@ -72,7 +74,9 @@ Copy `.env.example` to `.env` if you want to override defaults.
 ├── src/context_platform/
 │   ├── api.py
 │   ├── context_actor.py    # request-scoped actor (context var)
+│   ├── context_project.py  # active project id (context var + env)
 │   ├── middleware_actor.py # X-Context-Actor header
+│   ├── middleware_project.py # X-Context-Project + cookie
 │   ├── middleware_api_key.py # optional CONTEXT_API_KEY for /api/*
 │   ├── meeting_llm.py
 │   ├── meeting_extraction.py

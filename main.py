@@ -15,6 +15,7 @@ from fastapi.responses import RedirectResponse
 from src.context_platform import api as context_platform_api
 from src.context_platform.middleware_actor import ActorMiddleware
 from src.context_platform.middleware_api_key import ApiKeyMiddleware
+from src.context_platform.middleware_project import ProjectMiddleware
 from src.context_platform.store import init_store
 
 Path("data").mkdir(exist_ok=True)
@@ -36,6 +37,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(ProjectMiddleware)
 app.add_middleware(ApiKeyMiddleware)
 app.add_middleware(ActorMiddleware)
 

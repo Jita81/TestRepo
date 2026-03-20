@@ -14,6 +14,7 @@ from typing import Any, Generator, Optional
 logger = logging.getLogger(__name__)
 
 from src.context_platform.context_actor import get_actor
+from src.context_platform.context_project import DEFAULT_PROJECT_ID, get_project_id
 from src.context_platform.meeting_extraction import extract_transcript_auto
 from src.context_platform.package_models import (
     ContextPackageSectionsV2,
@@ -25,6 +26,8 @@ from src.context_platform.package_models import (
 from src.context_platform.schemas import (
     ArtifactRead,
     AuditEventRead,
+    ProjectCreate,
+    ProjectRead,
     ContextGapCreate,
     ContextGapRead,
     ContextPackageCreate,
@@ -164,8 +167,17 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
 
 
 SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO projects (id, name, created_at) VALUES ('prj_default', 'Default', datetime('now'));
+
 CREATE TABLE IF NOT EXISTS roadmap_cycles (
     id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
     name TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
@@ -191,6 +203,7 @@ CREATE TABLE IF NOT EXISTS features (
 CREATE TABLE IF NOT EXISTS stories (
     id TEXT PRIMARY KEY,
     feature_id TEXT NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+    project_id TEXT NOT NULL REFERENCES projects(id),
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
@@ -198,6 +211,7 @@ CREATE TABLE IF NOT EXISTS stories (
 
 CREATE TABLE IF NOT EXISTS sprints (
     id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
     name TEXT NOT NULL,
     roadmap_cycle_id TEXT REFERENCES roadmap_cycles(id) ON DELETE SET NULL,
     starts_at TEXT,
@@ -278,6 +292,7 @@ CREATE TABLE IF NOT EXISTS triage_results (
 
 CREATE TABLE IF NOT EXISTS meetings (
     id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
     meeting_type TEXT NOT NULL,
     title TEXT NOT NULL DEFAULT '',
     scheduled_at TEXT,
@@ -352,8 +367,8 @@ def _migrate_legacy_to_v2(conn: sqlite3.Connection) -> None:
         ts = _now()
         cid = _uid()
         conn.execute(
-            "INSERT INTO roadmap_cycles (id, name, created_at) VALUES (?,?,?)",
-            (cid, "Imported", ts),
+            "INSERT INTO roadmap_cycles (id, project_id, name, created_at) VALUES (?,?,?,?)",
+            (cid, DEFAULT_PROJECT_ID, "Imported", ts),
         )
         phase_by_kind: dict[str, str] = {}
         for row in conn.execute(
@@ -394,9 +409,16 @@ def _migrate_legacy_to_v2(conn: sqlite3.Connection) -> None:
                 feature_by_phase_id[phase_id] = fid
             fid = feature_by_phase_id[phase_id]
             conn.execute(
-                """INSERT INTO stories (id, feature_id, title, description, created_at)
-                VALUES (?,?,?,?,?)""",
-                (wi["id"], fid, wi["title"], wi["description"], wi["created_at"]),
+                """INSERT INTO stories (id, feature_id, project_id, title, description, created_at)
+                VALUES (?,?,?,?,?,?)""",
+                (
+                    wi["id"],
+                    fid,
+                    DEFAULT_PROJECT_ID,
+                    wi["title"],
+                    wi["description"],
+                    wi["created_at"],
+                ),
             )
 
     cols_cp = _table_columns(conn, "context_packages")
@@ -442,6 +464,81 @@ def _normalize_mfg_status(raw: str) -> str:
     return raw
 
 
+def _ensure_project_scoping(conn: sqlite3.Connection) -> None:
+    """Projects table + project_id columns; backfill to DEFAULT_PROJECT_ID."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )"""
+    )
+    conn.execute(
+        """INSERT OR IGNORE INTO projects (id, name, created_at)
+        VALUES (?, ?, datetime('now'))""",
+        (DEFAULT_PROJECT_ID, "Default"),
+    )
+    if _table_exists(conn, "roadmap_cycles"):
+        rc = _table_columns(conn, "roadmap_cycles")
+        if "project_id" not in rc:
+            conn.execute("ALTER TABLE roadmap_cycles ADD COLUMN project_id TEXT")
+            conn.execute(
+                "UPDATE roadmap_cycles SET project_id = ? WHERE project_id IS NULL",
+                (DEFAULT_PROJECT_ID,),
+            )
+    if _table_exists(conn, "stories"):
+        stc = _table_columns(conn, "stories")
+    else:
+        stc = set()
+    if stc and "project_id" not in stc:
+        conn.execute("ALTER TABLE stories ADD COLUMN project_id TEXT")
+        conn.execute(
+            """
+            UPDATE stories SET project_id = (
+                SELECT c.project_id FROM features f
+                JOIN delivery_phases p ON f.delivery_phase_id = p.id
+                JOIN roadmap_cycles c ON p.roadmap_cycle_id = c.id
+                WHERE f.id = stories.feature_id
+            )
+            WHERE project_id IS NULL
+            """
+        )
+        conn.execute(
+            "UPDATE stories SET project_id = ? WHERE project_id IS NULL",
+            (DEFAULT_PROJECT_ID,),
+        )
+    if _table_exists(conn, "meetings"):
+        mtc = _table_columns(conn, "meetings")
+    else:
+        mtc = set()
+    if mtc and "project_id" not in mtc:
+        conn.execute("ALTER TABLE meetings ADD COLUMN project_id TEXT")
+        conn.execute(
+            "UPDATE meetings SET project_id = ? WHERE project_id IS NULL",
+            (DEFAULT_PROJECT_ID,),
+        )
+    if _table_exists(conn, "sprints"):
+        spc = _table_columns(conn, "sprints")
+    else:
+        spc = set()
+    if spc and "project_id" not in spc:
+        conn.execute("ALTER TABLE sprints ADD COLUMN project_id TEXT")
+        conn.execute(
+            """
+            UPDATE sprints SET project_id = (
+                SELECT c.project_id FROM roadmap_cycles c
+                WHERE c.id = sprints.roadmap_cycle_id
+            )
+            WHERE project_id IS NULL AND roadmap_cycle_id IS NOT NULL
+            """
+        )
+        conn.execute(
+            "UPDATE sprints SET project_id = ? WHERE project_id IS NULL",
+            (DEFAULT_PROJECT_ID,),
+        )
+    conn.commit()
+
+
 class ContextStore:
     def __init__(self, db_path: str | Path) -> None:
         self._path = Path(db_path)
@@ -475,6 +572,7 @@ class ContextStore:
 
     def _ensure_extensions(self) -> None:
         with self._connect() as conn:
+            _ensure_project_scoping(conn)
             mcols = _table_columns(conn, "manufacturing_requests")
             for col, ddl in [
                 ("started_at", "ALTER TABLE manufacturing_requests ADD COLUMN started_at TEXT"),
@@ -573,6 +671,7 @@ class ContextStore:
                 """
                 CREATE TABLE IF NOT EXISTS sprints (
                     id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(id),
                     name TEXT NOT NULL,
                     roadmap_cycle_id TEXT REFERENCES roadmap_cycles(id) ON DELETE SET NULL,
                     starts_at TEXT,
@@ -859,72 +958,155 @@ class ContextStore:
         out["item_reviews"] = rev
         return out
 
+    def _project_id_for_phase(self, phase_id: str) -> str:
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT c.project_id FROM delivery_phases p
+                JOIN roadmap_cycles c ON p.roadmap_cycle_id = c.id
+                WHERE p.id = ?""",
+                (phase_id,),
+            ).fetchone()
+        if not row:
+            raise KeyError("delivery_phase_not_found")
+        return row["project_id"]
+
+    def _project_id_for_feature(self, feature_id: str) -> str:
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT c.project_id FROM features f
+                JOIN delivery_phases p ON f.delivery_phase_id = p.id
+                JOIN roadmap_cycles c ON p.roadmap_cycle_id = c.id
+                WHERE f.id = ?""",
+                (feature_id,),
+            ).fetchone()
+        if not row:
+            raise KeyError("feature_not_found")
+        return row["project_id"]
+
     def ensure_default_backlog_feature_id(self) -> str:
+        prj = get_project_id()
         with self._connect() as conn:
             row = conn.execute(
                 """SELECT f.id FROM features f
                 JOIN delivery_phases p ON f.delivery_phase_id = p.id
-                WHERE f.title = '__default_backlog__' LIMIT 1"""
+                JOIN roadmap_cycles c ON p.roadmap_cycle_id = c.id
+                WHERE f.title = '__default_backlog__' AND c.project_id = ?
+                LIMIT 1""",
+                (prj,),
             ).fetchone()
             if row:
                 return row[0]
             ts = _now()
             cid = _uid()
             conn.execute(
-                "INSERT INTO roadmap_cycles (id, name, created_at) VALUES (?,?,?)",
-                (cid, "Default", ts),
+                """INSERT INTO roadmap_cycles (id, project_id, name, created_at)
+                VALUES (?,?,?,?)""",
+                (cid, prj, "Default", ts),
             )
-            pid = _uid()
+            phid = _uid()
             conn.execute(
                 """INSERT INTO delivery_phases
                 (id, roadmap_cycle_id, name, phase_kind, sort_order, created_at)
                 VALUES (?,?,?,?,?,?)""",
-                (pid, cid, "Discovery", PhaseKind.discovery.value, 0, ts),
+                (phid, cid, "Discovery", PhaseKind.discovery.value, 0, ts),
             )
             fid = _uid()
             conn.execute(
                 """INSERT INTO features
                 (id, delivery_phase_id, title, description, sort_order, created_at)
                 VALUES (?,?,?,?,?,?)""",
-                (fid, pid, "__default_backlog__", "", 0, ts),
+                (fid, phid, "__default_backlog__", "", 0, ts),
             )
             conn.commit()
             return fid
 
-    # --- roadmap ---
-    def create_roadmap_cycle(self, data: RoadmapCycleCreate) -> RoadmapCycleRead:
-        rid = _uid()
+    # --- projects ---
+    def create_project(self, data: ProjectCreate) -> ProjectRead:
+        pid = _uid()
         ts = _now()
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO roadmap_cycles (id, name, created_at) VALUES (?,?,?)",
-                (rid, data.name, ts),
+                "INSERT INTO projects (id, name, created_at) VALUES (?,?,?)",
+                (pid, data.name, ts),
             )
             conn.commit()
-        self.log_audit("created", "roadmap_cycle", rid, detail={"name": data.name})
-        return self.get_roadmap_cycle(rid)
+        self.log_audit("created", "project", pid, detail={"name": data.name})
+        return self.get_project(pid)
 
-    def get_roadmap_cycle(self, cycle_id: str) -> RoadmapCycleRead:
+    def list_projects(self) -> list[ProjectRead]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM projects ORDER BY created_at ASC"
+            ).fetchall()
+        return [
+            ProjectRead(
+                id=r["id"],
+                name=r["name"],
+                created_at=datetime.fromisoformat(r["created_at"]),
+            )
+            for r in rows
+        ]
+
+    def get_project(self, project_id: str) -> ProjectRead:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM roadmap_cycles WHERE id = ?", (cycle_id,)
+                "SELECT * FROM projects WHERE id = ?", (project_id,)
             ).fetchone()
         if not row:
-            raise KeyError("roadmap_cycle_not_found")
-        return RoadmapCycleRead(
+            raise KeyError("project_not_found")
+        return ProjectRead(
             id=row["id"],
             name=row["name"],
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 
+    # --- roadmap ---
+    def create_roadmap_cycle(self, data: RoadmapCycleCreate) -> RoadmapCycleRead:
+        rid = _uid()
+        ts = _now()
+        prj = get_project_id()
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO roadmap_cycles (id, project_id, name, created_at)
+                VALUES (?,?,?,?)""",
+                (rid, prj, data.name, ts),
+            )
+            conn.commit()
+        self.log_audit(
+            "created",
+            "roadmap_cycle",
+            rid,
+            detail={"name": data.name, "project_id": prj},
+        )
+        return self.get_roadmap_cycle(rid)
+
+    def get_roadmap_cycle(self, cycle_id: str) -> RoadmapCycleRead:
+        prj = get_project_id()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM roadmap_cycles WHERE id = ? AND project_id = ?",
+                (cycle_id, prj),
+            ).fetchone()
+        if not row:
+            raise KeyError("roadmap_cycle_not_found")
+        return RoadmapCycleRead(
+            id=row["id"],
+            project_id=row["project_id"],
+            name=row["name"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
     def list_roadmap_cycles(self) -> list[RoadmapCycleRead]:
+        prj = get_project_id()
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM roadmap_cycles ORDER BY created_at DESC"
+                "SELECT * FROM roadmap_cycles WHERE project_id = ? ORDER BY created_at DESC",
+                (prj,),
             ).fetchall()
         return [
             RoadmapCycleRead(
                 id=r["id"],
+                project_id=r["project_id"],
                 name=r["name"],
                 created_at=datetime.fromisoformat(r["created_at"]),
             )
@@ -959,6 +1141,9 @@ class ContextStore:
         return self.get_delivery_phase(pid)
 
     def get_delivery_phase(self, phase_id: str) -> DeliveryPhaseRead:
+        pj = self._project_id_for_phase(phase_id)
+        if pj != get_project_id():
+            raise KeyError("delivery_phase_not_found")
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM delivery_phases WHERE id = ?", (phase_id,)
@@ -1020,6 +1205,9 @@ class ContextStore:
         return self.get_feature(fid)
 
     def get_feature(self, feature_id: str) -> FeatureRead:
+        pj = self._project_id_for_feature(feature_id)
+        if pj != get_project_id():
+            raise KeyError("feature_not_found")
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM features WHERE id = ?", (feature_id,)
@@ -1054,14 +1242,16 @@ class ContextStore:
         ]
 
     def create_story(self, data: StoryCreate) -> StoryRead:
-        self.get_feature(data.feature_id)
+        sprj = self._project_id_for_feature(data.feature_id)
+        if sprj != get_project_id():
+            raise KeyError("feature_not_found")
         sid = _uid()
         ts = _now()
         with self._connect() as conn:
             conn.execute(
-                """INSERT INTO stories (id, feature_id, title, description, created_at)
-                VALUES (?,?,?,?,?)""",
-                (sid, data.feature_id, data.title, data.description, ts),
+                """INSERT INTO stories (id, feature_id, project_id, title, description, created_at)
+                VALUES (?,?,?,?,?,?)""",
+                (sid, data.feature_id, sprj, data.title, data.description, ts),
             )
             conn.commit()
         self.log_audit(
@@ -1077,35 +1267,44 @@ class ContextStore:
         return self.create_story(StoryCreate(feature_id=fid, title=title, description=description))
 
     def get_story(self, story_id: str) -> StoryRead:
+        prj = get_project_id()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM stories WHERE id = ?", (story_id,)
+                "SELECT * FROM stories WHERE id = ? AND project_id = ?",
+                (story_id, prj),
             ).fetchone()
         if not row:
             raise KeyError("story_not_found")
         return StoryRead(
             id=row["id"],
             feature_id=row["feature_id"],
+            project_id=row["project_id"],
             title=row["title"],
             description=row["description"],
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 
     def list_stories(self, feature_id: Optional[str] = None) -> list[StoryRead]:
+        prj = get_project_id()
         with self._connect() as conn:
             if feature_id:
+                self.get_feature(feature_id)
                 rows = conn.execute(
-                    "SELECT * FROM stories WHERE feature_id = ? ORDER BY created_at DESC",
-                    (feature_id,),
+                    """SELECT * FROM stories WHERE feature_id = ? AND project_id = ?
+                    ORDER BY created_at DESC""",
+                    (feature_id, prj),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM stories ORDER BY created_at DESC"
+                    """SELECT * FROM stories WHERE project_id = ?
+                    ORDER BY created_at DESC""",
+                    (prj,),
                 ).fetchall()
         return [
             StoryRead(
                 id=r["id"],
                 feature_id=r["feature_id"],
+                project_id=r["project_id"],
                 title=r["title"],
                 description=r["description"],
                 created_at=datetime.fromisoformat(r["created_at"]),
@@ -1141,6 +1340,7 @@ class ContextStore:
     def _sprint_row_to_read(self, row: sqlite3.Row) -> SprintRead:
         return SprintRead(
             id=row["id"],
+            project_id=row["project_id"],
             name=row["name"],
             roadmap_cycle_id=row["roadmap_cycle_id"],
             starts_at=(
@@ -1154,8 +1354,10 @@ class ContextStore:
         )
 
     def create_sprint(self, data: SprintCreate) -> SprintRead:
+        sprj = get_project_id()
         if data.roadmap_cycle_id:
-            self.get_roadmap_cycle(data.roadmap_cycle_id)
+            c = self.get_roadmap_cycle(data.roadmap_cycle_id)
+            sprj = c.project_id
         sid = _uid()
         ts = _now()
         starts = data.starts_at.isoformat() if data.starts_at else None
@@ -1163,10 +1365,11 @@ class ContextStore:
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO sprints
-                (id, name, roadmap_cycle_id, starts_at, ends_at, capacity_notes, created_at)
-                VALUES (?,?,?,?,?,?,?)""",
+                (id, project_id, name, roadmap_cycle_id, starts_at, ends_at, capacity_notes, created_at)
+                VALUES (?,?,?,?,?,?,?,?)""",
                 (
                     sid,
+                    sprj,
                     data.name,
                     data.roadmap_cycle_id,
                     starts,
@@ -1180,18 +1383,22 @@ class ContextStore:
         return self.get_sprint(sid)
 
     def get_sprint(self, sprint_id: str) -> SprintRead:
+        prj = get_project_id()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM sprints WHERE id = ?", (sprint_id,)
+                "SELECT * FROM sprints WHERE id = ? AND project_id = ?",
+                (sprint_id, prj),
             ).fetchone()
         if not row:
             raise KeyError("sprint_not_found")
         return self._sprint_row_to_read(row)
 
     def list_sprints(self) -> list[SprintRead]:
+        prj = get_project_id()
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM sprints ORDER BY created_at DESC"
+                "SELECT * FROM sprints WHERE project_id = ? ORDER BY created_at DESC",
+                (prj,),
             ).fetchall()
         return [self._sprint_row_to_read(r) for r in rows]
 
@@ -1352,6 +1559,8 @@ class ContextStore:
         return self.get_sprint_commitment_read(commitment_id)
 
     def remove_sprint_commitment(self, sprint_id: str, story_id: str) -> None:
+        self.get_sprint(sprint_id)
+        self.get_story(story_id)
         with self._connect() as conn:
             r = conn.execute(
                 """SELECT id FROM sprint_commitments
@@ -1458,6 +1667,19 @@ class ContextStore:
         )
         return self.get_context_package(pid)
 
+    def get_project_id_for_package(self, package_id: str) -> str:
+        """Resolve owning project without request scope (e.g. background jobs)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT s.project_id FROM context_packages cp
+                JOIN stories s ON cp.story_id = s.id
+                WHERE cp.id = ?""",
+                (package_id,),
+            ).fetchone()
+        if not row:
+            raise KeyError("context_package_not_found")
+        return row["project_id"]
+
     def get_context_package(self, package_id: str) -> ContextPackageRead:
         with self._connect() as conn:
             row = conn.execute(
@@ -1469,9 +1691,11 @@ class ContextStore:
                 "SELECT role, signed_by, signed_at FROM sign_offs WHERE context_package_id = ? ORDER BY signed_at",
                 (package_id,),
             ).fetchall()
+        self.get_story(row["story_id"])
         return self._row_to_package(row, signs)
 
     def list_packages_for_story(self, story_id: str) -> list[ContextPackageRead]:
+        self.get_story(story_id)
         with self._connect() as conn:
             ids = [
                 r["id"]
@@ -1685,6 +1909,7 @@ class ContextStore:
             ).fetchone()
         if not row:
             raise KeyError("gap_not_found")
+        self.get_story(row["story_id"])
         return ContextGapRead(
             id=row["id"],
             story_id=row["story_id"],
@@ -1700,14 +1925,17 @@ class ContextStore:
     def list_gaps(
         self, story_id: Optional[str] = None, unresolved_only: bool = False
     ) -> list[ContextGapRead]:
-        q = "SELECT * FROM context_gaps WHERE 1=1"
-        params: list[Any] = []
+        prj = get_project_id()
+        q = """SELECT g.* FROM context_gaps g
+        JOIN stories s ON g.story_id = s.id
+        WHERE s.project_id = ?"""
+        params: list[Any] = [prj]
         if story_id:
-            q += " AND story_id = ?"
+            q += " AND g.story_id = ?"
             params.append(story_id)
         if unresolved_only:
-            q += " AND resolved = 0"
-        q += " ORDER BY created_at DESC"
+            q += " AND g.resolved = 0"
+        q += " ORDER BY g.created_at DESC"
         with self._connect() as conn:
             rows = conn.execute(q, params).fetchall()
         return [
@@ -1805,7 +2033,9 @@ class ContextStore:
         return row
 
     def get_manufacturing(self, request_id: str) -> ManufacturingRead:
-        return self._mfg_row_to_read(self.get_manufacturing_row(request_id))
+        row = self.get_manufacturing_row(request_id)
+        self.get_context_package(row["context_package_id"])
+        return self._mfg_row_to_read(row)
 
     def update_manufacturing_status(
         self,
@@ -1999,12 +2229,17 @@ class ContextStore:
         queue: Optional[str] = None,
         limit: int = 100,
     ) -> list[TriageRead]:
-        q = "SELECT * FROM triage_results WHERE 1=1"
-        params: list[Any] = []
+        prj = get_project_id()
+        q = """SELECT t.* FROM triage_results t
+        JOIN manufacturing_requests m ON t.manufacturing_request_id = m.id
+        JOIN context_packages cp ON m.context_package_id = cp.id
+        JOIN stories s ON cp.story_id = s.id
+        WHERE s.project_id = ?"""
+        params: list[Any] = [prj]
         if queue:
-            q += " AND queue = ?"
+            q += " AND t.queue = ?"
             params.append(queue)
-        q += " ORDER BY created_at DESC LIMIT ?"
+        q += " ORDER BY t.created_at DESC LIMIT ?"
         params.append(min(limit, 500))
         with self._connect() as conn:
             rows = conn.execute(q, params).fetchall()
@@ -2027,8 +2262,14 @@ class ContextStore:
             row["extraction_status"] if "extraction_status" in keys else "none"
         ) or "none"
         conf = row["extraction_confirmed_at"] if "extraction_confirmed_at" in keys else None
+        proj = (
+            row["project_id"]
+            if "project_id" in keys and row["project_id"]
+            else DEFAULT_PROJECT_ID
+        )
         return MeetingRead(
             id=row["id"],
+            project_id=proj,
             meeting_type=MeetingTypeRef(row["meeting_type"]),
             title=row["title"] or "",
             scheduled_at=sched,
@@ -2045,35 +2286,44 @@ class ContextStore:
     def create_meeting(self, data: MeetingCreate) -> MeetingRead:
         mid = _uid()
         ts = _now()
+        prj = get_project_id()
         sched = data.scheduled_at.isoformat() if data.scheduled_at else None
         with self._connect() as conn:
             conn.execute(
-                """INSERT INTO meetings (id, meeting_type, title, scheduled_at, status, created_at)
-                VALUES (?,?,?,?,?,?)""",
-                (mid, data.meeting_type.value, data.title, sched, "planned", ts),
+                """INSERT INTO meetings (id, project_id, meeting_type, title, scheduled_at, status, created_at)
+                VALUES (?,?,?,?,?,?,?)""",
+                (mid, prj, data.meeting_type.value, data.title, sched, "planned", ts),
             )
             conn.commit()
         self.log_audit(
             "created",
             "meeting",
             mid,
-            detail={"meeting_type": data.meeting_type.value, "title": data.title},
+            detail={
+                "meeting_type": data.meeting_type.value,
+                "title": data.title,
+                "project_id": prj,
+            },
         )
         return self.get_meeting(mid)
 
     def get_meeting(self, meeting_id: str) -> MeetingRead:
+        prj = get_project_id()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM meetings WHERE id = ?", (meeting_id,)
+                "SELECT * FROM meetings WHERE id = ? AND project_id = ?",
+                (meeting_id, prj),
             ).fetchone()
         if not row:
             raise KeyError("meeting_not_found")
         return self._meeting_row_to_read(row)
 
     def list_meetings(self) -> list[MeetingRead]:
+        prj = get_project_id()
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM meetings ORDER BY created_at DESC"
+                "SELECT * FROM meetings WHERE project_id = ? ORDER BY created_at DESC",
+                (prj,),
             ).fetchall()
         return [self._meeting_row_to_read(r) for r in rows]
 
@@ -2256,12 +2506,15 @@ class ContextStore:
     def list_improvement_items(
         self, *, status: Optional[str] = "open", limit: int = 200
     ) -> list[ImprovementItemRead]:
-        q = "SELECT * FROM context_improvement_items WHERE 1=1"
-        params: list[Any] = []
+        prj = get_project_id()
+        q = """SELECT i.* FROM context_improvement_items i
+        LEFT JOIN stories s ON i.story_id = s.id
+        WHERE (i.story_id IS NULL OR s.project_id = ?)"""
+        params: list[Any] = [prj]
         if status:
-            q += " AND status = ?"
+            q += " AND i.status = ?"
             params.append(status)
-        q += " ORDER BY created_at DESC LIMIT ?"
+        q += " ORDER BY i.created_at DESC LIMIT ?"
         params.append(min(limit, 500))
         with self._connect() as conn:
             rows = conn.execute(q, params).fetchall()
@@ -2282,6 +2535,9 @@ class ContextStore:
         ]
 
     def resolve_improvement_item(self, item_id: str) -> ImprovementItemRead:
+        row = self._get_improvement_row(item_id)
+        if row["story_id"]:
+            self.get_story(row["story_id"])
         with self._connect() as conn:
             conn.execute(
                 "UPDATE context_improvement_items SET status = 'closed' WHERE id = ?",

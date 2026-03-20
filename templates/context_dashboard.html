@@ -90,12 +90,24 @@
 <body>
   <nav class="topnav">
     <span class="muted">Automated Agile · MVP</span>
+    <form method="post" action="/context/set-project" style="display:flex;align-items:center;gap:0.5rem;margin:0">
+      <label class="muted" style="font-size:0.85rem">Project</label>
+      <select name="project_id" onchange="this.form.submit()" style="width:auto;min-width:10rem">
+        {% for p in projects %}
+        <option value="{{ p.id }}" {% if p.id == current_project_id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
     <a href="/docs">API docs</a>
   </nav>
   <div class="grid">
     <header>
       <h1>Context Engineering Platform</h1>
-      <p class="sub">Roadmap → story → D7 → <strong>D8 sprints</strong> → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D8/D10/D4) + <strong>artifacts</strong>. Set actor via header <code>X-Context-Actor</code> or env <code>CONTEXT_ACTOR</code>.</p>
+      <p class="sub">Roadmap → story → D7 → <strong>D8 sprints</strong> → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D8/D10/D4) + <strong>artifacts</strong>. Scope data by <strong>project</strong> (cookie / <code>X-Context-Project</code> / env <code>CONTEXT_PROJECT_ID</code>). Set actor via <code>X-Context-Actor</code> or <code>CONTEXT_ACTOR</code>.</p>
+      <form method="post" action="/context/projects" class="row" style="margin-bottom:1rem;max-width:28rem">
+        <div><label>New project name</label><input name="name" required placeholder="Product A"></div>
+        <button type="submit">Create project</button>
+      </form>
     </header>
 
     <div class="card">

@@ -55,6 +55,19 @@ class ManufacturingStatus(str, Enum):
     completed = "completed"
 
 
+# --- Projects (tenant / workspace scope) ---
+
+
+class ProjectCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+class ProjectRead(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
+
+
 # --- Roadmap hierarchy (A1) ---
 
 
@@ -64,6 +77,7 @@ class RoadmapCycleCreate(BaseModel):
 
 class RoadmapCycleRead(BaseModel):
     id: str
+    project_id: str
     name: str
     created_at: datetime
 
@@ -114,6 +128,7 @@ class StoryQuickCreate(BaseModel):
 class StoryRead(BaseModel):
     id: str
     feature_id: str
+    project_id: str
     title: str
     description: str
     created_at: datetime
@@ -132,6 +147,7 @@ class SprintCreate(BaseModel):
 
 class SprintRead(BaseModel):
     id: str
+    project_id: str
     name: str
     roadmap_cycle_id: Optional[str] = None
     starts_at: Optional[datetime] = None
@@ -303,6 +319,7 @@ class MeetingCreate(BaseModel):
 
 class MeetingRead(BaseModel):
     id: str
+    project_id: str
     meeting_type: MeetingTypeRef
     title: str
     scheduled_at: Optional[datetime]

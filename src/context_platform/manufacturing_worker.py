@@ -51,6 +51,7 @@ def run_stub_manufacturing_job(request_id: str) -> None:
     """
 
     store = get_store()
+    old_proj = os.environ.get("CONTEXT_PROJECT_ID")
     try:
         store.update_manufacturing_status(
             request_id,
@@ -60,6 +61,10 @@ def run_stub_manufacturing_job(request_id: str) -> None:
         time.sleep(1.2)
         row = store.get_manufacturing_row(request_id)
         pid = row["context_package_id"]
+        try:
+            os.environ["CONTEXT_PROJECT_ID"] = store.get_project_id_for_package(pid)
+        except KeyError:
+            pass
         h = row["package_content_hash"]
         summary_line = _package_one_line_summary(store, pid)
 
@@ -109,3 +114,8 @@ Replace `run_stub_manufacturing_job` with your codegen / CI adapter. This file i
             )
         except Exception:
             pass
+    finally:
+        if old_proj is None:
+            os.environ.pop("CONTEXT_PROJECT_ID", None)
+        else:
+            os.environ["CONTEXT_PROJECT_ID"] = old_proj
