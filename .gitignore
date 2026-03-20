@@ -4,5 +4,6 @@ __pycache__/
 .venv/
 venv/
 data/*.db
+data/manufacturing_outputs/
 generated_apps/
 temp_repos/

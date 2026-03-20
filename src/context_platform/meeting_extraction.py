@@ -46,3 +46,14 @@ def stub_extract_transcript(text: str) -> dict[str, Any]:
         "extractor": "stub_v1",
         "proposed_items": items,
     }
+
+
+def extract_transcript_auto(text: str) -> dict[str, Any]:
+    """Use OpenAI when `OPENAI_API_KEY` + `openai` package; else pattern stub."""
+
+    from src.context_platform.meeting_llm import try_llm_extract
+
+    llm = try_llm_extract(text)
+    if llm is not None:
+        return llm
+    return stub_extract_transcript(text)

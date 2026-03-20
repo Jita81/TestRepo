@@ -2,3 +2,5 @@ fastapi
 uvicorn[standard]
 jinja2
 python-multipart
+python-dotenv
+openai>=1.0.0

@@ -235,6 +235,7 @@ def api_meeting_transcript(meeting_id: str, body: MeetingTranscriptUpdate):
 
 @api_router.post("/meetings/{meeting_id}/extract-stub")
 def api_meeting_extract_stub(meeting_id: str):
+    """Run extraction: OpenAI when `OPENAI_API_KEY` is set, else DECISION:/ACTION:/REQ: stub."""
     try:
         return _dump(get_store().run_meeting_extraction_stub(meeting_id))
     except KeyError:

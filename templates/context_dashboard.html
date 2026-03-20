@@ -243,8 +243,9 @@
             <button type="submit" class="secondary" style="margin-top:0.35rem">Save transcript</button>
           </form>
           <form method="post" action="/context/meetings/{{ m.id }}/extract-stub" style="margin-top:0.5rem">
-            <button type="submit">Run stub extraction</button>
+            <button type="submit">Run extraction</button>
           </form>
+          <p class="muted" style="font-size:0.8rem;margin-top:0.25rem">Uses OpenAI if <code>OPENAI_API_KEY</code> is set; otherwise line-prefix stub.</p>
           {% if m.extraction_draft and m.extraction_draft.get('proposed_items') %}
           <div class="muted" style="margin-top:0.75rem">
             <strong>Draft items</strong>

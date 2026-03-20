@@ -6,13 +6,19 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+load_dotenv()
 from fastapi.responses import RedirectResponse
 
 from src.context_platform import api as context_platform_api
 from src.context_platform.store import init_store
 
 Path("data").mkdir(exist_ok=True)
+Path(os.environ.get("MANUFACTURING_OUTPUT_DIR", "data/manufacturing_outputs")).mkdir(
+    parents=True, exist_ok=True
+)
 
 
 @asynccontextmanager

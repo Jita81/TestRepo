@@ -27,6 +27,10 @@ python run.py
 
 **D7:** requires **context_engineer**, **product_owner**, and **either** **tech_lead** or **developer**. On completion, an **approved JSON snapshot** and **SHA-256 hash** are stored; the live package rows are no longer editable.
 
+**Meeting extraction:** set **`OPENAI_API_KEY`** (and optional **`OPENAI_MODEL`**, default `gpt-4o-mini`) for LLM-based draft items; without a key, the **DECISION:/ACTION:/REQ:** pattern stub runs. **`python-dotenv`** loads `.env` from `main.py`.
+
+**Manufacturing output:** each stub run writes **`MANUFACTURING.md`** under **`MANUFACTURING_OUTPUT_DIR`** (default `data/manufacturing_outputs/<request_id>/`).
+
 **SQLite migration:** existing DBs that used `work_items` are migrated on startup into cycles/phases/features/stories; `context_packages` gains `story_id` and approval columns.
 
 ## Configuration
@@ -34,6 +38,9 @@ python run.py
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `CONTEXT_DB_PATH` | `data/context_platform.db` | SQLite database file |
+| `OPENAI_API_KEY` | — | Optional; enables LLM meeting extraction |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Chat model for extraction |
+| `MANUFACTURING_OUTPUT_DIR` | `data/manufacturing_outputs` | Stub manufacturing artifacts |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Port |
 
@@ -50,7 +57,10 @@ Copy `.env.example` to `.env` if you want to override defaults.
 │   └── roadmap-github-issues.md
 ├── src/context_platform/
 │   ├── api.py
-│   ├── package_models.py   # v2 section schemas + readiness / gap_analysis
+│   ├── meeting_llm.py      # optional OpenAI extraction
+│   ├── meeting_extraction.py
+│   ├── manufacturing_worker.py
+│   ├── package_models.py
 │   ├── schemas.py
 │   └── store.py
 └── templates/

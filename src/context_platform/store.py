@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Generator, Optional
 
-from src.context_platform.meeting_extraction import stub_extract_transcript
+from src.context_platform.meeting_extraction import extract_transcript_auto
 from src.context_platform.package_models import (
     ContextPackageSectionsV2,
     compute_readiness_v2,
@@ -1164,7 +1164,7 @@ class ContextStore:
         m = self.get_meeting(meeting_id)
         if not m.transcript:
             raise ValueError("meeting_has_no_transcript")
-        draft = stub_extract_transcript(m.transcript)
+        draft = extract_transcript_auto(m.transcript)
         ts = _now()
         with self._connect() as conn:
             conn.execute(
