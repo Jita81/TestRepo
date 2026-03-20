@@ -1,89 +1,186 @@
 # Context Engineering Platform
 
-MVP for the **Automated Agile — Context Engineering Platform**: **projects** (workspace scope for all roadmap/story/meeting/sprint data), **roadmap hierarchy**, **v2 structured context packages**, **D7** frozen approval snapshot + hash, **D8 sprints** (commit stories with D7 gate + optional override), **stub manufacturing** + on-disk artifact, **D10 triage**, **D11 improvement backlog** (auto from **Q2/Q3** triage), **append-only audit trail**, **`decision_records`** (typed **D7 / D8 / D10 / D4** entries) + **`artifacts`** (approved package, triage, meeting extraction, sprint commitment), **meeting extraction** (optional OpenAI or pattern stub) with **per-item accept/reject**, context gaps, meetings registry.
+Reference implementation for the **Automated Agile — Context Engineering Platform**: a **self-curating context graph** (roadmap → story → **D7** context package → **D8** sprint commitment → **D9** manufacturing → **D10** triage → **D11** improvement backlog) with **meetings (D4 extraction)**, **audit trail**, **decision/artifact records**, and **project-scoped** workspaces.
 
-- Process specification: [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md)  
-- GitHub issue roadmap: [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
+**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
 
-## Quick start
+---
+
+## Programme goals (what “done” means)
+
+The programme exists so that **the right person has the right context to make the right decision at the right time**—using three primitives everywhere: **Inputs → Decisions → Outputs**, with **decisions D1–D12** and **meetings M1–M7** as first-class process steps.
+
+| Goal | Target outcome |
+|------|----------------|
+| **Structured context** | Context packages are validated, versioned, and **D7-approved** before manufacturing. |
+| **Traceability** | Approvals, triage, extractions, and sprint commitments are **attributed** and **queryable**. |
+| **Delivery spine** | Roadmap, sprints, manufacturing, and triage connect **stories → code path → feedback**. |
+| **Self-curation** | Gaps, triage (Q2/Q3), and improvement items **feed back** into context quality. |
+| **Governance** | Multi-**project** isolation, optional **API key**, and hooks for future **org/auth**. |
+
+This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a single-process API, and a dashboard—not full enterprise auth, integrations, or real codegen.
+
+---
+
+## Implementation status
+
+| Area | Spec / epic | Status in repo |
+|------|-------------|----------------|
+| Roadmap hierarchy | A1 | **Done** — cycle → phase → feature → story |
+| Structured context package + D7 snapshot | B1, B2 | **Done** — Pydantic v2 sections, hash, frozen snapshot |
+| Gap analysis / readiness | B3 | **Partial** — readiness + gap hints from schema; not full blocking UI |
+| Decision & artifact records | A2 | **Partial** — `decision_records` + `artifacts`; **D7, D8, D10, D4** wired; not full D1–D12 UI |
+| Audit / provenance | A3 | **Partial** — append-only events; **before/after** on key package + gap actions; not full graph diff |
+| Manufacturing | H1 / D9 | **Stub** — background job + `MANUFACTURING.md`; not real codegen/CI |
+| Triage D10 | C2 | **Partial** — structured Q1/Q2/Q3 + `detail_json` + list API |
+| Sprint D8 | C1 | **Partial** — sprints + commitments + D7 gate; light on dates/capacity |
+| D11 backlog | C3 | **Partial** — items from Q2/Q3; basic list/resolve |
+| Meetings / extraction D4 | D2 | **Partial** — transcript, LLM or stub, per-item review, confirm |
+| Projects / tenancy | I2 | **Partial** — `projects` + `project_id` scope; **not** org/RBAC |
+| Auth | I1 | **Not done** — actor string + optional **API key** for `/api/*` only |
+| Integrations | F | **Not done** |
+| Codebase intelligence | G | **Not done** |
+
+---
+
+## What’s left (grouped backlog)
+
+1. **Graph & governance:** `project_id` (or org) on **audit / decisions / artifacts**; filter APIs; optional **PostgreSQL** for multi-instance deploys.
+2. **Identity:** Session or token auth for **dashboard**; roles (PO, CE, dev) beyond string actor.
+3. **Delivery depth:** D8 sprint calendar/capacity UI; **D12** release sign-off placeholder; manufacturing **real** adapter (repo + PR).
+4. **Meetings:** **D1** agenda items + status; **D3** gap-driven agenda rules; richer M1–M7 registry.
+5. **Product / analytics:** Triage trends, improvement metrics, exports; **B4** predicted queue heuristic.
+6. **Integrations:** Chat, PM, SCM webhooks (roadmap outlines in [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)).
+
+---
+
+## Agent cycle phases (suggested autonomous work units)
+
+Use these as **sequenced iterations** for coding agents (or human sprints). Each phase has a clear “done” signal without requiring calendar estimates.
+
+| Phase | Focus | Done when |
+|-------|--------|-----------|
+| **1 — Scope completion** | Attach **project_id** (or `project_id` FK) to `audit_events`, `decision_records`, `artifacts`; filter list APIs; backfill from story/package | No cross-project leakage in traceability reads |
+| **2 — Auth MVP** | Login session OR API tokens for **dashboard**; protect `POST /context/*`; keep `CONTEXT_API_KEY` for automation | Dashboard not world-writable in prod |
+| **3 — Manufacturing v2** | Replace stub with **git clone + patch + test** adapter (configurable); status machine unchanged | One real pipeline path documented |
+| **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | API + minimal UI for agenda |
+| **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | End-to-end demo path |
+| **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | Deploy runbook validated |
+
+Phases **1–2** unlock trustworthy multi-tenant demos; **3–4** deepen Automated Agile **D9/D4**; **5–6** move toward “platform” operations.
+
+---
+
+## Quick start (local)
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env   # optional
 python run.py
 ```
 
-- **Dashboard:** [http://localhost:8000/context](http://localhost:8000/context) (root `/` redirects here)  
-- **OpenAPI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Dashboard:** http://localhost:8000/context ( `/` redirects here )
+- **OpenAPI:** http://localhost:8000/docs
 
-## API highlights
+---
 
-| Area | Endpoints |
-|------|-----------|
-| Projects | `GET/POST /api/context/projects` — isolate data per project (header **`X-Context-Project`**, cookie **`context_project_id`**, or env **`CONTEXT_PROJECT_ID`**) |
-| Roadmap | `POST/GET /api/context/roadmap-cycles`, `POST/GET /api/context/delivery-phases?cycle_id=`, `POST/GET /api/context/features?delivery_phase_id=`, `GET /api/context/roadmap-tree` |
-| Stories | `POST /api/context/stories`, `POST /api/context/stories/quick` (default backlog), `GET /api/context/stories` |
-| D8 Sprints | `POST/GET /api/context/sprints`, `GET /api/context/sprints/{id}` (board + commitments), `POST …/sprints/{id}/commitments`, `DELETE …/commitments/{story_id}` |
-| Package | `POST …/context-packages`, `PATCH …/context-packages/{id}`, sign-offs |
-| Manufacturing | `POST …/context-packages/{id}/manufacturing` (starts **background stub job**), `POST …/manufacturing/{id}/triage`, `GET …/triage-results` (optional `queue`, `limit`) |
-| Meetings | `PUT …/transcript`, `POST …/extract-stub`, `POST …/extraction-items/{i}/review`, `POST …/extraction-accept-all`, `POST …/confirm-extraction`, `GET …/meetings/{id}` |
-| Audit | `GET /api/context/audit-events` (optional `entity_type`, `entity_id`, **`action`**, `limit`) — package updates & sign-offs include **before/after** section hashes |
-| Decisions | `GET /api/context/decision-records` (filter by `entity_type`, `entity_id`, `decision_code`) |
-| Artifacts | `GET /api/context/artifacts` (filter by `entity_type`, `entity_id`, `artifact_kind`) |
-| D11 | `GET /api/context/improvement-items`, `POST …/improvement-items/{id}/resolve` |
+## Deployment
 
-**D7:** requires **context_engineer**, **product_owner**, and **either** **tech_lead** or **developer**. On completion, an **approved JSON snapshot** and **SHA-256 hash** are stored; the live package rows are no longer editable.
+### Docker (recommended)
 
-**D8:** a story may appear in **at most one** sprint commitment. By default the story must have an **approved** package; set **`CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT=1`** (or use the dashboard checkbox / API `allow_unapproved`) to bypass for admins.
+```bash
+docker compose up --build
+```
 
-**D10 triage (structured):** **Q1** requires notes. **Q2** requires at least one **gap line** (and stores `gap_items` in `detail`). **Q3** requires **root cause category** + **narrative** (`detail_json` on `triage_results`). Human-readable text is still in `feedback` for legacy display.
+- App listens on **8000**.
+- SQLite and manufacturing outputs use a **named volume** (`data`) so they survive restarts—see [docker-compose.yml](docker-compose.yml).
 
-**Audit / A3 (partial):** `context_package` **updated** and **sign_off** events store compact **before/after** snapshots (section SHA-256 prefixes, status, sign-off roles). **Gap resolve** records resolved transition. Large `detail_json` payloads are truncated defensively.
+**Production checklist**
 
-**Meeting extraction:** set **`OPENAI_API_KEY`** (and optional **`OPENAI_MODEL`**, default `gpt-4o-mini`) for LLM-based draft items; without a key, the **DECISION:/ACTION:/REQ:** pattern stub runs. **`python-dotenv`** loads `.env` from `main.py`.
+| Item | Notes |
+|------|--------|
+| **Secrets** | Set `CONTEXT_API_KEY` for REST; use strong values for any future auth |
+| **Project default** | Set `CONTEXT_PROJECT_ID` or rely on UI cookie / `X-Context-Project` |
+| **Persistence** | Mount a volume at `/app/data` (see compose) or switch DB later |
+| **HTTPS** | Terminate TLS at your reverse proxy / platform load balancer |
+| **OpenAI** | Optional `OPENAI_API_KEY` for meeting extraction |
 
-**Manufacturing output:** each stub run writes **`MANUFACTURING.md`** under **`MANUFACTURING_OUTPUT_DIR`** (default `data/manufacturing_outputs/<request_id>/`).
+**Build image only**
 
-**SQLite migration:** existing DBs that used `work_items` are migrated on startup into cycles/phases/features/stories; `context_packages` gains `story_id` and approval columns.
+```bash
+docker build -t context-platform .
+docker run -p 8000:8000 -v context_data:/app/data -e CONTEXT_API_KEY=secret context-platform
+```
+
+### Platform examples
+
+- **Fly.io / Railway / Render:** Dockerfile deploy; set `PORT` if the platform injects it; bind `0.0.0.0` (default). Mount persistent disk for `/app/data`.
+- **Kubernetes:** Single Deployment + PVC for `/app/data`; Secret for env vars.
+
+---
+
+## API overview
+
+| Area | Endpoints (prefix `/api/context`) |
+|------|-----------------------------------|
+| Projects | `GET/POST /projects` — scope via `X-Context-Project`, cookie `context_project_id`, or `CONTEXT_PROJECT_ID` |
+| Roadmap | `/roadmap-cycles`, `/delivery-phases`, `/features`, `/roadmap-tree`, stories CRUD |
+| D8 | `/sprints`, `/sprints/{id}`, `/sprints/{id}/commitments` |
+| Package / D7 | `/stories/{id}/context-packages`, `PATCH`, `/sign-offs` |
+| D9 / D10 | `/context-packages/{id}/manufacturing`, `/manufacturing/{id}/triage`, `GET /triage-results` |
+| Meetings / D4 | `/meetings`, transcript, extract, confirm, per-item review |
+| Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
+
+**D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen.  
+**D8:** One story ↔ one sprint commitment; D7 required unless override env/checkbox.  
+**D10:** Q1 notes; Q2 gap lines; Q3 root cause + narrative (`detail_json`).
+
+---
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CONTEXT_DB_PATH` | `data/context_platform.db` | SQLite database file |
-| `OPENAI_API_KEY` | — | Optional; enables LLM meeting extraction |
-| `OPENAI_MODEL` | `gpt-4o-mini` | Chat model for extraction |
-| `MANUFACTURING_OUTPUT_DIR` | `data/manufacturing_outputs` | Stub manufacturing artifacts |
-| `CONTEXT_ACTOR` | `anonymous` | Default actor; override per request with **`X-Context-Actor`** |
-| `CONTEXT_PROJECT_ID` | `prj_default` | Default project id when no **`X-Context-Project`** / cookie (UI switcher sets `context_project_id`) |
-| `CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT` | unset | If `1` / `true`, allow D8 sprint commits without an approved package |
-| `CONTEXT_API_KEY` | unset | If set, **REST `/api/*`** requires `X-Context-API-Key` or `Authorization: Bearer` (HTML dashboard not gated) |
-| `HOST` | `0.0.0.0` | Bind address |
-| `PORT` | `8000` | Port |
+| `CONTEXT_DB_PATH` | `data/context_platform.db` | SQLite path |
+| `CONTEXT_PROJECT_ID` | `prj_default` | Default project (override with header/cookie) |
+| `CONTEXT_ACTOR` | `anonymous` | Default actor; per request: `X-Context-Actor` |
+| `CONTEXT_API_KEY` | — | If set, `/api/*` requires `X-Context-API-Key` or `Authorization: Bearer` |
+| `CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT` | unset | `1` / `true` allows D8 without D7 |
+| `OPENAI_API_KEY` / `OPENAI_MODEL` | — / `gpt-4o-mini` | Optional LLM meeting extraction |
+| `MANUFACTURING_OUTPUT_DIR` | `data/manufacturing_outputs` | Stub artifacts |
+| `HOST` / `PORT` | `0.0.0.0` / `8000` | Server bind |
 
-Copy `.env.example` to `.env` if you want to override defaults.
+See [.env.example](.env.example).
 
-## Project layout
+---
+
+## Repository layout
 
 ```
-├── main.py
-├── run.py
-├── requirements.txt
+├── main.py                 # FastAPI app + middleware
+├── run.py                  # Uvicorn entry
+├── Dockerfile              # Container image (uvicorn)
+├── docker-compose.yml      # Volume-backed SQLite + port 8000
+├── .dockerignore
 ├── docs/
 │   ├── context-platform-process-architecture.md
 │   └── roadmap-github-issues.md
 ├── src/context_platform/
 │   ├── api.py
-│   ├── context_actor.py    # request-scoped actor (context var)
-│   ├── context_project.py  # active project id (context var + env)
-│   ├── middleware_actor.py # X-Context-Actor header
-│   ├── middleware_project.py # X-Context-Project + cookie
-│   ├── middleware_api_key.py # optional CONTEXT_API_KEY for /api/*
-│   ├── meeting_llm.py
-│   ├── meeting_extraction.py
-│   ├── manufacturing_worker.py
-│   ├── package_models.py
+│   ├── store.py
 │   ├── schemas.py
-│   └── store.py
+│   ├── package_models.py
+│   ├── context_actor.py
+│   ├── context_project.py
+│   ├── middleware_*.py
+│   ├── meeting_extraction.py
+│   └── manufacturing_worker.py
 └── templates/
     └── context_dashboard.html
 ```
+
+---
+
+## SQLite migration
+
+Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions`. For production scale-out, plan a **single-writer** SQLite or move to Postgres (future phase).

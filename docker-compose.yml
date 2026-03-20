@@ -1,0 +1,17 @@
+# Local / single-node deployment with persistent SQLite + manufacturing outputs
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      CONTEXT_DB_PATH: /app/data/context_platform.db
+      MANUFACTURING_OUTPUT_DIR: /app/data/manufacturing_outputs
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      # CONTEXT_API_KEY: change-me
+    volumes:
+      - context_platform_data:/app/data
+
+volumes:
+  context_platform_data:
