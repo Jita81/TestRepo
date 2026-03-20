@@ -362,7 +362,7 @@ The entire architecture rests on a single principle: AI accelerates every part o
 
 ## Reference implementation (this repository)
 
-An MVP aligned with **D7** / **D8** (sprint commitments with D7 gate + override) / **D9** / **D10** (structured **Q1/Q2/Q3** triage with `detail_json`) / **D4** (meeting extraction sign-off), plus **`decision_records`** and **`artifacts`** for traceability, **audit events**, and request **`X-Context-Actor`**, lives in `src/context_platform/`: roadmap **cycle → phase → feature → story**, structured package sections, SQLite persistence (with migration from legacy `work_items`), REST API under `/api/context`, and a dashboard at `/context`. Run `python run.py` and see the repository README for URLs and `CONTEXT_DB_PATH`.
+An MVP aligned with **D7** / **D8** (sprint commitments with D7 gate + override) / **D9** / **D10** (structured **Q1/Q2/Q3** triage with `detail_json`) / **D4** (meeting extraction sign-off), plus **`decision_records`** and **`artifacts`** for traceability, **audit events** (including **before/after** snapshots for key package edits), optional **`CONTEXT_API_KEY`** on **`/api/*`**, and request **`X-Context-Actor`**, lives in `src/context_platform/`: roadmap **cycle → phase → feature → story**, structured package sections, SQLite persistence (with migration from legacy `work_items`), REST API under `/api/context`, and a dashboard at `/context`. Run `python run.py` and see the repository README for URLs and `CONTEXT_DB_PATH`.
 
 ---
 

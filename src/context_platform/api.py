@@ -340,12 +340,16 @@ def api_list_artifacts(
 def api_list_audit(
     entity_type: Optional[str] = None,
     entity_id: Optional[str] = None,
+    action: Optional[str] = None,
     limit: int = 100,
 ):
     return [
         _dump(x)
         for x in get_store().list_audit_events(
-            entity_type=entity_type, entity_id=entity_id, limit=limit
+            entity_type=entity_type,
+            entity_id=entity_id,
+            action=action,
+            limit=limit,
         )
     ]
 

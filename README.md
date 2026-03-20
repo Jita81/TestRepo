@@ -25,7 +25,7 @@ python run.py
 | Package | `POST …/context-packages`, `PATCH …/context-packages/{id}`, sign-offs |
 | Manufacturing | `POST …/context-packages/{id}/manufacturing` (starts **background stub job**), `POST …/manufacturing/{id}/triage`, `GET …/triage-results` (optional `queue`, `limit`) |
 | Meetings | `PUT …/transcript`, `POST …/extract-stub`, `POST …/extraction-items/{i}/review`, `POST …/extraction-accept-all`, `POST …/confirm-extraction`, `GET …/meetings/{id}` |
-| Audit | `GET /api/context/audit-events` (optional `entity_type`, `entity_id`, `limit`) |
+| Audit | `GET /api/context/audit-events` (optional `entity_type`, `entity_id`, **`action`**, `limit`) — package updates & sign-offs include **before/after** section hashes |
 | Decisions | `GET /api/context/decision-records` (filter by `entity_type`, `entity_id`, `decision_code`) |
 | Artifacts | `GET /api/context/artifacts` (filter by `entity_type`, `entity_id`, `artifact_kind`) |
 | D11 | `GET /api/context/improvement-items`, `POST …/improvement-items/{id}/resolve` |
@@ -35,6 +35,8 @@ python run.py
 **D8:** a story may appear in **at most one** sprint commitment. By default the story must have an **approved** package; set **`CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT=1`** (or use the dashboard checkbox / API `allow_unapproved`) to bypass for admins.
 
 **D10 triage (structured):** **Q1** requires notes. **Q2** requires at least one **gap line** (and stores `gap_items` in `detail`). **Q3** requires **root cause category** + **narrative** (`detail_json` on `triage_results`). Human-readable text is still in `feedback` for legacy display.
+
+**Audit / A3 (partial):** `context_package` **updated** and **sign_off** events store compact **before/after** snapshots (section SHA-256 prefixes, status, sign-off roles). **Gap resolve** records resolved transition. Large `detail_json` payloads are truncated defensively.
 
 **Meeting extraction:** set **`OPENAI_API_KEY`** (and optional **`OPENAI_MODEL`**, default `gpt-4o-mini`) for LLM-based draft items; without a key, the **DECISION:/ACTION:/REQ:** pattern stub runs. **`python-dotenv`** loads `.env` from `main.py`.
 
@@ -52,6 +54,7 @@ python run.py
 | `MANUFACTURING_OUTPUT_DIR` | `data/manufacturing_outputs` | Stub manufacturing artifacts |
 | `CONTEXT_ACTOR` | `anonymous` | Default actor; override per request with **`X-Context-Actor`** |
 | `CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT` | unset | If `1` / `true`, allow D8 sprint commits without an approved package |
+| `CONTEXT_API_KEY` | unset | If set, **REST `/api/*`** requires `X-Context-API-Key` or `Authorization: Bearer` (HTML dashboard not gated) |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Port |
 
@@ -70,6 +73,7 @@ Copy `.env.example` to `.env` if you want to override defaults.
 │   ├── api.py
 │   ├── context_actor.py    # request-scoped actor (context var)
 │   ├── middleware_actor.py # X-Context-Actor header
+│   ├── middleware_api_key.py # optional CONTEXT_API_KEY for /api/*
 │   ├── meeting_llm.py
 │   ├── meeting_extraction.py
 │   ├── manufacturing_worker.py

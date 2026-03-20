@@ -70,6 +70,41 @@ REQUIRED_SIGN_OFF_ROLES = frozenset(
 )
 
 
+def _audit_detail_json(detail: Optional[dict[str, Any]]) -> Optional[str]:
+    if not detail:
+        return None
+    try:
+        raw = json.dumps(detail, ensure_ascii=False)
+    except (TypeError, ValueError):
+        raw = json.dumps({"_error": "detail_not_serializable"}, ensure_ascii=False)
+    if len(raw) > 120_000:
+        return json.dumps(
+            {"_truncated": True, "approx_bytes": len(raw)}, ensure_ascii=False
+        )
+    return raw
+
+
+def _package_audit_snapshot(pkg: ContextPackageRead) -> dict[str, Any]:
+    """Compact before/after for A3-style provenance (hashes + key fields)."""
+
+    def _h(d: dict[str, Any]) -> str:
+        b = json.dumps(d, sort_keys=True, ensure_ascii=False).encode()
+        return hashlib.sha256(b).hexdigest()[:16]
+
+    return {
+        "version": pkg.version,
+        "status": pkg.status.value,
+        "readiness_score": round(float(pkg.readiness_score), 2),
+        "sign_off_roles": sorted(s.role.value for s in pkg.sign_offs),
+        "section_hashes": {
+            "business": _h(pkg.business_context),
+            "technical": _h(pkg.technical_approach),
+            "testing": _h(pkg.testing_contract),
+        },
+        "content_hash": pkg.content_hash,
+    }
+
+
 def _triage_feedback_and_detail(data: TriageSubmit) -> tuple[str, dict[str, Any]]:
     """Human-readable feedback column + structured JSON for analytics (D10)."""
     detail: dict[str, Any] = {"queue": data.queue.value}
@@ -592,7 +627,7 @@ class ContextStore:
         try:
             eid = _uid()
             ts = _now()
-            dj = json.dumps(detail, ensure_ascii=False) if detail else None
+            dj = _audit_detail_json(detail)
             with self._connect() as conn:
                 conn.execute(
                     """INSERT INTO audit_events (id, occurred_at, action, entity_type, entity_id, actor, detail_json)
@@ -608,6 +643,7 @@ class ContextStore:
         *,
         entity_type: Optional[str] = None,
         entity_id: Optional[str] = None,
+        action: Optional[str] = None,
         limit: int = 100,
     ) -> list[AuditEventRead]:
         q = "SELECT * FROM audit_events WHERE 1=1"
@@ -618,6 +654,9 @@ class ContextStore:
         if entity_id:
             q += " AND entity_id = ?"
             params.append(entity_id)
+        if action:
+            q += " AND action = ?"
+            params.append(action)
         q += " ORDER BY occurred_at DESC LIMIT ?"
         params.append(min(limit, 500))
         with self._connect() as conn:
@@ -1487,13 +1526,17 @@ class ContextStore:
                 ),
             )
             conn.commit()
+        out = self.get_context_package(package_id)
         self.log_audit(
             "updated",
             "context_package",
             package_id,
-            detail={"readiness_score": readiness, "status": status.value},
+            detail={
+                "before": _package_audit_snapshot(pkg),
+                "after": _package_audit_snapshot(out),
+            },
         )
-        return self.get_context_package(package_id)
+        return out
 
     def _approval_snapshot_payload_conn(
         self, conn: sqlite3.Connection, package_id: str
@@ -1522,6 +1565,7 @@ class ContextStore:
 
     def add_sign_off(self, package_id: str, data: SignOffCreate) -> ContextPackageRead:
         pkg = self.get_context_package(package_id)
+        before_snap = _package_audit_snapshot(pkg)
         if pkg.status == PackageStatus.approved:
             return pkg
         if pkg.status not in (PackageStatus.in_review, PackageStatus.draft):
@@ -1558,20 +1602,28 @@ class ContextStore:
                     ),
                 )
             conn.commit()
+        out = self.get_context_package(package_id)
         self.log_audit(
             "sign_off",
             "context_package",
             package_id,
             actor=data.signed_by,
-            detail={"role": data.role.value},
+            detail={
+                "role": data.role.value,
+                "before": before_snap,
+                "after": _package_audit_snapshot(out),
+            },
         )
-        out = self.get_context_package(package_id)
         if out.status == PackageStatus.approved:
             self.log_audit(
                 "approved",
                 "context_package",
                 package_id,
-                detail={"content_hash": out.content_hash},
+                detail={
+                    "content_hash": out.content_hash,
+                    "before_status": before_snap.get("status"),
+                    "after_status": out.status.value,
+                },
             )
             self.record_decision(
                 "D7",
@@ -1674,13 +1726,24 @@ class ContextStore:
         ]
 
     def resolve_gap(self, gap_id: str) -> ContextGapRead:
+        prev = self.get_gap(gap_id)
+        before = {"resolved": prev.resolved, "story_id": prev.story_id}
         with self._connect() as conn:
             conn.execute(
                 "UPDATE context_gaps SET resolved = 1 WHERE id = ?", (gap_id,)
             )
             conn.commit()
-        self.log_audit("resolved", "context_gap", gap_id)
-        return self.get_gap(gap_id)
+        out = self.get_gap(gap_id)
+        self.log_audit(
+            "resolved",
+            "context_gap",
+            gap_id,
+            detail={
+                "before": before,
+                "after": {"resolved": out.resolved, "story_id": out.story_id},
+            },
+        )
+        return out
 
     def submit_manufacturing(
         self, package_id: str, data: ManufacturingSubmit
