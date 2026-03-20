@@ -77,6 +77,7 @@
     .badge-awaiting_triage { background: #3d4a2d; color: #d8f0a8; }
     .badge-failed { background: #4d1e1e; color: #f0a8a8; }
     .badge-completed { background: #1e3d4d; color: #a8e0f0; }
+    .badge-warn { background: #4a3d1e; color: #f5e6a8; }
     .pkg { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
     .pkg-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
     .muted { color: var(--muted); font-size: 0.85rem; }
@@ -94,7 +95,7 @@
   <div class="grid">
     <header>
       <h1>Context Engineering Platform</h1>
-      <p class="sub">Roadmap → story → D7 → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D10/D4) + <strong>artifacts</strong>. Set actor via header <code>X-Context-Actor</code> or env <code>CONTEXT_ACTOR</code>.</p>
+      <p class="sub">Roadmap → story → D7 → <strong>D8 sprints</strong> → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D8/D10/D4) + <strong>artifacts</strong>. Set actor via header <code>X-Context-Actor</code> or env <code>CONTEXT_ACTOR</code>.</p>
     </header>
 
     <div class="card">
@@ -117,7 +118,7 @@
 
     <div class="card">
       <h2>Decision records (D1–D12 trace)</h2>
-      <p class="muted" style="margin-bottom:0.75rem">Structured decisions (e.g. <strong>D7</strong> approve, <strong>D10</strong> triage, <strong>D4</strong> meeting sign-off). <code>GET /api/context/decision-records</code></p>
+      <p class="muted" style="margin-bottom:0.75rem">Structured decisions (e.g. <strong>D7</strong> approve, <strong>D8</strong> sprint commit, <strong>D10</strong> triage, <strong>D4</strong> meeting sign-off). <code>GET /api/context/decision-records</code></p>
       {% if decision_records %}
       <ul style="list-style:none;font-size:0.85rem;max-height:12rem;overflow:auto">
         {% for d in decision_records %}
@@ -244,6 +245,73 @@
         <div><input name="title" required placeholder="Quick story title"></div>
         <button type="submit" class="secondary">Quick story</button>
       </form>
+    </div>
+
+    <div class="card">
+      <h2>Sprints (D8 commitment)</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Commit stories to a sprint only when the story has an <strong>approved</strong> context package (D7), unless you use an admin override.</p>
+      {% if allow_unapproved_sprint_env %}
+      <p class="muted" style="margin-bottom:0.75rem"><span class="badge badge-warn">Override</span> Env <code>CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT</code> is on — commits without D7 are allowed.</p>
+      {% endif %}
+      <form method="post" action="/context/sprints" class="row" style="margin-bottom:1rem">
+        <div><label>Sprint name</label><input name="name" required placeholder="2026.03.2"></div>
+        <div>
+          <label>Cycle (optional)</label>
+          <select name="roadmap_cycle_id">
+            <option value="">— none —</option>
+            {% for block in roadmap_tree %}
+            <option value="{{ block.cycle.id }}">{{ block.cycle.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="flex:2;min-width:200px"><label>Capacity notes</label><input name="capacity_notes" placeholder="e.g. 30 pts, 2 engineers"></div>
+        <button type="submit">Create sprint</button>
+      </form>
+      {% for board in sprint_boards %}
+      <details style="margin-top:0.75rem;border:1px solid var(--border);border-radius:8px;padding:0.75rem">
+        <summary style="cursor:pointer;font-weight:600">{{ board.sprint.name }} <span class="muted"><code>{{ board.sprint.id[:10] }}…</code></span></summary>
+        {% if board.sprint.capacity_notes %}
+        <p class="muted" style="margin:0.5rem 0 0 0;font-size:0.85rem">{{ board.sprint.capacity_notes }}</p>
+        {% endif %}
+        {% if board.commitments %}
+        <ol style="margin:0.75rem 0 0 1.1rem">
+          {% for c in board.commitments %}
+          <li style="margin:0.35rem 0">
+            <strong>{{ c.story_title }}</strong>
+            {% if c.has_approved_context %}<span class="badge badge-approved">D7</span>{% else %}<span class="badge badge-draft">no D7</span>{% endif %}
+            <form method="post" action="/context/sprints/{{ board.sprint.id }}/commitments/{{ c.story_id }}/remove" style="display:inline;margin-left:0.35rem">
+              <button type="submit" class="small secondary">Remove</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        <p class="muted" style="margin-top:0.5rem">No stories committed yet.</p>
+        {% endif %}
+        <form method="post" action="/context/sprints/{{ board.sprint.id }}/commitments" class="row" style="margin-top:0.75rem">
+          <div>
+            <label>Story</label>
+            <select name="story_id" required>
+              <option value="">— select —</option>
+              {% for b in story_blocks %}
+              <option value="{{ b.story.id }}">{{ b.story.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div><label>Order</label><input type="number" name="sort_order" value="0"></div>
+          <div>
+            <label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer;font-size:0.85rem">
+              <input type="checkbox" name="allow_unapproved" value="1" style="width:auto">
+              Allow without D7
+            </label>
+          </div>
+          <button type="submit">Commit story</button>
+        </form>
+      </details>
+      {% endfor %}
+      {% if not sprint_boards %}
+      <p class="muted" style="margin-top:0.75rem">No sprints yet — create one above.</p>
+      {% endif %}
     </div>
 
     <div class="card">

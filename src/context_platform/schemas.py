@@ -107,6 +107,48 @@ class StoryRead(BaseModel):
     created_at: datetime
 
 
+# --- Sprints & D8 commitment ---
+
+
+class SprintCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    roadmap_cycle_id: Optional[str] = None
+    starts_at: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
+    capacity_notes: str = ""
+
+
+class SprintRead(BaseModel):
+    id: str
+    name: str
+    roadmap_cycle_id: Optional[str] = None
+    starts_at: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
+    capacity_notes: str = ""
+    created_at: datetime
+
+
+class SprintCommitStoryBody(BaseModel):
+    story_id: str
+    sort_order: int = 0
+    allow_unapproved: bool = False
+
+
+class SprintCommitmentRead(BaseModel):
+    id: str
+    sprint_id: str
+    story_id: str
+    sort_order: int
+    story_title: str
+    has_approved_context: bool
+    created_at: datetime
+
+
+class SprintBoardRead(BaseModel):
+    sprint: SprintRead
+    commitments: list[SprintCommitmentRead] = Field(default_factory=list)
+
+
 # --- Context package ---
 
 

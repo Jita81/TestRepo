@@ -27,6 +27,8 @@ from src.context_platform.schemas import (
     RoadmapCycleCreate,
     SignOffCreate,
     SignOffRole,
+    SprintCommitStoryBody,
+    SprintCreate,
     StoryCreate,
     StoryQuickCreate,
     TriageQueue,
@@ -115,6 +117,49 @@ def api_get_story(story_id: str):
 @api_router.get("/roadmap-tree")
 def api_roadmap_tree():
     return get_store().roadmap_tree()
+
+
+# --- Sprints (D8) ---
+
+
+@api_router.post("/sprints")
+def api_create_sprint(body: SprintCreate):
+    try:
+        return _dump(get_store().create_sprint(body))
+    except KeyError:
+        raise HTTPException(404, "Roadmap cycle not found") from None
+
+
+@api_router.get("/sprints")
+def api_list_sprints():
+    return [_dump(x) for x in get_store().list_sprints()]
+
+
+@api_router.get("/sprints/{sprint_id}")
+def api_sprint_board(sprint_id: str):
+    try:
+        return _dump(get_store().sprint_board(sprint_id))
+    except KeyError:
+        raise HTTPException(404, "Sprint not found") from None
+
+
+@api_router.post("/sprints/{sprint_id}/commitments")
+def api_sprint_commit(sprint_id: str, body: SprintCommitStoryBody):
+    try:
+        return _dump(get_store().commit_story_to_sprint(sprint_id, body))
+    except KeyError:
+        raise HTTPException(404, "Sprint or story not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@api_router.delete("/sprints/{sprint_id}/commitments/{story_id}")
+def api_sprint_uncommit(sprint_id: str, story_id: str):
+    try:
+        get_store().remove_sprint_commitment(sprint_id, story_id)
+    except KeyError:
+        raise HTTPException(404, "Commitment not found") from None
+    return {"ok": True}
 
 
 # --- Context packages, gaps, manufacturing ---
@@ -355,6 +400,7 @@ def api_meeting_confirm(
 def _dashboard_context(request: Request) -> dict[str, Any]:
     store = get_store()
     tree = store.roadmap_tree()
+    sprint_boards = [store.sprint_board(sp.id) for sp in store.list_sprints()]
     story_blocks = []
     for s in store.list_stories():
         pkgs = store.list_packages_for_story(s.id)
@@ -385,6 +431,8 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         "decision_records": store.list_decision_records(limit=25),
         "artifacts": store.list_artifacts(limit=25),
         "open_improvements": store.list_improvement_items(status="open", limit=40),
+        "sprint_boards": sprint_boards,
+        "allow_unapproved_sprint_env": store.allow_unapproved_sprint_commit_env(),
         "phase_kinds": [e.value for e in PhaseKind],
         "roles": [e.value for e in SignOffRole],
         "queues": [e.value for e in TriageQueue],
@@ -492,6 +540,59 @@ def form_story_quick(
     description: str = Form(""),
 ):
     get_store().create_story_on_default_backlog(title, description)
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/sprints")
+def form_create_sprint(
+    request: Request,
+    name: str = Form(...),
+    roadmap_cycle_id: str = Form(""),
+    capacity_notes: str = Form(""),
+):
+    try:
+        get_store().create_sprint(
+            SprintCreate(
+                name=name,
+                roadmap_cycle_id=roadmap_cycle_id.strip() or None,
+                capacity_notes=capacity_notes,
+            )
+        )
+    except KeyError:
+        raise HTTPException(404, "Roadmap cycle not found") from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/sprints/{sprint_id}/commitments")
+def form_sprint_commit(
+    request: Request,
+    sprint_id: str,
+    story_id: str = Form(...),
+    sort_order: int = Form(0),
+    allow_unapproved: Optional[str] = Form(None),
+):
+    try:
+        get_store().commit_story_to_sprint(
+            sprint_id,
+            SprintCommitStoryBody(
+                story_id=story_id,
+                sort_order=sort_order,
+                allow_unapproved=allow_unapproved in ("1", "on", "true", "yes"),
+            ),
+        )
+    except KeyError:
+        raise HTTPException(404, "Sprint or story not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/sprints/{sprint_id}/commitments/{story_id}/remove")
+def form_sprint_uncommit(request: Request, sprint_id: str, story_id: str):
+    try:
+        get_store().remove_sprint_commitment(sprint_id, story_id)
+    except KeyError:
+        raise HTTPException(404, "Commitment not found") from None
     return RedirectResponse(url="/context", status_code=303)
 
 

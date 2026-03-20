@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -51,6 +52,11 @@ from src.context_platform.schemas import (
     SignOffCreate,
     SignOffRead,
     SignOffRole,
+    SprintBoardRead,
+    SprintCommitmentRead,
+    SprintCommitStoryBody,
+    SprintCreate,
+    SprintRead,
     StoryCreate,
     StoryRead,
     TriageQueue,
@@ -76,6 +82,11 @@ def _now() -> str:
 
 def _uid() -> str:
     return str(uuid.uuid4())
+
+
+def _env_truthy(name: str) -> bool:
+    v = os.environ.get(name, "").strip().lower()
+    return v in ("1", "true", "yes", "on")
 
 
 def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -121,6 +132,26 @@ CREATE TABLE IF NOT EXISTS stories (
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sprints (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    roadmap_cycle_id TEXT REFERENCES roadmap_cycles(id) ON DELETE SET NULL,
+    starts_at TEXT,
+    ends_at TEXT,
+    capacity_notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sprint_commitments (
+    id TEXT PRIMARY KEY,
+    sprint_id TEXT NOT NULL REFERENCES sprints(id) ON DELETE CASCADE,
+    story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    UNIQUE(sprint_id, story_id),
+    UNIQUE(story_id)
 );
 
 CREATE TABLE IF NOT EXISTS context_packages (
@@ -472,6 +503,32 @@ class ContextStore:
                     body_json TEXT,
                     actor TEXT NOT NULL DEFAULT 'anonymous',
                     created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sprints (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    roadmap_cycle_id TEXT REFERENCES roadmap_cycles(id) ON DELETE SET NULL,
+                    starts_at TEXT,
+                    ends_at TEXT,
+                    capacity_notes TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sprint_commitments (
+                    id TEXT PRIMARY KEY,
+                    sprint_id TEXT NOT NULL REFERENCES sprints(id) ON DELETE CASCADE,
+                    story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(sprint_id, story_id),
+                    UNIQUE(story_id)
                 )
                 """
             )
@@ -1005,6 +1062,242 @@ class ContextStore:
                 cdict["phases"].append(pdict)
             out.append(cdict)
         return out
+
+    def _sprint_row_to_read(self, row: sqlite3.Row) -> SprintRead:
+        return SprintRead(
+            id=row["id"],
+            name=row["name"],
+            roadmap_cycle_id=row["roadmap_cycle_id"],
+            starts_at=(
+                datetime.fromisoformat(row["starts_at"]) if row["starts_at"] else None
+            ),
+            ends_at=(
+                datetime.fromisoformat(row["ends_at"]) if row["ends_at"] else None
+            ),
+            capacity_notes=row["capacity_notes"] or "",
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def create_sprint(self, data: SprintCreate) -> SprintRead:
+        if data.roadmap_cycle_id:
+            self.get_roadmap_cycle(data.roadmap_cycle_id)
+        sid = _uid()
+        ts = _now()
+        starts = data.starts_at.isoformat() if data.starts_at else None
+        ends = data.ends_at.isoformat() if data.ends_at else None
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO sprints
+                (id, name, roadmap_cycle_id, starts_at, ends_at, capacity_notes, created_at)
+                VALUES (?,?,?,?,?,?,?)""",
+                (
+                    sid,
+                    data.name,
+                    data.roadmap_cycle_id,
+                    starts,
+                    ends,
+                    data.capacity_notes,
+                    ts,
+                ),
+            )
+            conn.commit()
+        self.log_audit("created", "sprint", sid, detail={"name": data.name})
+        return self.get_sprint(sid)
+
+    def get_sprint(self, sprint_id: str) -> SprintRead:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM sprints WHERE id = ?", (sprint_id,)
+            ).fetchone()
+        if not row:
+            raise KeyError("sprint_not_found")
+        return self._sprint_row_to_read(row)
+
+    def list_sprints(self) -> list[SprintRead]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM sprints ORDER BY created_at DESC"
+            ).fetchall()
+        return [self._sprint_row_to_read(r) for r in rows]
+
+    def story_has_approved_context_package(self, story_id: str) -> bool:
+        with self._connect() as conn:
+            r = conn.execute(
+                "SELECT 1 FROM context_packages WHERE story_id = ? AND status = ? LIMIT 1",
+                (story_id, PackageStatus.approved.value),
+            ).fetchone()
+        return r is not None
+
+    def _latest_approved_package_id(self, story_id: str) -> Optional[str]:
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT id FROM context_packages WHERE story_id = ? AND status = ?
+                ORDER BY version DESC LIMIT 1""",
+                (story_id, PackageStatus.approved.value),
+            ).fetchone()
+        return row["id"] if row else None
+
+    def _sprint_id_for_story(self, story_id: str) -> Optional[str]:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT sprint_id FROM sprint_commitments WHERE story_id = ?",
+                (story_id,),
+            ).fetchone()
+        return row["sprint_id"] if row else None
+
+    def _commitment_row_to_read(self, row: sqlite3.Row, has_ap: bool) -> SprintCommitmentRead:
+        return SprintCommitmentRead(
+            id=row["id"],
+            sprint_id=row["sprint_id"],
+            story_id=row["story_id"],
+            sort_order=row["sort_order"],
+            story_title=row["story_title"],
+            has_approved_context=has_ap,
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def get_sprint_commitment_read(self, commitment_id: str) -> SprintCommitmentRead:
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT sc.*, s.title AS story_title
+                FROM sprint_commitments sc
+                JOIN stories s ON s.id = sc.story_id
+                WHERE sc.id = ?""",
+                (commitment_id,),
+            ).fetchone()
+        if not row:
+            raise KeyError("commitment_not_found")
+        ha = self.story_has_approved_context_package(row["story_id"])
+        return self._commitment_row_to_read(row, ha)
+
+    def sprint_board(self, sprint_id: str) -> SprintBoardRead:
+        sp = self.get_sprint(sprint_id)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT sc.*, s.title AS story_title
+                FROM sprint_commitments sc
+                JOIN stories s ON s.id = sc.story_id
+                WHERE sc.sprint_id = ?
+                ORDER BY sc.sort_order ASC, sc.created_at ASC""",
+                (sprint_id,),
+            ).fetchall()
+        cm: list[SprintCommitmentRead] = []
+        for r in rows:
+            ha = self.story_has_approved_context_package(r["story_id"])
+            cm.append(self._commitment_row_to_read(r, ha))
+        return SprintBoardRead(sprint=sp, commitments=cm)
+
+    def commit_story_to_sprint(
+        self, sprint_id: str, body: SprintCommitStoryBody
+    ) -> SprintCommitmentRead:
+        self.get_sprint(sprint_id)
+        self.get_story(body.story_id)
+        has_pkg = self.story_has_approved_context_package(body.story_id)
+        allow_override = body.allow_unapproved or _env_truthy(
+            "CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT"
+        )
+        if not has_pkg and not allow_override:
+            raise ValueError(
+                "d8_gate: story needs an approved context package (set "
+                "CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT=1 or pass allow_unapproved)"
+            )
+        other = self._sprint_id_for_story(body.story_id)
+        if other and other != sprint_id:
+            raise ValueError("story_already_committed_to_another_sprint")
+        pkg_id = self._latest_approved_package_id(body.story_id)
+        ts = _now()
+        commitment_id: str
+        is_new: bool
+        with self._connect() as conn:
+            hit = conn.execute(
+                """SELECT id FROM sprint_commitments
+                WHERE sprint_id = ? AND story_id = ?""",
+                (sprint_id, body.story_id),
+            ).fetchone()
+            if hit:
+                commitment_id = hit["id"]
+                is_new = False
+                conn.execute(
+                    "UPDATE sprint_commitments SET sort_order = ? WHERE id = ?",
+                    (body.sort_order, commitment_id),
+                )
+            else:
+                commitment_id = _uid()
+                is_new = True
+                conn.execute(
+                    """INSERT INTO sprint_commitments
+                    (id, sprint_id, story_id, sort_order, created_at)
+                    VALUES (?,?,?,?,?)""",
+                    (commitment_id, sprint_id, body.story_id, body.sort_order, ts),
+                )
+            conn.commit()
+        if is_new:
+            st = self.get_story(body.story_id)
+            self.record_decision(
+                "D8",
+                f"Sprint commitment: {st.title[:120]}",
+                "sprint_commitment",
+                commitment_id,
+                detail={
+                    "sprint_id": sprint_id,
+                    "story_id": body.story_id,
+                    "context_package_id": pkg_id,
+                    "override_unapproved": bool(allow_override and not has_pkg),
+                },
+            )
+            self.record_artifact(
+                "sprint_commitment",
+                "sprint",
+                sprint_id,
+                title=f"Committed: {st.title[:200]}",
+                body={
+                    "commitment_id": commitment_id,
+                    "story_id": body.story_id,
+                    "context_package_id": pkg_id,
+                    "override_unapproved": bool(allow_override and not has_pkg),
+                },
+            )
+            self.log_audit(
+                "committed",
+                "sprint_commitment",
+                commitment_id,
+                detail={"sprint_id": sprint_id, "story_id": body.story_id},
+            )
+        else:
+            self.log_audit(
+                "updated",
+                "sprint_commitment",
+                commitment_id,
+                detail={
+                    "sprint_id": sprint_id,
+                    "story_id": body.story_id,
+                    "sort_order": body.sort_order,
+                },
+            )
+        return self.get_sprint_commitment_read(commitment_id)
+
+    def remove_sprint_commitment(self, sprint_id: str, story_id: str) -> None:
+        with self._connect() as conn:
+            r = conn.execute(
+                """SELECT id FROM sprint_commitments
+                WHERE sprint_id = ? AND story_id = ?""",
+                (sprint_id, story_id),
+            ).fetchone()
+            if not r:
+                raise KeyError("commitment_not_found")
+            cid = r["id"]
+            conn.execute("DELETE FROM sprint_commitments WHERE id = ?", (cid,))
+            conn.commit()
+        self.log_audit(
+            "removed",
+            "sprint_commitment",
+            cid,
+            detail={"sprint_id": sprint_id, "story_id": story_id},
+        )
+
+    @staticmethod
+    def allow_unapproved_sprint_commit_env() -> bool:
+        return _env_truthy("CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT")
 
     def _row_to_package(self, row: sqlite3.Row, signs: list[sqlite3.Row]) -> ContextPackageRead:
         use_snapshot = (
