@@ -1,6 +1,6 @@
 # Roadmap — GitHub issue breakdown
 
-**Progress (repo):** **A1**, **B1**, **B2** as before; **H1** stub manufacturing job + **on-disk `MANUFACTURING.md` artifact**; **D2** transcript + confirm with **optional OpenAI extraction** (`meeting_llm.py`) and pattern stub fallback. Remaining: real codegen/CI adapter, per-item extraction review UI, auth, integrations, full graph.
+**Progress (repo):** **A1**, **B1**, **B2**; **H1** stub manufacturing + artifact; **D2** transcript + **per-item review** + optional OpenAI (`meeting_llm.py`); **`audit_events`** trail; **D11** improvement items from Q2/Q3 triage. Remaining: **A2/A3** (decision/artifact model + full provenance), real codegen/CI, auth/tenancy, integrations, graph UI, D1–D3/D8/D12.
 
 Use this document to create **Epics** (GitHub Milestones or parent Issues) and **child Issues**. Each block below is intended as **one issue**: title = first line; body = the rest of the block.
 

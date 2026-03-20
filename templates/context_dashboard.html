@@ -94,8 +94,47 @@
   <div class="grid">
     <header>
       <h1>Context Engineering Platform</h1>
-      <p class="sub">Roadmap → story → package → D7 → <strong>stub manufacturing job</strong> (queued→running→awaiting_triage) → D10 triage. Meetings: transcript → <strong>stub extraction</strong> (DECISION:/ACTION:/REQ:) → confirm. API <code>/api/context</code>.</p>
+      <p class="sub">Roadmap → story → package → D7 → manufacturing stub → D10 triage → <strong>D11 improvement items</strong> (Q2/Q3). <strong>Audit trail</strong> + meeting extraction with per-item accept/reject. API <code>/api/context/audit-events</code>.</p>
     </header>
+
+    <div class="card">
+      <h2>Activity (audit trail)</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Recent platform events — <code>GET /api/context/audit-events</code></p>
+      {% if audit_events %}
+      <ul style="list-style:none;font-size:0.85rem;max-height:14rem;overflow:auto">
+        {% for ev in audit_events %}
+        <li style="padding:0.35rem 0;border-bottom:1px solid var(--border)">
+          <span class="muted">{{ ev.occurred_at }}</span>
+          <strong>{{ ev.action }}</strong> · {{ ev.entity_type }} <code>{{ ev.entity_id[:10] }}…</code>
+          {% if ev.actor and ev.actor != 'anonymous' %}· {{ ev.actor }}{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No events yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Context improvement backlog (D11)</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Opened automatically on <strong>Q2</strong> or <strong>Q3</strong> triage.</p>
+      {% if open_improvements %}
+      <ul style="list-style:none">
+        {% for im in open_improvements %}
+        <li style="padding:0.5rem 0;border-bottom:1px solid var(--border)">
+          <span class="badge badge-in_review">{{ im.priority }}</span>
+          <strong>{{ im.title }}</strong>
+          <p class="muted" style="margin:0.25rem 0;font-size:0.85rem">{{ im.description[:200] }}{% if im.description|length > 200 %}…{% endif %}</p>
+          <form method="post" action="/context/improvement-items/{{ im.id }}/resolve" style="display:inline">
+            <button type="submit" class="small secondary">Mark done</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No open items.</p>
+      {% endif %}
+    </div>
 
     <div class="card">
       <h2>Roadmap (cycle → phase → feature)</h2>
@@ -248,18 +287,39 @@
           <p class="muted" style="font-size:0.8rem;margin-top:0.25rem">Uses OpenAI if <code>OPENAI_API_KEY</code> is set; otherwise line-prefix stub.</p>
           {% if m.extraction_draft and m.extraction_draft.get('proposed_items') %}
           <div class="muted" style="margin-top:0.75rem">
-            <strong>Draft items</strong>
-            <ul style="margin:0.35rem 0 0 1.25rem">
+            <strong>Draft items</strong> — accept/reject each (or <em>Accept all</em>), then confirm.
+            <ul style="margin:0.35rem 0 0 0;list-style:none">
               {% for it in m.extraction_draft.get('proposed_items', []) %}
-              <li><span class="badge badge-in_review">{{ it.get('type','?') }}</span> {{ it.get('text','') }}</li>
+              {% set idx = loop.index0 %}
+              {% set rev = (m.extraction_draft.get('item_reviews') or {}).get(idx|string, 'pending') %}
+              <li style="padding:0.4rem 0;border-bottom:1px solid var(--border)">
+                <span class="badge {% if rev == 'accepted' %}badge-approved{% elif rev == 'rejected' %}badge-rejected{% else %}badge-draft{% endif %}">{{ rev }}</span>
+                <span class="badge badge-in_review">{{ it.get('type','?') }}</span> {{ it.get('text','') }}
+                {% if m.extraction_status == 'draft' %}
+                <span style="margin-left:0.35rem">
+                  <form method="post" action="/context/meetings/{{ m.id }}/extraction-items/{{ idx }}/review" style="display:inline">
+                    <input type="hidden" name="decision" value="accept">
+                    <button type="submit" class="small secondary">Accept</button>
+                  </form>
+                  <form method="post" action="/context/meetings/{{ m.id }}/extraction-items/{{ idx }}/review" style="display:inline">
+                    <input type="hidden" name="decision" value="reject">
+                    <button type="submit" class="small secondary">Reject</button>
+                  </form>
+                </span>
+                {% endif %}
+              </li>
               {% endfor %}
             </ul>
+            {% if m.extraction_status == 'draft' %}
+            <form method="post" action="/context/meetings/{{ m.id }}/extraction-accept-all" style="margin-top:0.5rem">
+              <button type="submit" class="secondary">Accept all items</button>
+            </form>
+            <form method="post" action="/context/meetings/{{ m.id }}/confirm-extraction" style="margin-top:0.5rem">
+              <button type="submit">Confirm extraction (human sign-off)</button>
+            </form>
+            <p class="muted" style="font-size:0.75rem;margin-top:0.35rem">Confirm requires every item accepted or rejected (unless you use legacy API <code>accepted_indices</code>).</p>
+            {% endif %}
           </div>
-          {% endif %}
-          {% if m.extraction_status == 'draft' %}
-          <form method="post" action="/context/meetings/{{ m.id }}/confirm-extraction" style="margin-top:0.75rem">
-            <button type="submit" class="secondary">Confirm extraction (human sign-off)</button>
-          </form>
           {% endif %}
           {% if m.extraction_status == 'confirmed' and m.extraction_confirmed_at %}
           <p class="muted" style="margin-top:0.5rem">Confirmed at {{ m.extraction_confirmed_at }}</p>

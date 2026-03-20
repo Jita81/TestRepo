@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Generator, Optional
+
+logger = logging.getLogger(__name__)
 
 from src.context_platform.meeting_extraction import extract_transcript_auto
 from src.context_platform.package_models import (
@@ -18,6 +21,7 @@ from src.context_platform.package_models import (
     sections_to_storage_tuple,
 )
 from src.context_platform.schemas import (
+    AuditEventRead,
     ContextGapCreate,
     ContextGapRead,
     ContextPackageCreate,
@@ -32,6 +36,7 @@ from src.context_platform.schemas import (
     ManufacturingStatus,
     ManufacturingSubmit,
     MeetingCreate,
+    ImprovementItemRead,
     MeetingExtractionConfirm,
     MeetingRead,
     MeetingTranscriptUpdate,
@@ -185,6 +190,29 @@ CREATE TABLE IF NOT EXISTS meetings (
     extraction_draft_json TEXT,
     extraction_status TEXT NOT NULL DEFAULT 'none',
     extraction_confirmed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS audit_events (
+    id TEXT PRIMARY KEY,
+    occurred_at TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    actor TEXT NOT NULL DEFAULT 'anonymous',
+    detail_json TEXT
+);
+
+CREATE TABLE IF NOT EXISTS context_improvement_items (
+    id TEXT PRIMARY KEY,
+    source_triage_id TEXT REFERENCES triage_results(id) ON DELETE SET NULL,
+    story_id TEXT REFERENCES stories(id) ON DELETE SET NULL,
+    context_package_id TEXT REFERENCES context_packages(id) ON DELETE SET NULL,
+    manufacturing_request_id TEXT REFERENCES manufacturing_requests(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    priority TEXT NOT NULL DEFAULT 'high',
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL
 );
 """
 
@@ -365,6 +393,35 @@ class ContextStore:
                         conn.execute(ddl)
                     except sqlite3.OperationalError:
                         pass
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    id TEXT PRIMARY KEY,
+                    occurred_at TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    actor TEXT NOT NULL DEFAULT 'anonymous',
+                    detail_json TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS context_improvement_items (
+                    id TEXT PRIMARY KEY,
+                    source_triage_id TEXT REFERENCES triage_results(id) ON DELETE SET NULL,
+                    story_id TEXT REFERENCES stories(id) ON DELETE SET NULL,
+                    context_package_id TEXT REFERENCES context_packages(id) ON DELETE SET NULL,
+                    manufacturing_request_id TEXT REFERENCES manufacturing_requests(id) ON DELETE SET NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    priority TEXT NOT NULL DEFAULT 'high',
+                    status TEXT NOT NULL DEFAULT 'open',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
             conn.commit()
 
     @contextmanager
@@ -375,6 +432,82 @@ class ContextStore:
             yield conn
         finally:
             conn.close()
+
+    def log_audit(
+        self,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        *,
+        actor: str = "anonymous",
+        detail: Optional[dict[str, Any]] = None,
+    ) -> None:
+        try:
+            eid = _uid()
+            ts = _now()
+            dj = json.dumps(detail, ensure_ascii=False) if detail else None
+            with self._connect() as conn:
+                conn.execute(
+                    """INSERT INTO audit_events (id, occurred_at, action, entity_type, entity_id, actor, detail_json)
+                    VALUES (?,?,?,?,?,?,?)""",
+                    (eid, ts, action, entity_type, entity_id, actor, dj),
+                )
+                conn.commit()
+        except Exception as e:
+            logger.warning("audit_log_failed: %s", e)
+
+    def list_audit_events(
+        self,
+        *,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[AuditEventRead]:
+        q = "SELECT * FROM audit_events WHERE 1=1"
+        params: list[Any] = []
+        if entity_type:
+            q += " AND entity_type = ?"
+            params.append(entity_type)
+        if entity_id:
+            q += " AND entity_id = ?"
+            params.append(entity_id)
+        q += " ORDER BY occurred_at DESC LIMIT ?"
+        params.append(min(limit, 500))
+        with self._connect() as conn:
+            rows = conn.execute(q, params).fetchall()
+        out = []
+        for r in rows:
+            det: dict[str, Any] = {}
+            if r["detail_json"]:
+                try:
+                    det = json.loads(r["detail_json"])
+                except json.JSONDecodeError:
+                    det = {}
+            out.append(
+                AuditEventRead(
+                    id=r["id"],
+                    occurred_at=datetime.fromisoformat(r["occurred_at"]),
+                    action=r["action"],
+                    entity_type=r["entity_type"],
+                    entity_id=r["entity_id"],
+                    actor=r["actor"],
+                    detail=det,
+                )
+            )
+        return out
+
+    @staticmethod
+    def _coerce_extraction_draft(draft: dict[str, Any]) -> dict[str, Any]:
+        out = dict(draft)
+        items = list(out.get("proposed_items") or [])
+        rev = dict(out.get("item_reviews") or {})
+        for i in range(len(items)):
+            k = str(i)
+            if k not in rev:
+                rev[k] = "pending"
+        out["proposed_items"] = items
+        out["item_reviews"] = rev
+        return out
 
     def ensure_default_backlog_feature_id(self) -> str:
         with self._connect() as conn:
@@ -418,6 +551,7 @@ class ContextStore:
                 (rid, data.name, ts),
             )
             conn.commit()
+        self.log_audit("created", "roadmap_cycle", rid, detail={"name": data.name})
         return self.get_roadmap_cycle(rid)
 
     def get_roadmap_cycle(self, cycle_id: str) -> RoadmapCycleRead:
@@ -466,6 +600,12 @@ class ContextStore:
                 ),
             )
             conn.commit()
+        self.log_audit(
+            "created",
+            "delivery_phase",
+            pid,
+            detail={"roadmap_cycle_id": data.roadmap_cycle_id, "name": data.name},
+        )
         return self.get_delivery_phase(pid)
 
     def get_delivery_phase(self, phase_id: str) -> DeliveryPhaseRead:
@@ -521,6 +661,12 @@ class ContextStore:
                 ),
             )
             conn.commit()
+        self.log_audit(
+            "created",
+            "feature",
+            fid,
+            detail={"delivery_phase_id": data.delivery_phase_id, "title": data.title},
+        )
         return self.get_feature(fid)
 
     def get_feature(self, feature_id: str) -> FeatureRead:
@@ -568,6 +714,12 @@ class ContextStore:
                 (sid, data.feature_id, data.title, data.description, ts),
             )
             conn.commit()
+        self.log_audit(
+            "created",
+            "story",
+            sid,
+            detail={"feature_id": data.feature_id, "title": data.title},
+        )
         return self.get_story(sid)
 
     def create_story_on_default_backlog(self, title: str, description: str = "") -> StoryRead:
@@ -712,6 +864,12 @@ class ContextStore:
                 ),
             )
             conn.commit()
+        self.log_audit(
+            "created",
+            "context_package",
+            pid,
+            detail={"story_id": data.story_id, "version": version},
+        )
         return self.get_context_package(pid)
 
     def get_context_package(self, package_id: str) -> ContextPackageRead:
@@ -782,6 +940,12 @@ class ContextStore:
                 ),
             )
             conn.commit()
+        self.log_audit(
+            "updated",
+            "context_package",
+            package_id,
+            detail={"readiness_score": readiness, "status": status.value},
+        )
         return self.get_context_package(package_id)
 
     def _approval_snapshot_payload_conn(
@@ -847,7 +1011,22 @@ class ContextStore:
                     ),
                 )
             conn.commit()
-        return self.get_context_package(package_id)
+        self.log_audit(
+            "sign_off",
+            "context_package",
+            package_id,
+            actor=data.signed_by,
+            detail={"role": data.role.value},
+        )
+        out = self.get_context_package(package_id)
+        if out.status == PackageStatus.approved:
+            self.log_audit(
+                "approved",
+                "context_package",
+                package_id,
+                detail={"content_hash": out.content_hash},
+            )
+        return out
 
     def create_gap(self, data: ContextGapCreate) -> ContextGapRead:
         self.get_story(data.story_id)
@@ -873,6 +1052,7 @@ class ContextStore:
                 ),
             )
             conn.commit()
+        self.log_audit("created", "context_gap", gid, detail={"story_id": data.story_id})
         return self.get_gap(gid)
 
     def get_gap(self, gap_id: str) -> ContextGapRead:
@@ -928,6 +1108,7 @@ class ContextStore:
                 "UPDATE context_gaps SET resolved = 1 WHERE id = ?", (gap_id,)
             )
             conn.commit()
+        self.log_audit("resolved", "context_gap", gap_id)
         return self.get_gap(gap_id)
 
     def submit_manufacturing(
@@ -947,6 +1128,13 @@ class ContextStore:
                 (mid, package_id, h, data.submitted_by, ts, ManufacturingStatus.queued.value),
             )
             conn.commit()
+        self.log_audit(
+            "submitted",
+            "manufacturing_request",
+            mid,
+            actor=data.submitted_by,
+            detail={"context_package_id": package_id, "package_content_hash": h},
+        )
         return self.get_manufacturing(mid)
 
     def _mfg_row_to_read(self, row: sqlite3.Row) -> ManufacturingRead:
@@ -1017,6 +1205,12 @@ class ContextStore:
                 params,
             )
             conn.commit()
+        self.log_audit(
+            "status_changed",
+            "manufacturing_request",
+            request_id,
+            detail={"status": status.value},
+        )
 
     def list_manufacturing_for_package(self, package_id: str) -> list[ManufacturingRead]:
         with self._connect() as conn:
@@ -1041,6 +1235,9 @@ class ContextStore:
             raise ValueError("not_ready_for_triage")
         tid = _uid()
         ts = _now()
+        pkg = self.get_context_package(m.context_package_id)
+        story_id = pkg.story_id
+        improvement_id: Optional[str] = None
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO triage_results
@@ -1052,7 +1249,45 @@ class ContextStore:
                 "UPDATE manufacturing_requests SET status = ? WHERE id = ?",
                 (ManufacturingStatus.completed.value, request_id),
             )
+            if data.queue in (TriageQueue.Q2, TriageQueue.Q3):
+                improvement_id = _uid()
+                pr = "high" if data.queue == TriageQueue.Q3 else "medium"
+                title = f"{data.queue.value} triage: context follow-up"
+                conn.execute(
+                    """INSERT INTO context_improvement_items
+                    (id, source_triage_id, story_id, context_package_id, manufacturing_request_id,
+                    title, description, priority, status, created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        improvement_id,
+                        tid,
+                        story_id,
+                        m.context_package_id,
+                        request_id,
+                        title,
+                        data.feedback[:4000],
+                        pr,
+                        "open",
+                        ts,
+                    ),
+                )
             conn.commit()
+        self.log_audit(
+            "submitted",
+            "triage",
+            tid,
+            detail={
+                "queue": data.queue.value,
+                "manufacturing_request_id": request_id,
+            },
+        )
+        if improvement_id:
+            self.log_audit(
+                "created",
+                "context_improvement_item",
+                improvement_id,
+                detail={"source_triage_id": tid, "queue": data.queue.value},
+            )
         return self.get_triage(tid)
 
     def get_triage(self, triage_id: str) -> TriageRead:
@@ -1130,6 +1365,12 @@ class ContextStore:
                 (mid, data.meeting_type.value, data.title, sched, "planned", ts),
             )
             conn.commit()
+        self.log_audit(
+            "created",
+            "meeting",
+            mid,
+            detail={"meeting_type": data.meeting_type.value, "title": data.title},
+        )
         return self.get_meeting(mid)
 
     def get_meeting(self, meeting_id: str) -> MeetingRead:
@@ -1158,14 +1399,15 @@ class ContextStore:
                 (data.text, meeting_id),
             )
             conn.commit()
+        self.log_audit("transcript_saved", "meeting", meeting_id)
         return self.get_meeting(meeting_id)
 
     def run_meeting_extraction_stub(self, meeting_id: str) -> MeetingRead:
         m = self.get_meeting(meeting_id)
         if not m.transcript:
             raise ValueError("meeting_has_no_transcript")
-        draft = extract_transcript_auto(m.transcript)
-        ts = _now()
+        raw = extract_transcript_auto(m.transcript)
+        draft = self._coerce_extraction_draft(raw)
         with self._connect() as conn:
             conn.execute(
                 """UPDATE meetings SET extraction_draft_json = ?, extraction_status = 'draft',
@@ -1174,6 +1416,63 @@ class ContextStore:
                 (json.dumps(draft, ensure_ascii=False), meeting_id),
             )
             conn.commit()
+        self.log_audit(
+            "extraction_drafted",
+            "meeting",
+            meeting_id,
+            detail={"extractor": draft.get("extractor"), "n_items": len(draft.get("proposed_items") or [])},
+        )
+        return self.get_meeting(meeting_id)
+
+    def set_meeting_extraction_item_review(
+        self,
+        meeting_id: str,
+        item_index: int,
+        decision: str,
+        *,
+        actor: str = "anonymous",
+    ) -> MeetingRead:
+        if decision not in ("accept", "reject"):
+            raise ValueError("invalid_decision")
+        m = self.get_meeting(meeting_id)
+        if m.extraction_status != "draft":
+            raise ValueError("no_active_draft")
+        draft = dict(m.extraction_draft)
+        items = list(draft.get("proposed_items") or [])
+        if item_index < 0 or item_index >= len(items):
+            raise ValueError("invalid_item_index")
+        rev = dict(draft.get("item_reviews") or {})
+        rev[str(item_index)] = "accepted" if decision == "accept" else "rejected"
+        draft["item_reviews"] = rev
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE meetings SET extraction_draft_json = ? WHERE id = ?",
+                (json.dumps(draft, ensure_ascii=False), meeting_id),
+            )
+            conn.commit()
+        self.log_audit(
+            "extraction_item_reviewed",
+            "meeting",
+            meeting_id,
+            actor=actor,
+            detail={"item_index": item_index, "decision": decision},
+        )
+        return self.get_meeting(meeting_id)
+
+    def meeting_extraction_accept_all(self, meeting_id: str) -> MeetingRead:
+        m = self.get_meeting(meeting_id)
+        if m.extraction_status != "draft":
+            raise ValueError("no_active_draft")
+        draft = self._coerce_extraction_draft(dict(m.extraction_draft))
+        rev = {str(i): "accepted" for i in range(len(draft.get("proposed_items") or []))}
+        draft["item_reviews"] = rev
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE meetings SET extraction_draft_json = ? WHERE id = ?",
+                (json.dumps(draft, ensure_ascii=False), meeting_id),
+            )
+            conn.commit()
+        self.log_audit("extraction_accept_all", "meeting", meeting_id)
         return self.get_meeting(meeting_id)
 
     def confirm_meeting_extraction(
@@ -1182,18 +1481,42 @@ class ContextStore:
         m = self.get_meeting(meeting_id)
         if m.extraction_status != "draft":
             raise ValueError("no_draft_to_confirm")
-        items = list(m.extraction_draft.get("proposed_items") or [])
+        draft = dict(m.extraction_draft)
+        items = list(draft.get("proposed_items") or [])
+        rev = draft.get("item_reviews") or {}
+
         if data.accepted_indices:
             picked = []
             for i in data.accepted_indices:
                 if isinstance(i, int) and 0 <= i < len(items):
                     picked.append(items[i])
-            items = picked
-        payload = {
-            **m.extraction_draft,
-            "confirmed_items": items,
-            "confirmed": True,
-        }
+            payload = {
+                **draft,
+                "confirmed_items": picked,
+                "confirmed": True,
+            }
+        elif rev:
+            draft = self._coerce_extraction_draft(draft)
+            rev = draft["item_reviews"]
+            for i in range(len(items)):
+                if rev.get(str(i), "pending") == "pending":
+                    raise ValueError("extraction_items_pending_review")
+            confirmed = [
+                items[i]
+                for i in range(len(items))
+                if rev.get(str(i)) == "accepted"
+            ]
+            payload = {
+                **draft,
+                "confirmed_items": confirmed,
+                "confirmed": True,
+            }
+        else:
+            payload = {
+                **draft,
+                "confirmed_items": items,
+                "confirmed": True,
+            }
         ts = _now()
         with self._connect() as conn:
             conn.execute(
@@ -1203,7 +1526,75 @@ class ContextStore:
                 (json.dumps(payload, ensure_ascii=False), ts, meeting_id),
             )
             conn.commit()
+        self.log_audit(
+            "extraction_confirmed",
+            "meeting",
+            meeting_id,
+            detail={"n_confirmed": len(payload.get("confirmed_items") or [])},
+        )
         return self.get_meeting(meeting_id)
+
+    def list_improvement_items(
+        self, *, status: Optional[str] = "open", limit: int = 200
+    ) -> list[ImprovementItemRead]:
+        q = "SELECT * FROM context_improvement_items WHERE 1=1"
+        params: list[Any] = []
+        if status:
+            q += " AND status = ?"
+            params.append(status)
+        q += " ORDER BY created_at DESC LIMIT ?"
+        params.append(min(limit, 500))
+        with self._connect() as conn:
+            rows = conn.execute(q, params).fetchall()
+        return [
+            ImprovementItemRead(
+                id=r["id"],
+                source_triage_id=r["source_triage_id"],
+                story_id=r["story_id"],
+                context_package_id=r["context_package_id"],
+                manufacturing_request_id=r["manufacturing_request_id"],
+                title=r["title"],
+                description=r["description"],
+                priority=r["priority"],
+                status=r["status"],
+                created_at=datetime.fromisoformat(r["created_at"]),
+            )
+            for r in rows
+        ]
+
+    def resolve_improvement_item(self, item_id: str) -> ImprovementItemRead:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE context_improvement_items SET status = 'closed' WHERE id = ?",
+                (item_id,),
+            )
+            conn.commit()
+        row = self._get_improvement_row(item_id)
+        self.log_audit("resolved", "context_improvement_item", item_id)
+        return self._improvement_row_to_read(row)
+
+    def _get_improvement_row(self, item_id: str) -> sqlite3.Row:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM context_improvement_items WHERE id = ?", (item_id,)
+            ).fetchone()
+        if not row:
+            raise KeyError("improvement_item_not_found")
+        return row
+
+    def _improvement_row_to_read(self, row: sqlite3.Row) -> ImprovementItemRead:
+        return ImprovementItemRead(
+            id=row["id"],
+            source_triage_id=row["source_triage_id"],
+            story_id=row["story_id"],
+            context_package_id=row["context_package_id"],
+            manufacturing_request_id=row["manufacturing_request_id"],
+            title=row["title"],
+            description=row["description"],
+            priority=row["priority"],
+            status=row["status"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
 
 
 _store: Optional[ContextStore] = None

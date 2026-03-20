@@ -19,6 +19,7 @@ from src.context_platform.schemas import (
     FeatureCreate,
     ManufacturingSubmit,
     MeetingCreate,
+    ExtractionItemReviewBody,
     MeetingExtractionConfirm,
     MeetingTranscriptUpdate,
     MeetingTypeRef,
@@ -244,6 +245,61 @@ def api_meeting_extract_stub(meeting_id: str):
         raise HTTPException(400, str(e)) from e
 
 
+@api_router.get("/audit-events")
+def api_list_audit(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    limit: int = 100,
+):
+    return [
+        _dump(x)
+        for x in get_store().list_audit_events(
+            entity_type=entity_type, entity_id=entity_id, limit=limit
+        )
+    ]
+
+
+@api_router.get("/improvement-items")
+def api_list_improvements(status: Optional[str] = "open", limit: int = 200):
+    return [_dump(x) for x in get_store().list_improvement_items(status=status, limit=limit)]
+
+
+@api_router.post("/improvement-items/{item_id}/resolve")
+def api_resolve_improvement(item_id: str):
+    try:
+        return _dump(get_store().resolve_improvement_item(item_id))
+    except KeyError:
+        raise HTTPException(404, "Improvement item not found") from None
+
+
+@api_router.post("/meetings/{meeting_id}/extraction-items/{item_index}/review")
+def api_extraction_item_review(
+    meeting_id: str,
+    item_index: int,
+    body: ExtractionItemReviewBody,
+):
+    try:
+        return _dump(
+            get_store().set_meeting_extraction_item_review(
+                meeting_id, item_index, body.decision
+            )
+        )
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@api_router.post("/meetings/{meeting_id}/extraction-accept-all")
+def api_extraction_accept_all(meeting_id: str):
+    try:
+        return _dump(get_store().meeting_extraction_accept_all(meeting_id))
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @api_router.post("/meetings/{meeting_id}/confirm-extraction")
 def api_meeting_confirm(
     meeting_id: str,
@@ -289,6 +345,8 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         "story_blocks": story_blocks,
         "gaps": store.list_gaps(unresolved_only=True),
         "meetings": store.list_meetings(),
+        "audit_events": store.list_audit_events(limit=30),
+        "open_improvements": store.list_improvement_items(status="open", limit=40),
         "phase_kinds": [e.value for e in PhaseKind],
         "roles": [e.value for e in SignOffRole],
         "queues": [e.value for e in TriageQueue],
@@ -575,4 +633,42 @@ def form_meeting_confirm(request: Request, meeting_id: str):
         raise HTTPException(404, "Meeting not found") from None
     except ValueError as e:
         raise HTTPException(400, str(e)) from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/meetings/{meeting_id}/extraction-items/{item_index}/review")
+def form_extraction_item_review(
+    request: Request,
+    meeting_id: str,
+    item_index: int,
+    decision: str = Form(...),
+):
+    if decision not in ("accept", "reject"):
+        raise HTTPException(400, "decision must be accept or reject")
+    try:
+        get_store().set_meeting_extraction_item_review(meeting_id, item_index, decision)
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/meetings/{meeting_id}/extraction-accept-all")
+def form_extraction_accept_all(request: Request, meeting_id: str):
+    try:
+        get_store().meeting_extraction_accept_all(meeting_id)
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/improvement-items/{item_id}/resolve")
+def form_resolve_improvement(request: Request, item_id: str):
+    try:
+        get_store().resolve_improvement_item(item_id)
+    except KeyError:
+        raise HTTPException(404, "Improvement item not found") from None
     return RedirectResponse(url="/context", status_code=303)

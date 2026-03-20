@@ -1,6 +1,6 @@
 # Context Engineering Platform
 
-MVP for the **Automated Agile — Context Engineering Platform**: **roadmap hierarchy** (cycle → delivery phase → feature → **story**), **v2 structured context packages**, **D7** frozen approval snapshot + hash, **stub manufacturing pipeline** (H1: `queued` → `running` → `awaiting_triage` → D10 triage → `completed`), **meeting transcript + stub extraction** (D2: `DECISION:` / `ACTION:` / `REQ:` lines → draft → human confirm), context gaps, meetings registry.
+MVP for the **Automated Agile — Context Engineering Platform**: **roadmap hierarchy**, **v2 structured context packages**, **D7** frozen approval snapshot + hash, **stub manufacturing** + on-disk artifact, **D10 triage**, **D11 improvement backlog** (auto from **Q2/Q3** triage), **append-only audit trail**, **meeting extraction** (optional OpenAI or pattern stub) with **per-item accept/reject** before confirm, context gaps, meetings registry.
 
 - Process specification: [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md)  
 - GitHub issue roadmap: [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
@@ -23,7 +23,9 @@ python run.py
 | Stories | `POST /api/context/stories`, `POST /api/context/stories/quick` (default backlog), `GET /api/context/stories` |
 | Package | `POST …/context-packages`, `PATCH …/context-packages/{id}`, sign-offs |
 | Manufacturing | `POST …/context-packages/{id}/manufacturing` (starts **background stub job**), `POST …/manufacturing/{id}/triage` |
-| Meetings | `PUT …/meetings/{id}/transcript`, `POST …/extract-stub`, `POST …/confirm-extraction`, `GET …/meetings/{id}` |
+| Meetings | `PUT …/transcript`, `POST …/extract-stub`, `POST …/extraction-items/{i}/review`, `POST …/extraction-accept-all`, `POST …/confirm-extraction`, `GET …/meetings/{id}` |
+| Audit | `GET /api/context/audit-events` (optional `entity_type`, `entity_id`, `limit`) |
+| D11 | `GET /api/context/improvement-items`, `POST …/improvement-items/{id}/resolve` |
 
 **D7:** requires **context_engineer**, **product_owner**, and **either** **tech_lead** or **developer**. On completion, an **approved JSON snapshot** and **SHA-256 hash** are stored; the live package rows are no longer editable.
 

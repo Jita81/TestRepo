@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -240,6 +240,38 @@ class MeetingTranscriptUpdate(BaseModel):
 
 
 class MeetingExtractionConfirm(BaseModel):
-    """Optional subset of proposed_items by index; empty = confirm whole draft."""
+    """
+    If `accepted_indices` is set: legacy one-shot confirm of that subset only.
+    Otherwise: when `item_reviews` exists on the draft, every item must be
+    accepted or rejected before confirm; confirmed payload = accepted items only.
+    If there are no per-item reviews (old drafts), all proposed items confirm.
+    """
 
     accepted_indices: list[int] = Field(default_factory=list)
+
+
+class ExtractionItemReviewBody(BaseModel):
+    decision: Literal["accept", "reject"]
+
+
+class AuditEventRead(BaseModel):
+    id: str
+    occurred_at: datetime
+    action: str
+    entity_type: str
+    entity_id: str
+    actor: str
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+class ImprovementItemRead(BaseModel):
+    id: str
+    source_triage_id: Optional[str] = None
+    story_id: Optional[str] = None
+    context_package_id: Optional[str] = None
+    manufacturing_request_id: Optional[str] = None
+    title: str
+    description: str
+    priority: str
+    status: str
+    created_at: datetime
