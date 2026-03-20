@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from src.context_platform.manufacturing_worker import run_stub_manufacturing_job
 from src.context_platform.schemas import (
     ContextGapCreate,
     ContextPackageCreate,
@@ -18,6 +19,8 @@ from src.context_platform.schemas import (
     FeatureCreate,
     ManufacturingSubmit,
     MeetingCreate,
+    MeetingExtractionConfirm,
+    MeetingTranscriptUpdate,
     MeetingTypeRef,
     PhaseKind,
     RoadmapCycleCreate,
@@ -179,9 +182,15 @@ def api_resolve_gap(gap_id: str):
 
 
 @api_router.post("/context-packages/{package_id}/manufacturing")
-def api_manufacturing(package_id: str, body: ManufacturingSubmit):
+def api_manufacturing(
+    package_id: str,
+    body: ManufacturingSubmit,
+    background_tasks: BackgroundTasks,
+):
     try:
-        return _dump(get_store().submit_manufacturing(package_id, body))
+        m = get_store().submit_manufacturing(package_id, body)
+        background_tasks.add_task(run_stub_manufacturing_job, m.id)
+        return _dump(m)
     except KeyError:
         raise HTTPException(404, "Context package not found") from None
     except ValueError as e:
@@ -194,6 +203,8 @@ def api_triage(request_id: str, body: TriageSubmit):
         return _dump(get_store().submit_triage(request_id, body))
     except KeyError:
         raise HTTPException(404, "Manufacturing request not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
 
 
 @api_router.get("/meetings")
@@ -201,9 +212,48 @@ def api_list_meetings():
     return [_dump(m) for m in get_store().list_meetings()]
 
 
+@api_router.get("/meetings/{meeting_id}")
+def api_get_meeting(meeting_id: str):
+    try:
+        return _dump(get_store().get_meeting(meeting_id))
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+
+
 @api_router.post("/meetings")
 def api_create_meeting(body: MeetingCreate):
     return _dump(get_store().create_meeting(body))
+
+
+@api_router.put("/meetings/{meeting_id}/transcript")
+def api_meeting_transcript(meeting_id: str, body: MeetingTranscriptUpdate):
+    try:
+        return _dump(get_store().set_meeting_transcript(meeting_id, body))
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+
+
+@api_router.post("/meetings/{meeting_id}/extract-stub")
+def api_meeting_extract_stub(meeting_id: str):
+    try:
+        return _dump(get_store().run_meeting_extraction_stub(meeting_id))
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@api_router.post("/meetings/{meeting_id}/confirm-extraction")
+def api_meeting_confirm(
+    meeting_id: str,
+    body: MeetingExtractionConfirm = Body(default_factory=MeetingExtractionConfirm),
+):
+    try:
+        return _dump(get_store().confirm_meeting_extraction(meeting_id, body))
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
 
 
 # --- HTML dashboard ---
@@ -411,12 +461,14 @@ def form_sign_off(
 def form_manufacturing(
     request: Request,
     package_id: str,
+    background_tasks: BackgroundTasks,
     submitted_by: str = Form(...),
 ):
     try:
-        get_store().submit_manufacturing(
+        m = get_store().submit_manufacturing(
             package_id, ManufacturingSubmit(submitted_by=submitted_by)
         )
+        background_tasks.add_task(run_stub_manufacturing_job, m.id)
     except KeyError:
         raise HTTPException(404, "Package not found") from None
     except ValueError as e:
@@ -437,6 +489,8 @@ def form_triage(
         )
     except KeyError:
         raise HTTPException(404, "Manufacturing request not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
     return RedirectResponse(url="/context", status_code=303)
 
 
@@ -483,4 +537,41 @@ def form_create_meeting(
         )
     except ValueError:
         raise HTTPException(400, "Invalid meeting type") from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/meetings/{meeting_id}/transcript")
+def form_meeting_transcript(
+    request: Request,
+    meeting_id: str,
+    transcript: str = Form(...),
+):
+    try:
+        get_store().set_meeting_transcript(
+            meeting_id, MeetingTranscriptUpdate(text=transcript)
+        )
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/meetings/{meeting_id}/extract-stub")
+def form_meeting_extract(request: Request, meeting_id: str):
+    try:
+        get_store().run_meeting_extraction_stub(meeting_id)
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/meetings/{meeting_id}/confirm-extraction")
+def form_meeting_confirm(request: Request, meeting_id: str):
+    try:
+        get_store().confirm_meeting_extraction(meeting_id, MeetingExtractionConfirm())
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
     return RedirectResponse(url="/context", status_code=303)

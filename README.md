@@ -1,6 +1,6 @@
 # Context Engineering Platform
 
-MVP for the **Automated Agile — Context Engineering Platform**: **roadmap hierarchy** (cycle → delivery phase → feature → **story**), **v2 structured context packages** (validated business / technical / testing sections), **D7** sign-offs with **immutable approval snapshot** + content hash, **D9** manufacturing (records package hash), **D10** triage, context gaps, meetings registry.
+MVP for the **Automated Agile — Context Engineering Platform**: **roadmap hierarchy** (cycle → delivery phase → feature → **story**), **v2 structured context packages**, **D7** frozen approval snapshot + hash, **stub manufacturing pipeline** (H1: `queued` → `running` → `awaiting_triage` → D10 triage → `completed`), **meeting transcript + stub extraction** (D2: `DECISION:` / `ACTION:` / `REQ:` lines → draft → human confirm), context gaps, meetings registry.
 
 - Process specification: [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md)  
 - GitHub issue roadmap: [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
@@ -21,7 +21,9 @@ python run.py
 |------|-----------|
 | Roadmap | `POST/GET /api/context/roadmap-cycles`, `POST/GET /api/context/delivery-phases?cycle_id=`, `POST/GET /api/context/features?delivery_phase_id=`, `GET /api/context/roadmap-tree` |
 | Stories | `POST /api/context/stories`, `POST /api/context/stories/quick` (default backlog), `GET /api/context/stories` |
-| Package | `POST /api/context/stories/{id}/context-packages`, `PATCH /api/context/context-packages/{id}`, sign-offs, manufacturing, triage (unchanged paths) |
+| Package | `POST …/context-packages`, `PATCH …/context-packages/{id}`, sign-offs |
+| Manufacturing | `POST …/context-packages/{id}/manufacturing` (starts **background stub job**), `POST …/manufacturing/{id}/triage` |
+| Meetings | `PUT …/meetings/{id}/transcript`, `POST …/extract-stub`, `POST …/confirm-extraction`, `GET …/meetings/{id}` |
 
 **D7:** requires **context_engineer**, **product_owner**, and **either** **tech_lead** or **developer**. On completion, an **approved JSON snapshot** and **SHA-256 hash** are stored; the live package rows are no longer editable.
 

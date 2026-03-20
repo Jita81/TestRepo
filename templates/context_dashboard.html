@@ -72,6 +72,11 @@
     .badge-in_review { background: #5c4a2d; color: #f0d9a8; }
     .badge-approved { background: #1e4d2e; color: #a8f0b8; }
     .badge-rejected { background: #4d1e1e; color: #f0a8a8; }
+    .badge-queued { background: #3d4a5c; color: #c5d0e0; }
+    .badge-running { background: #2d4a6c; color: #a8c8f0; }
+    .badge-awaiting_triage { background: #3d4a2d; color: #d8f0a8; }
+    .badge-failed { background: #4d1e1e; color: #f0a8a8; }
+    .badge-completed { background: #1e3d4d; color: #a8e0f0; }
     .pkg { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
     .pkg-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
     .muted { color: var(--muted); font-size: 0.85rem; }
@@ -89,7 +94,7 @@
   <div class="grid">
     <header>
       <h1>Context Engineering Platform</h1>
-      <p class="sub">Roadmap → story → context package (v2 JSON sections) → D7 (Context Engineer + <strong>Tech lead or Developer</strong> + Product Owner) → D9 → D10. API <code>/api/context</code> · <code>/api/context/roadmap-tree</code>.</p>
+      <p class="sub">Roadmap → story → package → D7 → <strong>stub manufacturing job</strong> (queued→running→awaiting_triage) → D10 triage. Meetings: transcript → <strong>stub extraction</strong> (DECISION:/ACTION:/REQ:) → confirm. API <code>/api/context</code>.</p>
     </header>
 
     <div class="card">
@@ -227,11 +232,40 @@
         <button type="submit">Add</button>
       </form>
       {% if meetings %}
-      <ul class="muted" style="margin-top:0.75rem;list-style:none">
+      <div style="margin-top:1rem">
         {% for m in meetings %}
-        <li>{{ m.meeting_type.value }} — {{ m.title or "(no title)" }} · {{ m.status }}</li>
+        <details style="margin-bottom:0.75rem;border:1px solid var(--border);border-radius:8px;padding:0.75rem">
+          <summary style="cursor:pointer;font-weight:600">{{ m.meeting_type.value }} — {{ m.title or "(no title)" }} · {{ m.status }} · extraction: {{ m.extraction_status }}</summary>
+          <p class="muted" style="margin:0.5rem 0"><code>{{ m.id }}</code></p>
+          <form method="post" action="/context/meetings/{{ m.id }}/transcript" style="margin-top:0.5rem">
+            <label>Transcript (use lines like <code>DECISION:</code>, <code>ACTION:</code>, <code>REQ:</code>)</label>
+            <textarea name="transcript" rows="5" placeholder="DECISION: We ship OAuth2 first&#10;ACTION: Bob updates the diagram">{{ m.transcript or '' }}</textarea>
+            <button type="submit" class="secondary" style="margin-top:0.35rem">Save transcript</button>
+          </form>
+          <form method="post" action="/context/meetings/{{ m.id }}/extract-stub" style="margin-top:0.5rem">
+            <button type="submit">Run stub extraction</button>
+          </form>
+          {% if m.extraction_draft and m.extraction_draft.get('proposed_items') %}
+          <div class="muted" style="margin-top:0.75rem">
+            <strong>Draft items</strong>
+            <ul style="margin:0.35rem 0 0 1.25rem">
+              {% for it in m.extraction_draft.get('proposed_items', []) %}
+              <li><span class="badge badge-in_review">{{ it.get('type','?') }}</span> {{ it.get('text','') }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if m.extraction_status == 'draft' %}
+          <form method="post" action="/context/meetings/{{ m.id }}/confirm-extraction" style="margin-top:0.75rem">
+            <button type="submit" class="secondary">Confirm extraction (human sign-off)</button>
+          </form>
+          {% endif %}
+          {% if m.extraction_status == 'confirmed' and m.extraction_confirmed_at %}
+          <p class="muted" style="margin-top:0.5rem">Confirmed at {{ m.extraction_confirmed_at }}</p>
+          {% endif %}
+        </details>
         {% endfor %}
-      </ul>
+      </div>
       {% endif %}
     </div>
 
@@ -304,10 +338,24 @@
 
         {% for mv in pv.manufacturing %}
         <div style="margin-top:0.75rem;padding:0.75rem;background:var(--bg);border-radius:6px">
-          <span class="muted">Mfg {{ mv.m.id[:8] }}… · {{ mv.m.status.value }} · by {{ mv.m.submitted_by }}{% if mv.m.package_content_hash %} · pkg hash {{ mv.m.package_content_hash[:10] }}…{% endif %}</span>
-          {% if mv.triage %}
+          <div class="pkg-head" style="margin-bottom:0.35rem">
+            <span>Mfg {{ mv.m.id[:8] }}…</span>
+            <span class="badge badge-{{ mv.m.status.value }}">{{ mv.m.status.value }}</span>
+            <span class="muted">by {{ mv.m.submitted_by }}{% if mv.m.package_content_hash %} · pkg hash {{ mv.m.package_content_hash[:10] }}…{% endif %}</span>
+          </div>
+          {% if mv.m.output_summary %}
+          <p class="muted" style="font-size:0.9rem;margin:0.35rem 0">{{ mv.m.output_summary }}</p>
+          {% endif %}
+          {% if mv.m.error_message %}
+          <p style="color:var(--danger);font-size:0.9rem;margin:0.35rem 0">{{ mv.m.error_message }}</p>
+          {% endif %}
+          {% if mv.m.status.value == 'running' %}
+          <p class="muted" style="margin-top:0.35rem">Stub pipeline running… refresh in a moment.</p>
+          {% elif mv.m.status.value == 'failed' %}
+          <p class="muted" style="margin-top:0.35rem">No triage — job failed.</p>
+          {% elif mv.triage %}
           <p style="margin-top:0.35rem">Triage: <strong>{{ mv.triage.queue.value }}</strong> — {{ mv.triage.feedback[:200] }}{% if mv.triage.feedback|length > 200 %}…{% endif %}</p>
-          {% else %}
+          {% elif mv.m.status.value in ('awaiting_triage', 'queued') %}
           <form method="post" action="/context/manufacturing/{{ mv.m.id }}/triage" class="row" style="margin-top:0.5rem">
             <div>
               <label>Queue</label>

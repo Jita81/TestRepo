@@ -1,6 +1,6 @@
 # Roadmap — GitHub issue breakdown
 
-**Progress (repo):** **A1** (hierarchy + `story_id`), **B1** (structured sections in `package_models.py`), and **B2** (approval snapshot + hash + manufacturing hash pin) have a first implementation. Remaining issues below still apply for auth, graph, meetings, integrations, etc.
+**Progress (repo):** **A1**, **B1**, **B2** as before; **H1** stub manufacturing job (`manufacturing_worker.py` + extended `ManufacturingStatus`); **D2** stub meeting extraction (`meeting_extraction.py`, transcript + confirm). Remaining: real LLM extraction, CI/codegen adapter, auth, integrations, full graph.
 
 Use this document to create **Epics** (GitHub Milestones or parent Issues) and **child Issues**. Each block below is intended as **one issue**: title = first line; body = the rest of the block.
 

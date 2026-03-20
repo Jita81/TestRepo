@@ -37,7 +37,9 @@ class TriageQueue(str, Enum):
 
 class ManufacturingStatus(str, Enum):
     queued = "queued"
-    in_progress = "in_progress"
+    running = "running"
+    awaiting_triage = "awaiting_triage"
+    failed = "failed"
     completed = "completed"
 
 
@@ -185,6 +187,10 @@ class ManufacturingRead(BaseModel):
     submitted_by: str
     submitted_at: datetime
     status: ManufacturingStatus
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    output_summary: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 class TriageSubmit(BaseModel):
@@ -223,3 +229,17 @@ class MeetingRead(BaseModel):
     scheduled_at: Optional[datetime]
     status: str
     created_at: datetime
+    transcript: Optional[str] = None
+    extraction_status: str = "none"
+    extraction_draft: dict[str, Any] = Field(default_factory=dict)
+    extraction_confirmed_at: Optional[datetime] = None
+
+
+class MeetingTranscriptUpdate(BaseModel):
+    text: str = Field(..., min_length=1)
+
+
+class MeetingExtractionConfirm(BaseModel):
+    """Optional subset of proposed_items by index; empty = confirm whole draft."""
+
+    accepted_indices: list[int] = Field(default_factory=list)

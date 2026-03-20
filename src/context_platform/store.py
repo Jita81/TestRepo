@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Generator, Optional
 
+from src.context_platform.meeting_extraction import stub_extract_transcript
 from src.context_platform.package_models import (
     ContextPackageSectionsV2,
     compute_readiness_v2,
@@ -31,7 +32,9 @@ from src.context_platform.schemas import (
     ManufacturingStatus,
     ManufacturingSubmit,
     MeetingCreate,
+    MeetingExtractionConfirm,
     MeetingRead,
+    MeetingTranscriptUpdate,
     MeetingTypeRef,
     PackageStatus,
     PhaseKind,
@@ -156,7 +159,11 @@ CREATE TABLE IF NOT EXISTS manufacturing_requests (
     package_content_hash TEXT,
     submitted_by TEXT NOT NULL,
     submitted_at TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'queued'
+    status TEXT NOT NULL DEFAULT 'queued',
+    started_at TEXT,
+    finished_at TEXT,
+    output_summary TEXT,
+    error_message TEXT
 );
 
 CREATE TABLE IF NOT EXISTS triage_results (
@@ -173,7 +180,11 @@ CREATE TABLE IF NOT EXISTS meetings (
     title TEXT NOT NULL DEFAULT '',
     scheduled_at TEXT,
     status TEXT NOT NULL DEFAULT 'planned',
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    transcript TEXT,
+    extraction_draft_json TEXT,
+    extraction_status TEXT NOT NULL DEFAULT 'none',
+    extraction_confirmed_at TEXT
 );
 """
 
@@ -278,11 +289,18 @@ def _migrate_legacy_to_v2(conn: sqlite3.Connection) -> None:
     return
 
 
+def _normalize_mfg_status(raw: str) -> str:
+    if raw == "in_progress":
+        return ManufacturingStatus.running.value
+    return raw
+
+
 class ContextStore:
     def __init__(self, db_path: str | Path) -> None:
         self._path = Path(db_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
+        self._ensure_extensions()
 
     def _init_db(self) -> None:
         with self._connect() as conn:
@@ -307,6 +325,47 @@ class ContextStore:
                     except sqlite3.OperationalError:
                         pass
                 conn.commit()
+
+    def _ensure_extensions(self) -> None:
+        with self._connect() as conn:
+            mcols = _table_columns(conn, "manufacturing_requests")
+            for col, ddl in [
+                ("started_at", "ALTER TABLE manufacturing_requests ADD COLUMN started_at TEXT"),
+                ("finished_at", "ALTER TABLE manufacturing_requests ADD COLUMN finished_at TEXT"),
+                ("output_summary", "ALTER TABLE manufacturing_requests ADD COLUMN output_summary TEXT"),
+                ("error_message", "ALTER TABLE manufacturing_requests ADD COLUMN error_message TEXT"),
+            ]:
+                if col not in mcols:
+                    try:
+                        conn.execute(ddl)
+                    except sqlite3.OperationalError:
+                        pass
+            conn.execute(
+                "UPDATE manufacturing_requests SET status = ? WHERE status = ?",
+                (ManufacturingStatus.running.value, "in_progress"),
+            )
+            mtcols = _table_columns(conn, "meetings")
+            for col, ddl in [
+                ("transcript", "ALTER TABLE meetings ADD COLUMN transcript TEXT"),
+                (
+                    "extraction_draft_json",
+                    "ALTER TABLE meetings ADD COLUMN extraction_draft_json TEXT",
+                ),
+                (
+                    "extraction_status",
+                    "ALTER TABLE meetings ADD COLUMN extraction_status TEXT DEFAULT 'none'",
+                ),
+                (
+                    "extraction_confirmed_at",
+                    "ALTER TABLE meetings ADD COLUMN extraction_confirmed_at TEXT",
+                ),
+            ]:
+                if col not in mtcols:
+                    try:
+                        conn.execute(ddl)
+                    except sqlite3.OperationalError:
+                        pass
+            conn.commit()
 
     @contextmanager
     def _connect(self) -> Generator[sqlite3.Connection, None, None]:
@@ -890,21 +949,74 @@ class ContextStore:
             conn.commit()
         return self.get_manufacturing(mid)
 
-    def get_manufacturing(self, request_id: str) -> ManufacturingRead:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM manufacturing_requests WHERE id = ?", (request_id,)
-            ).fetchone()
-        if not row:
-            raise KeyError("manufacturing_not_found")
+    def _mfg_row_to_read(self, row: sqlite3.Row) -> ManufacturingRead:
+        keys = set(row.keys())
+        raw_st = row["status"]
+        try:
+            st = ManufacturingStatus(_normalize_mfg_status(str(raw_st)))
+        except ValueError:
+            st = ManufacturingStatus.queued
+        started = row["started_at"] if "started_at" in keys else None
+        finished = row["finished_at"] if "finished_at" in keys else None
+        out = row["output_summary"] if "output_summary" in keys else None
+        err = row["error_message"] if "error_message" in keys else None
         return ManufacturingRead(
             id=row["id"],
             context_package_id=row["context_package_id"],
             package_content_hash=row["package_content_hash"],
             submitted_by=row["submitted_by"],
             submitted_at=datetime.fromisoformat(row["submitted_at"]),
-            status=ManufacturingStatus(row["status"]),
+            status=st,
+            started_at=datetime.fromisoformat(started) if started else None,
+            finished_at=datetime.fromisoformat(finished) if finished else None,
+            output_summary=out,
+            error_message=err,
         )
+
+    def get_manufacturing_row(self, request_id: str) -> sqlite3.Row:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM manufacturing_requests WHERE id = ?", (request_id,)
+            ).fetchone()
+        if not row:
+            raise KeyError("manufacturing_not_found")
+        return row
+
+    def get_manufacturing(self, request_id: str) -> ManufacturingRead:
+        return self._mfg_row_to_read(self.get_manufacturing_row(request_id))
+
+    def update_manufacturing_status(
+        self,
+        request_id: str,
+        status: ManufacturingStatus,
+        *,
+        started: bool = False,
+        finished: bool = False,
+        output_summary: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
+        ts = _now()
+        with self._connect() as conn:
+            parts = ["status = ?"]
+            params: list[Any] = [status.value]
+            if started:
+                parts.append("started_at = ?")
+                params.append(ts)
+            if finished:
+                parts.append("finished_at = ?")
+                params.append(ts)
+            if output_summary is not None:
+                parts.append("output_summary = ?")
+                params.append(output_summary)
+            if error_message is not None:
+                parts.append("error_message = ?")
+                params.append(error_message)
+            params.append(request_id)
+            conn.execute(
+                f"UPDATE manufacturing_requests SET {', '.join(parts)} WHERE id = ?",
+                params,
+            )
+            conn.commit()
 
     def list_manufacturing_for_package(self, package_id: str) -> list[ManufacturingRead]:
         with self._connect() as conn:
@@ -912,20 +1024,21 @@ class ContextStore:
                 "SELECT * FROM manufacturing_requests WHERE context_package_id = ? ORDER BY submitted_at DESC",
                 (package_id,),
             ).fetchall()
-        return [
-            ManufacturingRead(
-                id=r["id"],
-                context_package_id=r["context_package_id"],
-                package_content_hash=r["package_content_hash"],
-                submitted_by=r["submitted_by"],
-                submitted_at=datetime.fromisoformat(r["submitted_at"]),
-                status=ManufacturingStatus(r["status"]),
-            )
-            for r in rows
-        ]
+        return [self._mfg_row_to_read(r) for r in rows]
 
     def submit_triage(self, request_id: str, data: TriageSubmit) -> TriageRead:
-        self.get_manufacturing(request_id)
+        m = self.get_manufacturing(request_id)
+        if m.status == ManufacturingStatus.completed:
+            raise ValueError("already_triaged")
+        if m.status == ManufacturingStatus.failed:
+            raise ValueError("manufacturing_failed")
+        if m.status == ManufacturingStatus.running:
+            raise ValueError("manufacturing_running")
+        if m.status not in (
+            ManufacturingStatus.awaiting_triage,
+            ManufacturingStatus.queued,
+        ):
+            raise ValueError("not_ready_for_triage")
         tid = _uid()
         ts = _now()
         with self._connect() as conn:
@@ -974,6 +1087,38 @@ class ContextStore:
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 
+    def _meeting_row_to_read(self, row: sqlite3.Row) -> MeetingRead:
+        keys = set(row.keys())
+        sched = (
+            datetime.fromisoformat(row["scheduled_at"]) if row["scheduled_at"] else None
+        )
+        transcript = row["transcript"] if "transcript" in keys else None
+        ext_raw = row["extraction_draft_json"] if "extraction_draft_json" in keys else None
+        draft: dict[str, Any] = {}
+        if ext_raw:
+            try:
+                draft = json.loads(ext_raw)
+            except json.JSONDecodeError:
+                draft = {}
+        ext_status = (
+            row["extraction_status"] if "extraction_status" in keys else "none"
+        ) or "none"
+        conf = row["extraction_confirmed_at"] if "extraction_confirmed_at" in keys else None
+        return MeetingRead(
+            id=row["id"],
+            meeting_type=MeetingTypeRef(row["meeting_type"]),
+            title=row["title"] or "",
+            scheduled_at=sched,
+            status=row["status"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+            transcript=transcript,
+            extraction_status=ext_status,
+            extraction_draft=draft,
+            extraction_confirmed_at=(
+                datetime.fromisoformat(conf) if conf else None
+            ),
+        )
+
     def create_meeting(self, data: MeetingCreate) -> MeetingRead:
         mid = _uid()
         ts = _now()
@@ -994,37 +1139,71 @@ class ContextStore:
             ).fetchone()
         if not row:
             raise KeyError("meeting_not_found")
-        sched = (
-            datetime.fromisoformat(row["scheduled_at"]) if row["scheduled_at"] else None
-        )
-        return MeetingRead(
-            id=row["id"],
-            meeting_type=MeetingTypeRef(row["meeting_type"]),
-            title=row["title"] or "",
-            scheduled_at=sched,
-            status=row["status"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-        )
+        return self._meeting_row_to_read(row)
 
     def list_meetings(self) -> list[MeetingRead]:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT * FROM meetings ORDER BY created_at DESC"
             ).fetchall()
-        out = []
-        for r in rows:
-            sched = datetime.fromisoformat(r["scheduled_at"]) if r["scheduled_at"] else None
-            out.append(
-                MeetingRead(
-                    id=r["id"],
-                    meeting_type=MeetingTypeRef(r["meeting_type"]),
-                    title=r["title"] or "",
-                    scheduled_at=sched,
-                    status=r["status"],
-                    created_at=datetime.fromisoformat(r["created_at"]),
-                )
+        return [self._meeting_row_to_read(r) for r in rows]
+
+    def set_meeting_transcript(self, meeting_id: str, data: MeetingTranscriptUpdate) -> MeetingRead:
+        self.get_meeting(meeting_id)
+        with self._connect() as conn:
+            conn.execute(
+                """UPDATE meetings SET transcript = ?, extraction_status = 'none',
+                extraction_draft_json = NULL, extraction_confirmed_at = NULL
+                WHERE id = ?""",
+                (data.text, meeting_id),
             )
-        return out
+            conn.commit()
+        return self.get_meeting(meeting_id)
+
+    def run_meeting_extraction_stub(self, meeting_id: str) -> MeetingRead:
+        m = self.get_meeting(meeting_id)
+        if not m.transcript:
+            raise ValueError("meeting_has_no_transcript")
+        draft = stub_extract_transcript(m.transcript)
+        ts = _now()
+        with self._connect() as conn:
+            conn.execute(
+                """UPDATE meetings SET extraction_draft_json = ?, extraction_status = 'draft',
+                status = 'extraction_pending'
+                WHERE id = ?""",
+                (json.dumps(draft, ensure_ascii=False), meeting_id),
+            )
+            conn.commit()
+        return self.get_meeting(meeting_id)
+
+    def confirm_meeting_extraction(
+        self, meeting_id: str, data: MeetingExtractionConfirm
+    ) -> MeetingRead:
+        m = self.get_meeting(meeting_id)
+        if m.extraction_status != "draft":
+            raise ValueError("no_draft_to_confirm")
+        items = list(m.extraction_draft.get("proposed_items") or [])
+        if data.accepted_indices:
+            picked = []
+            for i in data.accepted_indices:
+                if isinstance(i, int) and 0 <= i < len(items):
+                    picked.append(items[i])
+            items = picked
+        payload = {
+            **m.extraction_draft,
+            "confirmed_items": items,
+            "confirmed": True,
+        }
+        ts = _now()
+        with self._connect() as conn:
+            conn.execute(
+                """UPDATE meetings SET extraction_draft_json = ?, extraction_status = 'confirmed',
+                extraction_confirmed_at = ?, status = 'extraction_confirmed'
+                WHERE id = ?""",
+                (json.dumps(payload, ensure_ascii=False), ts, meeting_id),
+            )
+            conn.commit()
+        return self.get_meeting(meeting_id)
 
 
 _store: Optional[ContextStore] = None
