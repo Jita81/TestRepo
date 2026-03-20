@@ -70,6 +70,33 @@ REQUIRED_SIGN_OFF_ROLES = frozenset(
 )
 
 
+def _triage_feedback_and_detail(data: TriageSubmit) -> tuple[str, dict[str, Any]]:
+    """Human-readable feedback column + structured JSON for analytics (D10)."""
+    detail: dict[str, Any] = {"queue": data.queue.value}
+    if data.queue == TriageQueue.Q1:
+        detail["notes"] = data.feedback.strip()
+        return data.feedback.strip(), detail
+    if data.queue == TriageQueue.Q2:
+        gaps = [g.strip() for g in data.gap_items if g and g.strip()]
+        detail["gap_items"] = gaps
+        if data.feedback.strip():
+            detail["notes"] = data.feedback.strip()
+        lines = [f"[gap] {g}" for g in gaps]
+        if data.feedback.strip():
+            lines.append(data.feedback.strip())
+        return "\n".join(lines), detail
+    cat = data.root_cause_category.value if data.root_cause_category else ""
+    narr = (data.root_cause_narrative or "").strip()
+    detail["root_cause_category"] = cat
+    detail["root_cause_narrative"] = narr
+    if data.feedback.strip():
+        detail["notes"] = data.feedback.strip()
+    fb = f"[{cat}] {narr}"
+    if data.feedback.strip():
+        fb = fb + "\n" + data.feedback.strip()
+    return fb, detail
+
+
 def _sign_offs_satisfy_d7(roles: set[SignOffRole]) -> bool:
     if not REQUIRED_SIGN_OFF_ROLES.issubset(roles):
         return False
@@ -210,6 +237,7 @@ CREATE TABLE IF NOT EXISTS triage_results (
     manufacturing_request_id TEXT NOT NULL REFERENCES manufacturing_requests(id) ON DELETE CASCADE,
     queue TEXT NOT NULL,
     feedback TEXT NOT NULL,
+    detail_json TEXT,
     created_at TEXT NOT NULL
 );
 
@@ -532,6 +560,14 @@ class ContextStore:
                 )
                 """
             )
+            trcols = _table_columns(conn, "triage_results")
+            if "detail_json" not in trcols:
+                try:
+                    conn.execute(
+                        "ALTER TABLE triage_results ADD COLUMN detail_json TEXT"
+                    )
+                except sqlite3.OperationalError:
+                    pass
             conn.commit()
 
     @contextmanager
@@ -1770,15 +1806,17 @@ class ContextStore:
             raise ValueError("not_ready_for_triage")
         tid = _uid()
         ts = _now()
+        fb_line, detail_obj = _triage_feedback_and_detail(data)
+        dj = json.dumps(detail_obj, ensure_ascii=False)
         pkg = self.get_context_package(m.context_package_id)
         story_id = pkg.story_id
         improvement_id: Optional[str] = None
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO triage_results
-                (id, manufacturing_request_id, queue, feedback, created_at)
-                VALUES (?,?,?,?,?)""",
-                (tid, request_id, data.queue.value, data.feedback, ts),
+                (id, manufacturing_request_id, queue, feedback, detail_json, created_at)
+                VALUES (?,?,?,?,?,?)""",
+                (tid, request_id, data.queue.value, fb_line, dj, ts),
             )
             conn.execute(
                 "UPDATE manufacturing_requests SET status = ? WHERE id = ?",
@@ -1800,7 +1838,7 @@ class ContextStore:
                         m.context_package_id,
                         request_id,
                         title,
-                        data.feedback[:4000],
+                        fb_line[:4000],
                         pr,
                         "open",
                         ts,
@@ -1814,6 +1852,7 @@ class ContextStore:
             detail={
                 "queue": data.queue.value,
                 "manufacturing_request_id": request_id,
+                "structured_keys": list(detail_obj.keys()),
             },
         )
         if improvement_id:
@@ -1831,7 +1870,8 @@ class ContextStore:
             detail={
                 "triage_id": tid,
                 "queue": data.queue.value,
-                "feedback_preview": data.feedback[:500],
+                "feedback_preview": fb_line[:500],
+                "structured": detail_obj,
             },
         )
         self.record_artifact(
@@ -1842,10 +1882,33 @@ class ContextStore:
             body={
                 "triage_id": tid,
                 "queue": data.queue.value,
-                "feedback": data.feedback[:8000],
+                "feedback": fb_line[:8000],
+                "structured": detail_obj,
             },
         )
         return self.get_triage(tid)
+
+    def _triage_row_to_read(self, row: sqlite3.Row) -> TriageRead:
+        det: dict[str, Any] = {}
+        try:
+            raw = row["detail_json"]
+        except (KeyError, IndexError):
+            raw = None
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    det = parsed
+            except json.JSONDecodeError:
+                det = {}
+        return TriageRead(
+            id=row["id"],
+            manufacturing_request_id=row["manufacturing_request_id"],
+            queue=TriageQueue(row["queue"]),
+            feedback=row["feedback"],
+            detail=det,
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
 
     def get_triage(self, triage_id: str) -> TriageRead:
         with self._connect() as conn:
@@ -1854,13 +1917,7 @@ class ContextStore:
             ).fetchone()
         if not row:
             raise KeyError("triage_not_found")
-        return TriageRead(
-            id=row["id"],
-            manufacturing_request_id=row["manufacturing_request_id"],
-            queue=TriageQueue(row["queue"]),
-            feedback=row["feedback"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-        )
+        return self._triage_row_to_read(row)
 
     def get_latest_triage_for_request(self, request_id: str) -> Optional[TriageRead]:
         with self._connect() as conn:
@@ -1871,13 +1928,24 @@ class ContextStore:
             ).fetchone()
         if not row:
             return None
-        return TriageRead(
-            id=row["id"],
-            manufacturing_request_id=row["manufacturing_request_id"],
-            queue=TriageQueue(row["queue"]),
-            feedback=row["feedback"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-        )
+        return self._triage_row_to_read(row)
+
+    def list_triage_results(
+        self,
+        *,
+        queue: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[TriageRead]:
+        q = "SELECT * FROM triage_results WHERE 1=1"
+        params: list[Any] = []
+        if queue:
+            q += " AND queue = ?"
+            params.append(queue)
+        q += " ORDER BY created_at DESC LIMIT ?"
+        params.append(min(limit, 500))
+        with self._connect() as conn:
+            rows = conn.execute(q, params).fetchall()
+        return [self._triage_row_to_read(r) for r in rows]
 
     def _meeting_row_to_read(self, row: sqlite3.Row) -> MeetingRead:
         keys = set(row.keys())

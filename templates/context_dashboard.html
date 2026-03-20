@@ -518,20 +518,58 @@
           {% elif mv.m.status.value == 'failed' %}
           <p class="muted" style="margin-top:0.35rem">No triage — job failed.</p>
           {% elif mv.triage %}
-          <p style="margin-top:0.35rem">Triage: <strong>{{ mv.triage.queue.value }}</strong> — {{ mv.triage.feedback[:200] }}{% if mv.triage.feedback|length > 200 %}…{% endif %}</p>
+          <div style="margin-top:0.35rem">
+            <p><strong>{{ mv.triage.queue.value }}</strong>
+              {% if mv.triage.detail and mv.triage.detail.get('gap_items') %}
+              <span class="muted">· {{ mv.triage.detail['gap_items']|length }} gap(s)</span>
+              {% endif %}
+              {% if mv.triage.detail and mv.triage.detail.get('root_cause_category') %}
+              <span class="muted">· cause: {{ mv.triage.detail['root_cause_category'] }}</span>
+              {% endif %}
+            </p>
+            {% if mv.triage.detail and mv.triage.detail.get('gap_items') %}
+            <ul style="margin:0.35rem 0 0 1.1rem;font-size:0.85rem">
+              {% for g in mv.triage.detail['gap_items'][:8] %}
+              <li>{{ g }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% if mv.triage.detail and mv.triage.detail.get('root_cause_narrative') %}
+            <p class="muted" style="font-size:0.85rem;margin-top:0.35rem">{{ mv.triage.detail['root_cause_narrative'][:400] }}{% if mv.triage.detail['root_cause_narrative']|length > 400 %}…{% endif %}</p>
+            {% endif %}
+            <p class="muted" style="font-size:0.85rem;margin-top:0.35rem">{{ mv.triage.feedback[:300] }}{% if mv.triage.feedback|length > 300 %}…{% endif %}</p>
+          </div>
           {% elif mv.m.status.value in ('awaiting_triage', 'queued') %}
-          <form method="post" action="/context/manufacturing/{{ mv.m.id }}/triage" class="row" style="margin-top:0.5rem">
-            <div>
-              <label>Queue</label>
-              <select name="queue">
-                {% for q in queues %}<option value="{{ q }}">{{ q }}</option>{% endfor %}
-              </select>
+          <form method="post" action="/context/manufacturing/{{ mv.m.id }}/triage" style="margin-top:0.5rem">
+            <p class="muted" style="font-size:0.8rem;margin-bottom:0.5rem">D10: <strong>Q1</strong> — notes only · <strong>Q2</strong> — one gap per line (required) + optional notes · <strong>Q3</strong> — category + narrative (required) + optional notes.</p>
+            <div class="row">
+              <div>
+                <label>Queue</label>
+                <select name="queue">
+                  {% for q in queues %}<option value="{{ q }}">{{ q }}</option>{% endfor %}
+                </select>
+              </div>
+              <div style="flex:2;min-width:200px">
+                <label>Notes (required for Q1)</label>
+                <input name="feedback" placeholder="Q1 rationale; optional extra for Q2/Q3">
+              </div>
             </div>
-            <div style="flex:2;min-width:200px">
-              <label>Feedback</label>
-              <input name="feedback" required placeholder="Q1/Q2/Q3 rationale">
+            <label>Gaps — one per line (Q2)</label>
+            <textarea name="gap_lines" rows="3" placeholder="Missing acceptance criteria&#10;Unclear error handling"></textarea>
+            <div class="row" style="margin-top:0.5rem">
+              <div>
+                <label>Root cause (Q3)</label>
+                <select name="root_cause_category">
+                  <option value="">—</option>
+                  {% for rc in root_cause_categories %}<option value="{{ rc }}">{{ rc }}</option>{% endfor %}
+                </select>
+              </div>
+              <div style="flex:2">
+                <label>Narrative (Q3)</label>
+                <input name="root_cause_narrative" placeholder="What broke / why">
+              </div>
             </div>
-            <button type="submit">Triage</button>
+            <div style="margin-top:0.5rem"><button type="submit">Submit triage</button></div>
           </form>
           {% endif %}
         </div>

@@ -23,7 +23,7 @@ python run.py
 | Stories | `POST /api/context/stories`, `POST /api/context/stories/quick` (default backlog), `GET /api/context/stories` |
 | D8 Sprints | `POST/GET /api/context/sprints`, `GET /api/context/sprints/{id}` (board + commitments), `POST …/sprints/{id}/commitments`, `DELETE …/commitments/{story_id}` |
 | Package | `POST …/context-packages`, `PATCH …/context-packages/{id}`, sign-offs |
-| Manufacturing | `POST …/context-packages/{id}/manufacturing` (starts **background stub job**), `POST …/manufacturing/{id}/triage` |
+| Manufacturing | `POST …/context-packages/{id}/manufacturing` (starts **background stub job**), `POST …/manufacturing/{id}/triage`, `GET …/triage-results` (optional `queue`, `limit`) |
 | Meetings | `PUT …/transcript`, `POST …/extract-stub`, `POST …/extraction-items/{i}/review`, `POST …/extraction-accept-all`, `POST …/confirm-extraction`, `GET …/meetings/{id}` |
 | Audit | `GET /api/context/audit-events` (optional `entity_type`, `entity_id`, `limit`) |
 | Decisions | `GET /api/context/decision-records` (filter by `entity_type`, `entity_id`, `decision_code`) |
@@ -33,6 +33,8 @@ python run.py
 **D7:** requires **context_engineer**, **product_owner**, and **either** **tech_lead** or **developer**. On completion, an **approved JSON snapshot** and **SHA-256 hash** are stored; the live package rows are no longer editable.
 
 **D8:** a story may appear in **at most one** sprint commitment. By default the story must have an **approved** package; set **`CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT=1`** (or use the dashboard checkbox / API `allow_unapproved`) to bypass for admins.
+
+**D10 triage (structured):** **Q1** requires notes. **Q2** requires at least one **gap line** (and stores `gap_items` in `detail`). **Q3** requires **root cause category** + **narrative** (`detail_json` on `triage_results`). Human-readable text is still in `feedback` for legacy display.
 
 **Meeting extraction:** set **`OPENAI_API_KEY`** (and optional **`OPENAI_MODEL`**, default `gpt-4o-mini`) for LLM-based draft items; without a key, the **DECISION:/ACTION:/REQ:** pattern stub runs. **`python-dotenv`** loads `.env` from `main.py`.
 

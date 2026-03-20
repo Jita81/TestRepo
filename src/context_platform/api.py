@@ -6,6 +6,7 @@ import json
 from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Body, Form, HTTPException, Request
+from pydantic import ValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -32,6 +33,7 @@ from src.context_platform.schemas import (
     StoryCreate,
     StoryQuickCreate,
     TriageQueue,
+    TriageRootCauseCategory,
     TriageSubmit,
 )
 from src.context_platform.store import get_store
@@ -253,6 +255,14 @@ def api_triage(request_id: str, body: TriageSubmit):
         raise HTTPException(400, str(e)) from None
 
 
+@api_router.get("/triage-results")
+def api_list_triage_results(queue: Optional[str] = None, limit: int = 100):
+    return [
+        _dump(x)
+        for x in get_store().list_triage_results(queue=queue, limit=limit)
+    ]
+
+
 @api_router.get("/meetings")
 def api_list_meetings():
     return [_dump(m) for m in get_store().list_meetings()]
@@ -433,6 +443,7 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         "open_improvements": store.list_improvement_items(status="open", limit=40),
         "sprint_boards": sprint_boards,
         "allow_unapproved_sprint_env": store.allow_unapproved_sprint_commit_env(),
+        "root_cause_categories": [e.value for e in TriageRootCauseCategory],
         "phase_kinds": [e.value for e in PhaseKind],
         "roles": [e.value for e in SignOffRole],
         "queues": [e.value for e in TriageQueue],
@@ -679,14 +690,31 @@ def form_triage(
     request: Request,
     request_id: str,
     queue: str = Form(...),
-    feedback: str = Form(...),
+    feedback: str = Form(""),
+    gap_lines: str = Form(""),
+    root_cause_category: str = Form(""),
+    root_cause_narrative: str = Form(""),
 ):
+    gaps = [ln.strip() for ln in gap_lines.replace("\r", "").split("\n") if ln.strip()]
+    cat: Optional[TriageRootCauseCategory] = None
+    if root_cause_category.strip():
+        try:
+            cat = TriageRootCauseCategory(root_cause_category.strip())
+        except ValueError:
+            raise HTTPException(400, "Invalid root_cause_category") from None
     try:
-        get_store().submit_triage(
-            request_id, TriageSubmit(queue=TriageQueue(queue), feedback=feedback)
+        body = TriageSubmit(
+            queue=TriageQueue(queue),
+            feedback=feedback,
+            gap_items=gaps,
+            root_cause_category=cat,
+            root_cause_narrative=root_cause_narrative or None,
         )
+        get_store().submit_triage(request_id, body)
     except KeyError:
         raise HTTPException(404, "Manufacturing request not found") from None
+    except ValidationError as e:
+        raise HTTPException(422, detail=e.errors()) from None
     except ValueError as e:
         raise HTTPException(400, str(e)) from None
     return RedirectResponse(url="/context", status_code=303)

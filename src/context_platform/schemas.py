@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class PhaseKind(str, Enum):
@@ -33,6 +33,18 @@ class TriageQueue(str, Enum):
     Q1 = "Q1"
     Q2 = "Q2"
     Q3 = "Q3"
+
+
+class TriageRootCauseCategory(str, Enum):
+    """Q3 structured root-cause bucket (D10)."""
+
+    requirements = "requirements"
+    scope = "scope"
+    technical = "technical"
+    process = "process"
+    data = "data"
+    quality = "quality"
+    other = "other"
 
 
 class ManufacturingStatus(str, Enum):
@@ -236,8 +248,32 @@ class ManufacturingRead(BaseModel):
 
 
 class TriageSubmit(BaseModel):
+    """
+    D10 triage: queue-specific rules — Q1 needs notes; Q2 needs ≥1 gap line;
+    Q3 needs root-cause category + narrative.
+    """
+
     queue: TriageQueue
-    feedback: str = Field(..., min_length=1)
+    feedback: str = ""
+    gap_items: list[str] = Field(default_factory=list)
+    root_cause_category: Optional[TriageRootCauseCategory] = None
+    root_cause_narrative: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_by_queue(self) -> "TriageSubmit":
+        if self.queue == TriageQueue.Q1:
+            if not self.feedback.strip():
+                raise ValueError("q1_requires_feedback")
+        elif self.queue == TriageQueue.Q2:
+            gaps = [g.strip() for g in self.gap_items if g and g.strip()]
+            if len(gaps) < 1:
+                raise ValueError("q2_requires_at_least_one_gap_item")
+        elif self.queue == TriageQueue.Q3:
+            if self.root_cause_category is None:
+                raise ValueError("q3_requires_root_cause_category")
+            if not self.root_cause_narrative or len(self.root_cause_narrative.strip()) < 2:
+                raise ValueError("q3_requires_root_cause_narrative")
+        return self
 
 
 class TriageRead(BaseModel):
@@ -245,6 +281,7 @@ class TriageRead(BaseModel):
     manufacturing_request_id: str
     queue: TriageQueue
     feedback: str
+    detail: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
 
