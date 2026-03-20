@@ -245,6 +245,42 @@ def api_meeting_extract_stub(meeting_id: str):
         raise HTTPException(400, str(e)) from e
 
 
+@api_router.get("/decision-records")
+def api_list_decisions(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    decision_code: Optional[str] = None,
+    limit: int = 100,
+):
+    return [
+        _dump(x)
+        for x in get_store().list_decision_records(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            decision_code=decision_code,
+            limit=limit,
+        )
+    ]
+
+
+@api_router.get("/artifacts")
+def api_list_artifacts(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    artifact_kind: Optional[str] = None,
+    limit: int = 100,
+):
+    return [
+        _dump(x)
+        for x in get_store().list_artifacts(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            artifact_kind=artifact_kind,
+            limit=limit,
+        )
+    ]
+
+
 @api_router.get("/audit-events")
 def api_list_audit(
     entity_type: Optional[str] = None,
@@ -346,6 +382,8 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         "gaps": store.list_gaps(unresolved_only=True),
         "meetings": store.list_meetings(),
         "audit_events": store.list_audit_events(limit=30),
+        "decision_records": store.list_decision_records(limit=25),
+        "artifacts": store.list_artifacts(limit=25),
         "open_improvements": store.list_improvement_items(status="open", limit=40),
         "phase_kinds": [e.value for e in PhaseKind],
         "roles": [e.value for e in SignOffRole],

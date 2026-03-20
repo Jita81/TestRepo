@@ -362,7 +362,7 @@ The entire architecture rests on a single principle: AI accelerates every part o
 
 ## Reference implementation (this repository)
 
-An MVP aligned with **D7** (Context Engineer + Tech lead *or* Developer + Product Owner; frozen approval snapshot + hash), **D9** (manufacturing request + pinned package hash; **stub async job** → `awaiting_triage` + **on-disk artifact**), **D10** (triage), and **D2-style meeting extraction** (transcript → **optional OpenAI** or pattern stub → human confirm) lives in `src/context_platform/`: roadmap **cycle → phase → feature → story**, structured package sections (`package_models.py`), SQLite persistence (with migration from legacy `work_items`), REST API under `/api/context`, and a dashboard at `/context`. Run `python run.py` and see the repository README for URLs and `CONTEXT_DB_PATH`.
+An MVP aligned with **D7** / **D9** / **D10** / **D4** (meeting extraction sign-off), plus **`decision_records`** and **`artifacts`** for traceability, **audit events**, and request **`X-Context-Actor`**, lives in `src/context_platform/`: roadmap **cycle → phase → feature → story**, structured package sections, SQLite persistence (with migration from legacy `work_items`), REST API under `/api/context`, and a dashboard at `/context`. Run `python run.py` and see the repository README for URLs and `CONTEXT_DB_PATH`.
 
 ---
 

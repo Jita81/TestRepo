@@ -1,6 +1,6 @@
 # Roadmap — GitHub issue breakdown
 
-**Progress (repo):** **A1**, **B1**, **B2**; **H1** stub manufacturing + artifact; **D2** transcript + **per-item review** + optional OpenAI (`meeting_llm.py`); **`audit_events`** trail; **D11** improvement items from Q2/Q3 triage. Remaining: **A2/A3** (decision/artifact model + full provenance), real codegen/CI, auth/tenancy, integrations, graph UI, D1–D3/D8/D12.
+**Progress (repo):** **A1**, **B1**, **B2**; **H1** stub manufacturing + file artifact; **D2** transcript + per-item review + optional OpenAI; **`audit_events`**; **D11** from Q2/Q3; **A2 (partial):** `decision_records` + `artifacts` tables with **D7/D10/D4** wiring + **`X-Context-Actor`**. Remaining: **A2** (full D1–D12 coverage, UI per decision), **A3** (diff-based provenance), auth/tenancy, integrations, D1–D3/D8/D12, real manufacturing.
 
 Use this document to create **Epics** (GitHub Milestones or parent Issues) and **child Issues**. Each block below is intended as **one issue**: title = first line; body = the rest of the block.
 

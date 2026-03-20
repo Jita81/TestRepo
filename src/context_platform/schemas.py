@@ -264,6 +264,28 @@ class AuditEventRead(BaseModel):
     detail: dict[str, Any] = Field(default_factory=dict)
 
 
+class DecisionRecordRead(BaseModel):
+    id: str
+    decision_code: str
+    summary: str
+    entity_type: str
+    entity_id: str
+    actor: str
+    detail: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class ArtifactRead(BaseModel):
+    id: str
+    artifact_kind: str
+    entity_type: str
+    entity_id: str
+    title: str
+    body: dict[str, Any] = Field(default_factory=dict)
+    actor: str
+    created_at: datetime
+
+
 class ImprovementItemRead(BaseModel):
     id: str
     source_triage_id: Optional[str] = None

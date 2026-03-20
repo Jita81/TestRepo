@@ -94,7 +94,7 @@
   <div class="grid">
     <header>
       <h1>Context Engineering Platform</h1>
-      <p class="sub">Roadmap → story → package → D7 → manufacturing stub → D10 triage → <strong>D11 improvement items</strong> (Q2/Q3). <strong>Audit trail</strong> + meeting extraction with per-item accept/reject. API <code>/api/context/audit-events</code>.</p>
+      <p class="sub">Roadmap → story → D7 → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D10/D4) + <strong>artifacts</strong>. Set actor via header <code>X-Context-Actor</code> or env <code>CONTEXT_ACTOR</code>.</p>
     </header>
 
     <div class="card">
@@ -112,6 +112,41 @@
       </ul>
       {% else %}
       <p class="muted">No events yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Decision records (D1–D12 trace)</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Structured decisions (e.g. <strong>D7</strong> approve, <strong>D10</strong> triage, <strong>D4</strong> meeting sign-off). <code>GET /api/context/decision-records</code></p>
+      {% if decision_records %}
+      <ul style="list-style:none;font-size:0.85rem;max-height:12rem;overflow:auto">
+        {% for d in decision_records %}
+        <li style="padding:0.35rem 0;border-bottom:1px solid var(--border)">
+          <span class="badge badge-approved">{{ d.decision_code }}</span>
+          {{ d.summary[:100] }}{% if d.summary|length > 100 %}…{% endif %}
+          <span class="muted"> · {{ d.entity_type }} · {{ d.actor }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No decisions recorded yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Artifacts</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Version-pinned outputs (approved package ref, triage payload, meeting extraction). <code>GET /api/context/artifacts</code></p>
+      {% if artifacts %}
+      <ul style="list-style:none;font-size:0.85rem;max-height:12rem;overflow:auto">
+        {% for a in artifacts %}
+        <li style="padding:0.35rem 0;border-bottom:1px solid var(--border)">
+          <strong>{{ a.artifact_kind }}</strong> — {{ a.title[:80] }}{% if a.title|length > 80 %}…{% endif %}
+          <span class="muted"> · {{ a.entity_type }} · {{ a.actor }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No artifacts yet.</p>
       {% endif %}
     </div>
 

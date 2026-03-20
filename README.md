@@ -1,6 +1,6 @@
 # Context Engineering Platform
 
-MVP for the **Automated Agile — Context Engineering Platform**: **roadmap hierarchy**, **v2 structured context packages**, **D7** frozen approval snapshot + hash, **stub manufacturing** + on-disk artifact, **D10 triage**, **D11 improvement backlog** (auto from **Q2/Q3** triage), **append-only audit trail**, **meeting extraction** (optional OpenAI or pattern stub) with **per-item accept/reject** before confirm, context gaps, meetings registry.
+MVP for the **Automated Agile — Context Engineering Platform**: **roadmap hierarchy**, **v2 structured context packages**, **D7** frozen approval snapshot + hash, **stub manufacturing** + on-disk artifact, **D10 triage**, **D11 improvement backlog** (auto from **Q2/Q3** triage), **append-only audit trail**, **`decision_records`** (typed **D7 / D10 / D4** entries) + **`artifacts`** (approved package, triage, meeting extraction), **meeting extraction** (optional OpenAI or pattern stub) with **per-item accept/reject**, context gaps, meetings registry.
 
 - Process specification: [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md)  
 - GitHub issue roadmap: [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
@@ -25,6 +25,8 @@ python run.py
 | Manufacturing | `POST …/context-packages/{id}/manufacturing` (starts **background stub job**), `POST …/manufacturing/{id}/triage` |
 | Meetings | `PUT …/transcript`, `POST …/extract-stub`, `POST …/extraction-items/{i}/review`, `POST …/extraction-accept-all`, `POST …/confirm-extraction`, `GET …/meetings/{id}` |
 | Audit | `GET /api/context/audit-events` (optional `entity_type`, `entity_id`, `limit`) |
+| Decisions | `GET /api/context/decision-records` (filter by `entity_type`, `entity_id`, `decision_code`) |
+| Artifacts | `GET /api/context/artifacts` (filter by `entity_type`, `entity_id`, `artifact_kind`) |
 | D11 | `GET /api/context/improvement-items`, `POST …/improvement-items/{id}/resolve` |
 
 **D7:** requires **context_engineer**, **product_owner**, and **either** **tech_lead** or **developer**. On completion, an **approved JSON snapshot** and **SHA-256 hash** are stored; the live package rows are no longer editable.
@@ -43,6 +45,7 @@ python run.py
 | `OPENAI_API_KEY` | — | Optional; enables LLM meeting extraction |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Chat model for extraction |
 | `MANUFACTURING_OUTPUT_DIR` | `data/manufacturing_outputs` | Stub manufacturing artifacts |
+| `CONTEXT_ACTOR` | `anonymous` | Default actor; override per request with **`X-Context-Actor`** |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Port |
 
@@ -59,7 +62,9 @@ Copy `.env.example` to `.env` if you want to override defaults.
 │   └── roadmap-github-issues.md
 ├── src/context_platform/
 │   ├── api.py
-│   ├── meeting_llm.py      # optional OpenAI extraction
+│   ├── context_actor.py    # request-scoped actor (context var)
+│   ├── middleware_actor.py # X-Context-Actor header
+│   ├── meeting_llm.py
 │   ├── meeting_extraction.py
 │   ├── manufacturing_worker.py
 │   ├── package_models.py

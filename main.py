@@ -13,6 +13,7 @@ load_dotenv()
 from fastapi.responses import RedirectResponse
 
 from src.context_platform import api as context_platform_api
+from src.context_platform.middleware_actor import ActorMiddleware
 from src.context_platform.store import init_store
 
 Path("data").mkdir(exist_ok=True)
@@ -33,6 +34,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(ActorMiddleware)
 
 app.include_router(
     context_platform_api.api_router,

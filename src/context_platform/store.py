@@ -12,6 +12,7 @@ from typing import Any, Generator, Optional
 
 logger = logging.getLogger(__name__)
 
+from src.context_platform.context_actor import get_actor
 from src.context_platform.meeting_extraction import extract_transcript_auto
 from src.context_platform.package_models import (
     ContextPackageSectionsV2,
@@ -21,6 +22,7 @@ from src.context_platform.package_models import (
     sections_to_storage_tuple,
 )
 from src.context_platform.schemas import (
+    ArtifactRead,
     AuditEventRead,
     ContextGapCreate,
     ContextGapRead,
@@ -28,6 +30,7 @@ from src.context_platform.schemas import (
     ContextPackageRead,
     ContextPackageSections,
     ContextPackageUpdate,
+    DecisionRecordRead,
     DeliveryPhaseCreate,
     DeliveryPhaseRead,
     FeatureCreate,
@@ -212,6 +215,28 @@ CREATE TABLE IF NOT EXISTS context_improvement_items (
     description TEXT NOT NULL DEFAULT '',
     priority TEXT NOT NULL DEFAULT 'high',
     status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS decision_records (
+    id TEXT PRIMARY KEY,
+    decision_code TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    actor TEXT NOT NULL DEFAULT 'anonymous',
+    detail_json TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS artifacts (
+    id TEXT PRIMARY KEY,
+    artifact_kind TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body_json TEXT,
+    actor TEXT NOT NULL DEFAULT 'anonymous',
     created_at TEXT NOT NULL
 );
 """
@@ -422,6 +447,34 @@ class ContextStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS decision_records (
+                    id TEXT PRIMARY KEY,
+                    decision_code TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    actor TEXT NOT NULL DEFAULT 'anonymous',
+                    detail_json TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS artifacts (
+                    id TEXT PRIMARY KEY,
+                    artifact_kind TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    body_json TEXT,
+                    actor TEXT NOT NULL DEFAULT 'anonymous',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
             conn.commit()
 
     @contextmanager
@@ -439,9 +492,10 @@ class ContextStore:
         entity_type: str,
         entity_id: str,
         *,
-        actor: str = "anonymous",
+        actor: Optional[str] = None,
         detail: Optional[dict[str, Any]] = None,
     ) -> None:
+        act = actor if actor is not None else get_actor()
         try:
             eid = _uid()
             ts = _now()
@@ -450,7 +504,7 @@ class ContextStore:
                 conn.execute(
                     """INSERT INTO audit_events (id, occurred_at, action, entity_type, entity_id, actor, detail_json)
                     VALUES (?,?,?,?,?,?,?)""",
-                    (eid, ts, action, entity_type, entity_id, actor, dj),
+                    (eid, ts, action, entity_type, entity_id, act, dj),
                 )
                 conn.commit()
         except Exception as e:
@@ -495,6 +549,170 @@ class ContextStore:
                 )
             )
         return out
+
+    def record_decision(
+        self,
+        decision_code: str,
+        summary: str,
+        entity_type: str,
+        entity_id: str,
+        *,
+        actor: Optional[str] = None,
+        detail: Optional[dict[str, Any]] = None,
+    ) -> DecisionRecordRead:
+        act = actor if actor is not None else get_actor()
+        did = _uid()
+        ts = _now()
+        dj = json.dumps(detail, ensure_ascii=False) if detail else None
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO decision_records
+                (id, decision_code, summary, entity_type, entity_id, actor, detail_json, created_at)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (did, decision_code[:32], summary[:2000], entity_type, entity_id, act, dj, ts),
+            )
+            conn.commit()
+        self.log_audit(
+            "decision_recorded",
+            "decision_record",
+            did,
+            actor=act,
+            detail={"decision_code": decision_code, "entity_type": entity_type},
+        )
+        return self.get_decision_record(did)
+
+    def get_decision_record(self, decision_id: str) -> DecisionRecordRead:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM decision_records WHERE id = ?", (decision_id,)
+            ).fetchone()
+        if not row:
+            raise KeyError("decision_record_not_found")
+        det: dict[str, Any] = {}
+        if row["detail_json"]:
+            try:
+                det = json.loads(row["detail_json"])
+            except json.JSONDecodeError:
+                det = {}
+        return DecisionRecordRead(
+            id=row["id"],
+            decision_code=row["decision_code"],
+            summary=row["summary"],
+            entity_type=row["entity_type"],
+            entity_id=row["entity_id"],
+            actor=row["actor"],
+            detail=det,
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def list_decision_records(
+        self,
+        *,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        decision_code: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[DecisionRecordRead]:
+        q = "SELECT id FROM decision_records WHERE 1=1"
+        params: list[Any] = []
+        if entity_type:
+            q += " AND entity_type = ?"
+            params.append(entity_type)
+        if entity_id:
+            q += " AND entity_id = ?"
+            params.append(entity_id)
+        if decision_code:
+            q += " AND decision_code = ?"
+            params.append(decision_code)
+        q += " ORDER BY created_at DESC LIMIT ?"
+        params.append(min(limit, 500))
+        with self._connect() as conn:
+            ids = [r["id"] for r in conn.execute(q, params).fetchall()]
+        return [self.get_decision_record(i) for i in ids]
+
+    def record_artifact(
+        self,
+        artifact_kind: str,
+        entity_type: str,
+        entity_id: str,
+        title: str,
+        *,
+        body: Optional[dict[str, Any]] = None,
+        actor: Optional[str] = None,
+    ) -> ArtifactRead:
+        act = actor if actor is not None else get_actor()
+        aid = _uid()
+        ts = _now()
+        bj = json.dumps(body or {}, ensure_ascii=False)
+        if len(bj) > 100_000:
+            bj = json.dumps(
+                {"_truncated": True, "approx_bytes": len(bj)}, ensure_ascii=False
+            )
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO artifacts
+                (id, artifact_kind, entity_type, entity_id, title, body_json, actor, created_at)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (aid, artifact_kind[:64], entity_type, entity_id, title[:500], bj, act, ts),
+            )
+            conn.commit()
+        self.log_audit(
+            "artifact_recorded",
+            "artifact",
+            aid,
+            actor=act,
+            detail={"artifact_kind": artifact_kind, "entity_type": entity_type},
+        )
+        return self.get_artifact(aid)
+
+    def get_artifact(self, artifact_id: str) -> ArtifactRead:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM artifacts WHERE id = ?", (artifact_id,)
+            ).fetchone()
+        if not row:
+            raise KeyError("artifact_not_found")
+        body: dict[str, Any] = {}
+        if row["body_json"]:
+            try:
+                body = json.loads(row["body_json"])
+            except json.JSONDecodeError:
+                body = {}
+        return ArtifactRead(
+            id=row["id"],
+            artifact_kind=row["artifact_kind"],
+            entity_type=row["entity_type"],
+            entity_id=row["entity_id"],
+            title=row["title"],
+            body=body,
+            actor=row["actor"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def list_artifacts(
+        self,
+        *,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        artifact_kind: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[ArtifactRead]:
+        q = "SELECT id FROM artifacts WHERE 1=1"
+        params: list[Any] = []
+        if entity_type:
+            q += " AND entity_type = ?"
+            params.append(entity_type)
+        if entity_id:
+            q += " AND entity_id = ?"
+            params.append(entity_id)
+        if artifact_kind:
+            q += " AND artifact_kind = ?"
+            params.append(artifact_kind)
+        q += " ORDER BY created_at DESC LIMIT ?"
+        params.append(min(limit, 500))
+        with self._connect() as conn:
+            ids = [r["id"] for r in conn.execute(q, params).fetchall()]
+        return [self.get_artifact(i) for i in ids]
 
     @staticmethod
     def _coerce_extraction_draft(draft: dict[str, Any]) -> dict[str, Any]:
@@ -1026,6 +1244,30 @@ class ContextStore:
                 package_id,
                 detail={"content_hash": out.content_hash},
             )
+            self.record_decision(
+                "D7",
+                "Context package approved for manufacturing",
+                "context_package",
+                package_id,
+                actor=data.signed_by,
+                detail={
+                    "content_hash": out.content_hash,
+                    "version": out.version,
+                    "story_id": out.story_id,
+                },
+            )
+            self.record_artifact(
+                "approved_context_package",
+                "context_package",
+                package_id,
+                title=f"Approved context package v{out.version}",
+                actor=data.signed_by,
+                body={
+                    "content_hash": out.content_hash,
+                    "version": out.version,
+                    "story_id": out.story_id,
+                },
+            )
         return out
 
     def create_gap(self, data: ContextGapCreate) -> ContextGapRead:
@@ -1288,6 +1530,28 @@ class ContextStore:
                 improvement_id,
                 detail={"source_triage_id": tid, "queue": data.queue.value},
             )
+        self.record_decision(
+            "D10",
+            f"Triage classification: {data.queue.value}",
+            "manufacturing_request",
+            request_id,
+            detail={
+                "triage_id": tid,
+                "queue": data.queue.value,
+                "feedback_preview": data.feedback[:500],
+            },
+        )
+        self.record_artifact(
+            "triage_result",
+            "manufacturing_request",
+            request_id,
+            title=f"Triage {data.queue.value}",
+            body={
+                "triage_id": tid,
+                "queue": data.queue.value,
+                "feedback": data.feedback[:8000],
+            },
+        )
         return self.get_triage(tid)
 
     def get_triage(self, triage_id: str) -> TriageRead:
@@ -1517,6 +1781,36 @@ class ContextStore:
                 "confirmed_items": items,
                 "confirmed": True,
             }
+        act = get_actor()
+        ci = payload.get("confirmed_items") or []
+        preview = [
+            {"type": x.get("type"), "text": (x.get("text") or "")[:400]}
+            for x in ci[:20]
+            if isinstance(x, dict)
+        ]
+        self.record_decision(
+            "D4",
+            "Meeting extraction signed off for downstream use",
+            "meeting",
+            meeting_id,
+            actor=act,
+            detail={
+                "n_confirmed": len(ci),
+                "extractor": payload.get("extractor"),
+            },
+        )
+        self.record_artifact(
+            "meeting_extraction_confirmed",
+            "meeting",
+            meeting_id,
+            title="Confirmed meeting extraction",
+            actor=act,
+            body={
+                "extractor": payload.get("extractor"),
+                "n_confirmed": len(ci),
+                "items_preview": preview,
+            },
+        )
         ts = _now()
         with self._connect() as conn:
             conn.execute(
@@ -1530,7 +1824,8 @@ class ContextStore:
             "extraction_confirmed",
             "meeting",
             meeting_id,
-            detail={"n_confirmed": len(payload.get("confirmed_items") or [])},
+            actor=act,
+            detail={"n_confirmed": len(ci)},
         )
         return self.get_meeting(meeting_id)
 
