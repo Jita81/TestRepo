@@ -98,12 +98,17 @@
         {% endfor %}
       </select>
     </form>
+    {% if dashboard_login_enabled %}
+    <form method="post" action="/context/logout" style="margin:0">
+      <button type="submit" class="small secondary" style="width:auto">Log out</button>
+    </form>
+    {% endif %}
     <a href="/docs">API docs</a>
   </nav>
   <div class="grid">
     <header>
       <h1>Context Engineering Platform</h1>
-      <p class="sub">Roadmap → story → D7 → <strong>D8 sprints</strong> → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D8/D10/D4) + <strong>artifacts</strong>. Scope data by <strong>project</strong> (cookie / <code>X-Context-Project</code> / env <code>CONTEXT_PROJECT_ID</code>). Set actor via <code>X-Context-Actor</code> or <code>CONTEXT_ACTOR</code>.</p>
+      <p class="sub">Roadmap → story → D7 → <strong>D8 sprints</strong> → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D8/D10/D4) + <strong>artifacts</strong>. Scope data by <strong>project</strong> (cookie / <code>X-Context-Project</code> / env <code>CONTEXT_PROJECT_ID</code>). Set actor via <code>X-Context-Actor</code> or <code>CONTEXT_ACTOR</code>.{% if dashboard_login_enabled %} <strong>Dashboard login</strong> is enforced (see env <code>CONTEXT_DASHBOARD_PASSWORD</code>).{% endif %}</p>
       <form method="post" action="/context/projects" class="row" style="margin-bottom:1rem;max-width:28rem">
         <div><label>New project name</label><input name="name" required placeholder="Product A"></div>
         <button type="submit">Create project</button>
@@ -391,6 +396,48 @@
         <details style="margin-bottom:0.75rem;border:1px solid var(--border);border-radius:8px;padding:0.75rem">
           <summary style="cursor:pointer;font-weight:600">{{ m.meeting_type.value }} — {{ m.title or "(no title)" }} · {{ m.status }} · extraction: {{ m.extraction_status }}</summary>
           <p class="muted" style="margin:0.5rem 0"><code>{{ m.id }}</code></p>
+          <div style="margin-top:0.75rem;padding:0.6rem 0;border-top:1px solid var(--border)">
+            <strong>Agenda (D1)</strong>
+            <span class="muted" style="font-size:0.85rem"> — <code>GET /api/context/meetings/{id}/agenda</code></span>
+            <form method="post" action="/context/meetings/{{ m.id }}/generate-agenda" style="margin:0.4rem 0">
+              <button type="submit" class="secondary small">Generate from open gaps</button>
+              <span class="muted" style="font-size:0.8rem;margin-left:0.35rem">Adds one line per unresolved gap (skips duplicates).</span>
+            </form>
+            {% set agenda = meeting_agendas.get(m.id, []) %}
+            {% if agenda %}
+            <ul style="margin:0.35rem 0 0 0;padding-left:1.1rem">
+              {% for item in agenda %}
+              <li style="margin:0.25rem 0">
+                <strong>{{ item.title }}</strong>
+                {% if item.context_gap_id %}<span class="muted"> · gap <code>{{ item.context_gap_id }}</code></span>{% endif %}
+                {% if item.notes %}<div class="muted" style="font-size:0.85rem;margin-top:0.15rem">{{ item.notes }}</div>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p class="muted" style="margin:0.35rem 0 0 0;font-size:0.9rem">No agenda items yet.</p>
+            {% endif %}
+            <form method="post" action="/context/meetings/{{ m.id }}/agenda" class="row" style="margin-top:0.6rem;flex-wrap:wrap;gap:0.5rem;align-items:flex-end">
+              <div style="flex:1;min-width:10rem">
+                <label for="at-{{ m.id }}">Title</label>
+                <input id="at-{{ m.id }}" name="title" required placeholder="Discuss API error contract">
+              </div>
+              <div style="flex:1;min-width:10rem">
+                <label for="ag-{{ m.id }}">Link gap (optional)</label>
+                <select id="ag-{{ m.id }}" name="context_gap_id">
+                  <option value="">—</option>
+                  {% for g in gaps %}
+                  <option value="{{ g.id }}">{{ g.description[:60] }}{% if g.description|length > 60 %}…{% endif %}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div style="flex:2;min-width:14rem">
+                <label for="an-{{ m.id }}">Notes</label>
+                <input id="an-{{ m.id }}" name="notes" placeholder="Context for facilitators">
+              </div>
+              <button type="submit" class="small">Add item</button>
+            </form>
+          </div>
           <form method="post" action="/context/meetings/{{ m.id }}/transcript" style="margin-top:0.5rem">
             <label>Transcript (use lines like <code>DECISION:</code>, <code>ACTION:</code>, <code>REQ:</code>)</label>
             <textarea name="transcript" rows="5" placeholder="DECISION: We ship OAuth2 first&#10;ACTION: Bob updates the diagram">{{ m.transcript or '' }}</textarea>

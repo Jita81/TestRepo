@@ -331,6 +331,24 @@ class MeetingRead(BaseModel):
     extraction_confirmed_at: Optional[datetime] = None
 
 
+class MeetingAgendaItemCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    notes: str = Field(default="", max_length=4000)
+    context_gap_id: Optional[str] = None
+    sort_order: int = 0
+
+
+class MeetingAgendaItemRead(BaseModel):
+    id: str
+    meeting_id: str
+    project_id: str
+    title: str
+    notes: str
+    sort_order: int
+    context_gap_id: Optional[str] = None
+    created_at: datetime
+
+
 class MeetingTranscriptUpdate(BaseModel):
     text: str = Field(..., min_length=1)
 
@@ -352,6 +370,7 @@ class ExtractionItemReviewBody(BaseModel):
 
 class AuditEventRead(BaseModel):
     id: str
+    project_id: str
     occurred_at: datetime
     action: str
     entity_type: str
@@ -362,6 +381,7 @@ class AuditEventRead(BaseModel):
 
 class DecisionRecordRead(BaseModel):
     id: str
+    project_id: str
     decision_code: str
     summary: str
     entity_type: str
@@ -373,6 +393,7 @@ class DecisionRecordRead(BaseModel):
 
 class ArtifactRead(BaseModel):
     id: str
+    project_id: str
     artifact_kind: str
     entity_type: str
     entity_id: str

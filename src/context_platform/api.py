@@ -10,8 +10,13 @@ from pydantic import ValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from src.context_platform.manufacturing_worker import run_stub_manufacturing_job
+from src.context_platform.manufacturing_worker import run_manufacturing_job
 from src.context_platform.context_project import get_project_id
+from src.context_platform.dashboard_auth import (
+    dashboard_password_configured,
+    verify_dashboard_credentials,
+)
+from src.context_platform.middleware_dashboard_auth import SESSION_KEY
 from src.context_platform.schemas import (
     ContextGapCreate,
     ContextPackageCreate,
@@ -20,6 +25,7 @@ from src.context_platform.schemas import (
     DeliveryPhaseCreate,
     FeatureCreate,
     ManufacturingSubmit,
+    MeetingAgendaItemCreate,
     MeetingCreate,
     ProjectCreate,
     ExtractionItemReviewBody,
@@ -252,7 +258,7 @@ def api_manufacturing(
 ):
     try:
         m = get_store().submit_manufacturing(package_id, body)
-        background_tasks.add_task(run_stub_manufacturing_job, m.id)
+        background_tasks.add_task(run_manufacturing_job, m.id)
         return _dump(m)
     except KeyError:
         raise HTTPException(404, "Context package not found") from None
@@ -294,6 +300,41 @@ def api_get_meeting(meeting_id: str):
 @api_router.post("/meetings")
 def api_create_meeting(body: MeetingCreate):
     return _dump(get_store().create_meeting(body))
+
+
+@api_router.get("/meetings/{meeting_id}/agenda")
+def api_list_meeting_agenda(meeting_id: str):
+    try:
+        return [
+            _dump(x) for x in get_store().list_meeting_agenda_items(meeting_id)
+        ]
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+
+
+@api_router.post("/meetings/{meeting_id}/agenda")
+def api_create_meeting_agenda(meeting_id: str, body: MeetingAgendaItemCreate):
+    try:
+        return _dump(get_store().create_meeting_agenda_item(meeting_id, body))
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        if str(e) == "agenda_gap_already_linked_to_meeting":
+            raise HTTPException(409, detail=str(e)) from None
+        raise HTTPException(400, str(e)) from e
+
+
+@api_router.post("/meetings/{meeting_id}/generate-agenda")
+def api_generate_meeting_agenda(meeting_id: str):
+    try:
+        items = get_store().generate_meeting_agenda_from_gaps(meeting_id)
+        return {
+            "meeting_id": meeting_id,
+            "items_added": len(items),
+            "items": [_dump(x) for x in items],
+        }
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
 
 
 @api_router.put("/meetings/{meeting_id}/transcript")
@@ -430,6 +471,10 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
     store = get_store()
     tree = store.roadmap_tree()
     sprint_boards = [store.sprint_board(sp.id) for sp in store.list_sprints()]
+    meetings_list = store.list_meetings()
+    meeting_agendas = {
+        m.id: store.list_meeting_agenda_items(m.id) for m in meetings_list
+    }
     story_blocks = []
     for s in store.list_stories():
         pkgs = store.list_packages_for_story(s.id)
@@ -457,7 +502,8 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         "roadmap_tree": tree,
         "story_blocks": story_blocks,
         "gaps": store.list_gaps(unresolved_only=True),
-        "meetings": store.list_meetings(),
+        "meetings": meetings_list,
+        "meeting_agendas": meeting_agendas,
         "audit_events": store.list_audit_events(limit=30),
         "decision_records": store.list_decision_records(limit=25),
         "artifacts": store.list_artifacts(limit=25),
@@ -469,6 +515,7 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         "roles": [e.value for e in SignOffRole],
         "queues": [e.value for e in TriageQueue],
         "meeting_types": [e.value for e in MeetingTypeRef],
+        "dashboard_login_enabled": dashboard_password_configured(),
         "package_json_example": json.dumps(
             {
                 "business_context": {
@@ -499,6 +546,47 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
             indent=2,
         ),
     }
+
+
+@page_router.get("/login", response_class=HTMLResponse)
+def dashboard_login_get(request: Request, next: str = "/context"):
+    if not dashboard_password_configured():
+        return RedirectResponse(url="/context", status_code=302)
+    return templates.TemplateResponse(
+        "dashboard_login.html",
+        {"request": request, "next": next, "error": None},
+    )
+
+
+@page_router.post("/login")
+def dashboard_login_post(
+    request: Request,
+    username: str = Form(""),
+    password: str = Form(...),
+    next: str = Form("/context"),
+):
+    if not dashboard_password_configured():
+        return RedirectResponse(url="/context", status_code=302)
+    if not verify_dashboard_credentials(username, password):
+        return templates.TemplateResponse(
+            "dashboard_login.html",
+            {
+                "request": request,
+                "next": next,
+                "error": "Invalid username or password.",
+            },
+            status_code=200,
+        )
+    request.session[SESSION_KEY] = True
+    dest = next if next.startswith("/") else "/context"
+    return RedirectResponse(url=dest, status_code=303)
+
+
+@page_router.post("/logout")
+def dashboard_logout(request: Request):
+    if dashboard_password_configured():
+        request.session.clear()
+    return RedirectResponse(url="/context/login", status_code=303)
 
 
 @page_router.get("", response_class=HTMLResponse)
@@ -721,7 +809,7 @@ def form_manufacturing(
         m = get_store().submit_manufacturing(
             package_id, ManufacturingSubmit(submitted_by=submitted_by)
         )
-        background_tasks.add_task(run_stub_manufacturing_job, m.id)
+        background_tasks.add_task(run_manufacturing_job, m.id)
     except KeyError:
         raise HTTPException(404, "Package not found") from None
     except ValueError as e:
@@ -807,6 +895,38 @@ def form_create_meeting(
         )
     except ValueError:
         raise HTTPException(400, "Invalid meeting type") from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/meetings/{meeting_id}/agenda")
+def form_add_meeting_agenda(
+    request: Request,
+    meeting_id: str,
+    title: str = Form(...),
+    notes: str = Form(""),
+    context_gap_id: str = Form(""),
+):
+    gap = (context_gap_id or "").strip() or None
+    try:
+        get_store().create_meeting_agenda_item(
+            meeting_id,
+            MeetingAgendaItemCreate(title=title, notes=notes, context_gap_id=gap),
+        )
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        if str(e) == "agenda_gap_already_linked_to_meeting":
+            raise HTTPException(400, "That gap is already on this meeting agenda") from None
+        raise HTTPException(400, str(e)) from e
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/meetings/{meeting_id}/generate-agenda")
+def form_generate_meeting_agenda(request: Request, meeting_id: str):
+    try:
+        get_store().generate_meeting_agenda_from_gaps(meeting_id)
+    except KeyError:
+        raise HTTPException(404, "Meeting not found") from None
     return RedirectResponse(url="/context", status_code=303)
 
 

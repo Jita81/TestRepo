@@ -42,6 +42,8 @@ from src.context_platform.schemas import (
     ManufacturingRead,
     ManufacturingStatus,
     ManufacturingSubmit,
+    MeetingAgendaItemCreate,
+    MeetingAgendaItemRead,
     MeetingCreate,
     ImprovementItemRead,
     MeetingExtractionConfirm,
@@ -304,8 +306,24 @@ CREATE TABLE IF NOT EXISTS meetings (
     extraction_confirmed_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS meeting_agenda_items (
+    id TEXT PRIMARY KEY,
+    meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    title TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    context_gap_id TEXT REFERENCES context_gaps(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meeting_agenda_meeting_gap
+ON meeting_agenda_items(meeting_id, context_gap_id)
+WHERE context_gap_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS audit_events (
     id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
     occurred_at TEXT NOT NULL,
     action TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -329,6 +347,7 @@ CREATE TABLE IF NOT EXISTS context_improvement_items (
 
 CREATE TABLE IF NOT EXISTS decision_records (
     id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
     decision_code TEXT NOT NULL,
     summary TEXT NOT NULL,
     entity_type TEXT NOT NULL,
@@ -340,6 +359,7 @@ CREATE TABLE IF NOT EXISTS decision_records (
 
 CREATE TABLE IF NOT EXISTS artifacts (
     id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
     artifact_kind TEXT NOT NULL,
     entity_type TEXT NOT NULL,
     entity_id TEXT NOT NULL,
@@ -539,6 +559,47 @@ def _ensure_project_scoping(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_meeting_agenda(conn: sqlite3.Connection) -> None:
+    """Phase 4: meeting agenda items linked to optional context gaps."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS meeting_agenda_items (
+            id TEXT PRIMARY KEY,
+            meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id),
+            title TEXT NOT NULL DEFAULT '',
+            notes TEXT NOT NULL DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            context_gap_id TEXT REFERENCES context_gaps(id) ON DELETE SET NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_meeting_agenda_meeting_gap
+        ON meeting_agenda_items(meeting_id, context_gap_id)
+        WHERE context_gap_id IS NOT NULL
+        """
+    )
+    conn.commit()
+
+
+def _ensure_traceability_project_scope(conn: sqlite3.Connection) -> None:
+    """Phase 1: project_id on audit_events, decision_records, artifacts."""
+    for table in ("audit_events", "decision_records", "artifacts"):
+        if not _table_exists(conn, table):
+            continue
+        cols = _table_columns(conn, table)
+        if "project_id" not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN project_id TEXT")
+            conn.execute(
+                f"UPDATE {table} SET project_id = ? WHERE project_id IS NULL",
+                (DEFAULT_PROJECT_ID,),
+            )
+    conn.commit()
+
+
 class ContextStore:
     def __init__(self, db_path: str | Path) -> None:
         self._path = Path(db_path)
@@ -573,6 +634,9 @@ class ContextStore:
     def _ensure_extensions(self) -> None:
         with self._connect() as conn:
             _ensure_project_scoping(conn)
+            _ensure_traceability_project_scope(conn)
+            if _table_exists(conn, "meetings"):
+                _ensure_meeting_agenda(conn)
             mcols = _table_columns(conn, "manufacturing_requests")
             for col, ddl in [
                 ("started_at", "ALTER TABLE manufacturing_requests ADD COLUMN started_at TEXT"),
@@ -614,6 +678,7 @@ class ContextStore:
                 """
                 CREATE TABLE IF NOT EXISTS audit_events (
                     id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(id),
                     occurred_at TEXT NOT NULL,
                     action TEXT NOT NULL,
                     entity_type TEXT NOT NULL,
@@ -643,6 +708,7 @@ class ContextStore:
                 """
                 CREATE TABLE IF NOT EXISTS decision_records (
                     id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(id),
                     decision_code TEXT NOT NULL,
                     summary TEXT NOT NULL,
                     entity_type TEXT NOT NULL,
@@ -657,6 +723,7 @@ class ContextStore:
                 """
                 CREATE TABLE IF NOT EXISTS artifacts (
                     id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(id),
                     artifact_kind TEXT NOT NULL,
                     entity_type TEXT NOT NULL,
                     entity_id TEXT NOT NULL,
@@ -721,17 +788,20 @@ class ContextStore:
         *,
         actor: Optional[str] = None,
         detail: Optional[dict[str, Any]] = None,
+        project_id: Optional[str] = None,
     ) -> None:
         act = actor if actor is not None else get_actor()
+        pid = project_id if project_id is not None else get_project_id()
         try:
             eid = _uid()
             ts = _now()
             dj = _audit_detail_json(detail)
             with self._connect() as conn:
                 conn.execute(
-                    """INSERT INTO audit_events (id, occurred_at, action, entity_type, entity_id, actor, detail_json)
-                    VALUES (?,?,?,?,?,?,?)""",
-                    (eid, ts, action, entity_type, entity_id, act, dj),
+                    """INSERT INTO audit_events
+                    (id, project_id, occurred_at, action, entity_type, entity_id, actor, detail_json)
+                    VALUES (?,?,?,?,?,?,?,?)""",
+                    (eid, pid, ts, action, entity_type, entity_id, act, dj),
                 )
                 conn.commit()
         except Exception as e:
@@ -745,8 +815,9 @@ class ContextStore:
         action: Optional[str] = None,
         limit: int = 100,
     ) -> list[AuditEventRead]:
-        q = "SELECT * FROM audit_events WHERE 1=1"
-        params: list[Any] = []
+        prj = get_project_id()
+        q = "SELECT * FROM audit_events WHERE project_id = ?"
+        params: list[Any] = [prj]
         if entity_type:
             q += " AND entity_type = ?"
             params.append(entity_type)
@@ -768,9 +839,11 @@ class ContextStore:
                     det = json.loads(r["detail_json"])
                 except json.JSONDecodeError:
                     det = {}
+            pj = r["project_id"] if r["project_id"] else DEFAULT_PROJECT_ID
             out.append(
                 AuditEventRead(
                     id=r["id"],
+                    project_id=pj,
                     occurred_at=datetime.fromisoformat(r["occurred_at"]),
                     action=r["action"],
                     entity_type=r["entity_type"],
@@ -790,17 +863,29 @@ class ContextStore:
         *,
         actor: Optional[str] = None,
         detail: Optional[dict[str, Any]] = None,
+        project_id: Optional[str] = None,
     ) -> DecisionRecordRead:
         act = actor if actor is not None else get_actor()
+        pid = project_id if project_id is not None else get_project_id()
         did = _uid()
         ts = _now()
         dj = json.dumps(detail, ensure_ascii=False) if detail else None
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO decision_records
-                (id, decision_code, summary, entity_type, entity_id, actor, detail_json, created_at)
-                VALUES (?,?,?,?,?,?,?,?)""",
-                (did, decision_code[:32], summary[:2000], entity_type, entity_id, act, dj, ts),
+                (id, project_id, decision_code, summary, entity_type, entity_id, actor, detail_json, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?)""",
+                (
+                    did,
+                    pid,
+                    decision_code[:32],
+                    summary[:2000],
+                    entity_type,
+                    entity_id,
+                    act,
+                    dj,
+                    ts,
+                ),
             )
             conn.commit()
         self.log_audit(
@@ -809,13 +894,16 @@ class ContextStore:
             did,
             actor=act,
             detail={"decision_code": decision_code, "entity_type": entity_type},
+            project_id=pid,
         )
         return self.get_decision_record(did)
 
     def get_decision_record(self, decision_id: str) -> DecisionRecordRead:
+        prj = get_project_id()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM decision_records WHERE id = ?", (decision_id,)
+                "SELECT * FROM decision_records WHERE id = ? AND project_id = ?",
+                (decision_id, prj),
             ).fetchone()
         if not row:
             raise KeyError("decision_record_not_found")
@@ -827,6 +915,7 @@ class ContextStore:
                 det = {}
         return DecisionRecordRead(
             id=row["id"],
+            project_id=row["project_id"],
             decision_code=row["decision_code"],
             summary=row["summary"],
             entity_type=row["entity_type"],
@@ -844,8 +933,9 @@ class ContextStore:
         decision_code: Optional[str] = None,
         limit: int = 100,
     ) -> list[DecisionRecordRead]:
-        q = "SELECT id FROM decision_records WHERE 1=1"
-        params: list[Any] = []
+        prj = get_project_id()
+        q = "SELECT id FROM decision_records WHERE project_id = ?"
+        params: list[Any] = [prj]
         if entity_type:
             q += " AND entity_type = ?"
             params.append(entity_type)
@@ -870,8 +960,10 @@ class ContextStore:
         *,
         body: Optional[dict[str, Any]] = None,
         actor: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> ArtifactRead:
         act = actor if actor is not None else get_actor()
+        pid = project_id if project_id is not None else get_project_id()
         aid = _uid()
         ts = _now()
         bj = json.dumps(body or {}, ensure_ascii=False)
@@ -882,9 +974,19 @@ class ContextStore:
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO artifacts
-                (id, artifact_kind, entity_type, entity_id, title, body_json, actor, created_at)
-                VALUES (?,?,?,?,?,?,?,?)""",
-                (aid, artifact_kind[:64], entity_type, entity_id, title[:500], bj, act, ts),
+                (id, project_id, artifact_kind, entity_type, entity_id, title, body_json, actor, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?)""",
+                (
+                    aid,
+                    pid,
+                    artifact_kind[:64],
+                    entity_type,
+                    entity_id,
+                    title[:500],
+                    bj,
+                    act,
+                    ts,
+                ),
             )
             conn.commit()
         self.log_audit(
@@ -893,13 +995,16 @@ class ContextStore:
             aid,
             actor=act,
             detail={"artifact_kind": artifact_kind, "entity_type": entity_type},
+            project_id=pid,
         )
         return self.get_artifact(aid)
 
     def get_artifact(self, artifact_id: str) -> ArtifactRead:
+        prj = get_project_id()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT * FROM artifacts WHERE id = ?", (artifact_id,)
+                "SELECT * FROM artifacts WHERE id = ? AND project_id = ?",
+                (artifact_id, prj),
             ).fetchone()
         if not row:
             raise KeyError("artifact_not_found")
@@ -911,6 +1016,7 @@ class ContextStore:
                 body = {}
         return ArtifactRead(
             id=row["id"],
+            project_id=row["project_id"],
             artifact_kind=row["artifact_kind"],
             entity_type=row["entity_type"],
             entity_id=row["entity_id"],
@@ -928,8 +1034,9 @@ class ContextStore:
         artifact_kind: Optional[str] = None,
         limit: int = 100,
     ) -> list[ArtifactRead]:
-        q = "SELECT id FROM artifacts WHERE 1=1"
-        params: list[Any] = []
+        prj = get_project_id()
+        q = "SELECT id FROM artifacts WHERE project_id = ?"
+        params: list[Any] = [prj]
         if entity_type:
             q += " AND entity_type = ?"
             params.append(entity_type)
@@ -2326,6 +2433,129 @@ class ContextStore:
                 (prj,),
             ).fetchall()
         return [self._meeting_row_to_read(r) for r in rows]
+
+    def _agenda_row_to_read(self, row: sqlite3.Row) -> MeetingAgendaItemRead:
+        return MeetingAgendaItemRead(
+            id=row["id"],
+            meeting_id=row["meeting_id"],
+            project_id=row["project_id"],
+            title=row["title"] or "",
+            notes=row["notes"] or "",
+            sort_order=int(row["sort_order"] or 0),
+            context_gap_id=row["context_gap_id"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def get_meeting_agenda_item(self, item_id: str) -> MeetingAgendaItemRead:
+        prj = get_project_id()
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT a.* FROM meeting_agenda_items a
+                JOIN meetings m ON a.meeting_id = m.id
+                WHERE a.id = ? AND m.project_id = ?""",
+                (item_id, prj),
+            ).fetchone()
+        if not row:
+            raise KeyError("meeting_agenda_item_not_found")
+        return self._agenda_row_to_read(row)
+
+    def list_meeting_agenda_items(self, meeting_id: str) -> list[MeetingAgendaItemRead]:
+        self.get_meeting(meeting_id)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM meeting_agenda_items
+                WHERE meeting_id = ?
+                ORDER BY sort_order ASC, created_at ASC""",
+                (meeting_id,),
+            ).fetchall()
+        return [self._agenda_row_to_read(r) for r in rows]
+
+    def create_meeting_agenda_item(
+        self, meeting_id: str, data: MeetingAgendaItemCreate
+    ) -> MeetingAgendaItemRead:
+        m = self.get_meeting(meeting_id)
+        prj = m.project_id
+        gap_id = (data.context_gap_id or "").strip() or None
+        if gap_id:
+            self.get_gap(gap_id)
+            with self._connect() as conn:
+                dup = conn.execute(
+                    """SELECT id FROM meeting_agenda_items
+                    WHERE meeting_id = ? AND context_gap_id = ?""",
+                    (meeting_id, gap_id),
+                ).fetchone()
+                if dup:
+                    raise ValueError("agenda_gap_already_linked_to_meeting")
+        aid = _uid()
+        ts = _now()
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO meeting_agenda_items
+                (id, meeting_id, project_id, title, notes, sort_order, context_gap_id, created_at)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (
+                    aid,
+                    meeting_id,
+                    prj,
+                    data.title.strip(),
+                    (data.notes or "").strip(),
+                    data.sort_order,
+                    gap_id,
+                    ts,
+                ),
+            )
+            conn.commit()
+        self.log_audit(
+            "created",
+            "meeting_agenda_item",
+            aid,
+            detail={"meeting_id": meeting_id, "context_gap_id": gap_id},
+        )
+        return self.get_meeting_agenda_item(aid)
+
+    def generate_meeting_agenda_from_gaps(self, meeting_id: str) -> list[MeetingAgendaItemRead]:
+        """D1-style stub: one row per unresolved project gap; skips gaps already on this meeting."""
+        self.get_meeting(meeting_id)
+        gaps = self.list_gaps(unresolved_only=True)
+        created: list[MeetingAgendaItemRead] = []
+        for g in gaps:
+            with self._connect() as conn:
+                dup = conn.execute(
+                    """SELECT id FROM meeting_agenda_items
+                    WHERE meeting_id = ? AND context_gap_id = ?""",
+                    (meeting_id, g.id),
+                ).fetchone()
+            if dup:
+                continue
+            title = g.description.strip()
+            if not title:
+                title = "(gap)"
+            if len(title) > 500:
+                title = title[:497] + "..."
+            notes_parts = [f"severity={g.severity}"]
+            if g.gap_type:
+                notes_parts.append(f"type={g.gap_type}")
+            if g.meeting_hint:
+                notes_parts.append(f"hint={g.meeting_hint}")
+            notes_parts.append(f"story={g.story_id}")
+            notes = " · ".join(notes_parts)[:4000]
+            item = self.create_meeting_agenda_item(
+                meeting_id,
+                MeetingAgendaItemCreate(
+                    title=title,
+                    notes=notes,
+                    context_gap_id=g.id,
+                    sort_order=len(created),
+                ),
+            )
+            created.append(item)
+        self.log_audit(
+            "agenda_generated_from_gaps",
+            "meeting",
+            meeting_id,
+            detail={"items_added": len(created)},
+        )
+        return created
 
     def set_meeting_transcript(self, meeting_id: str, data: MeetingTranscriptUpdate) -> MeetingRead:
         self.get_meeting(meeting_id)
