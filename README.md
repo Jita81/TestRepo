@@ -16,7 +16,7 @@ The programme exists so that **the right person has the right context to make th
 | **Traceability** | Approvals, triage, extractions, and sprint commitments are **attributed** and **queryable**. |
 | **Delivery spine** | Roadmap, sprints, manufacturing, and triage connect **stories → code path → feedback**. |
 | **Self-curation** | Gaps, triage (Q2/Q3), and improvement items **feed back** into context quality. |
-| **Governance** | Multi-**project** isolation, optional **API key**, and hooks for future **org/auth**. |
+| **Governance** | Multi-**project** isolation, optional **dashboard login** + **API key**, hooks for future **org/SSO**. |
 
 This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a single-process API, and a dashboard—not full enterprise auth, integrations, or real codegen.
 
@@ -37,7 +37,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | D11 backlog | C3 | **Partial** — items from Q2/Q3; basic list/resolve |
 | Meetings / extraction D4 | D2 | **Partial** — transcript, LLM or stub, per-item review, confirm |
 | Projects / tenancy | I2 | **Partial** — `projects` + `project_id` on core entities **and** audit / decisions / artifacts; **not** org/RBAC |
-| Auth | I1 | **Not done** — actor string + optional **API key** for `/api/*` only |
+| Auth | I1 | **Partial** — optional **dashboard** session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`); **API key** for `/api/*`; string actor; no OAuth/RBAC |
 | Integrations | F | **Not done** |
 | Codebase intelligence | G | **Not done** |
 
@@ -46,7 +46,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 ## What’s left (grouped backlog)
 
 1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
-2. **Identity:** Session or token auth for **dashboard**; roles (PO, CE, dev) beyond string actor.
+2. **Identity:** OAuth / SSO; roles (PO, CE, dev) beyond shared dashboard password; service accounts for automation.
 3. **Delivery depth:** D8 sprint calendar/capacity UI; **D12** release sign-off placeholder; manufacturing **real** adapter (repo + PR).
 4. **Meetings:** **D1** agenda items + status; **D3** gap-driven agenda rules; richer M1–M7 registry.
 5. **Product / analytics:** Triage trends, improvement metrics, exports; **B4** predicted queue heuristic.
@@ -61,13 +61,13 @@ Use these as **sequenced iterations** for coding agents (or human sprints). Each
 | Phase | Focus | Done when |
 |-------|--------|-----------|
 | **1 — Scope completion** | Attach **project_id** to `audit_events`, `decision_records`, `artifacts`; filter list APIs; backfill | **✅ Done** — columns + `WHERE project_id = ?` on list/get; legacy rows backfilled to `prj_default` |
-| **2 — Auth MVP** | Login session OR API tokens for **dashboard**; protect `POST /context/*`; keep `CONTEXT_API_KEY` for automation | Dashboard not world-writable in prod |
+| **2 — Auth MVP** | Session login for **`/context/*`** when password env set; **`CONTEXT_API_KEY`** unchanged for `/api/*` | **✅ Done** — `/context/login`, signed cookie, `POST`/`GET` dashboard gated |
 | **3 — Manufacturing v2** | Replace stub with **git clone + patch + test** adapter (configurable); status machine unchanged | One real pipeline path documented |
 | **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | API + minimal UI for agenda |
 | **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | End-to-end demo path |
 | **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | Deploy runbook validated |
 
-Phases **2** (next) unlock trustworthy multi-tenant **dashboard** demos; **3–4** deepen Automated Agile **D9/D4**; **5–6** move toward “platform” operations.
+Phase **3** (next) deepens **D9**; **4–6** expand meetings, integrations, and ops hardening.
 
 ---
 
@@ -81,6 +81,8 @@ python run.py
 
 - **Dashboard:** http://localhost:8000/context ( `/` redirects here )
 - **OpenAPI:** http://localhost:8000/docs
+
+With **`CONTEXT_DASHBOARD_PASSWORD`** + **`CONTEXT_SESSION_SECRET`** (≥32 chars) set, the browser must sign in at **`/context/login`** before using the dashboard. Omit them for local open access.
 
 ---
 
@@ -99,7 +101,8 @@ docker compose up --build
 
 | Item | Notes |
 |------|--------|
-| **Secrets** | Set `CONTEXT_API_KEY` for REST; use strong values for any future auth |
+| **Dashboard auth** | Set **`CONTEXT_DASHBOARD_PASSWORD`** and **`CONTEXT_SESSION_SECRET`** (≥32 chars, e.g. `openssl rand -hex 32`). Set **`CONTEXT_SESSION_HTTPS_ONLY=1`** when TLS terminates at the app. |
+| **REST** | Set **`CONTEXT_API_KEY`** so `/api/*` is not anonymous |
 | **Project default** | Set `CONTEXT_PROJECT_ID` or rely on UI cookie / `X-Context-Project` |
 | **Persistence** | Mount a volume at `/app/data` (see compose) or switch DB later |
 | **HTTPS** | Terminate TLS at your reverse proxy / platform load balancer |
@@ -109,7 +112,11 @@ docker compose up --build
 
 ```bash
 docker build -t context-platform .
-docker run -p 8000:8000 -v context_data:/app/data -e CONTEXT_API_KEY=secret context-platform
+docker run -p 8000:8000 -v context_data:/app/data \
+  -e CONTEXT_API_KEY=your-api-key \
+  -e CONTEXT_DASHBOARD_PASSWORD=your-dashboard-password \
+  -e CONTEXT_SESSION_SECRET=$(openssl rand -hex 32) \
+  context-platform
 ```
 
 ### CI
@@ -149,6 +156,10 @@ The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docke
 | `CONTEXT_PROJECT_ID` | `prj_default` | Default project (override with header/cookie) |
 | `CONTEXT_ACTOR` | `anonymous` | Default actor; per request: `X-Context-Actor` |
 | `CONTEXT_API_KEY` | — | If set, `/api/*` requires `X-Context-API-Key` or `Authorization: Bearer` |
+| `CONTEXT_DASHBOARD_PASSWORD` | — | If set, `/context/*` (except `/login`) requires session sign-in |
+| `CONTEXT_SESSION_SECRET` | — | Required with dashboard password; ≥32 chars; signs session cookie |
+| `CONTEXT_DASHBOARD_USER` | `admin` | Dashboard login username |
+| `CONTEXT_SESSION_HTTPS_ONLY` | unset | `1` / `true` — `Secure` session cookie (use behind HTTPS) |
 | `CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT` | unset | `1` / `true` allows D8 without D7 |
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | — / `gpt-4o-mini` | Optional LLM meeting extraction |
 | `MANUFACTURING_OUTPUT_DIR` | `data/manufacturing_outputs` | Stub artifacts |
@@ -177,11 +188,13 @@ See [.env.example](.env.example).
 │   ├── package_models.py
 │   ├── context_actor.py
 │   ├── context_project.py
+│   ├── dashboard_auth.py
 │   ├── middleware_*.py
 │   ├── meeting_extraction.py
 │   └── manufacturing_worker.py
 └── templates/
-    └── context_dashboard.html
+    ├── context_dashboard.html
+    └── dashboard_login.html
 ```
 
 ---

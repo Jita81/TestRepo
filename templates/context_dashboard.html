@@ -98,12 +98,17 @@
         {% endfor %}
       </select>
     </form>
+    {% if dashboard_login_enabled %}
+    <form method="post" action="/context/logout" style="margin:0">
+      <button type="submit" class="small secondary" style="width:auto">Log out</button>
+    </form>
+    {% endif %}
     <a href="/docs">API docs</a>
   </nav>
   <div class="grid">
     <header>
       <h1>Context Engineering Platform</h1>
-      <p class="sub">Roadmap → story → D7 → <strong>D8 sprints</strong> → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D8/D10/D4) + <strong>artifacts</strong>. Scope data by <strong>project</strong> (cookie / <code>X-Context-Project</code> / env <code>CONTEXT_PROJECT_ID</code>). Set actor via <code>X-Context-Actor</code> or <code>CONTEXT_ACTOR</code>.</p>
+      <p class="sub">Roadmap → story → D7 → <strong>D8 sprints</strong> → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D8/D10/D4) + <strong>artifacts</strong>. Scope data by <strong>project</strong> (cookie / <code>X-Context-Project</code> / env <code>CONTEXT_PROJECT_ID</code>). Set actor via <code>X-Context-Actor</code> or <code>CONTEXT_ACTOR</code>.{% if dashboard_login_enabled %} <strong>Dashboard login</strong> is enforced (see env <code>CONTEXT_DASHBOARD_PASSWORD</code>).{% endif %}</p>
       <form method="post" action="/context/projects" class="row" style="margin-bottom:1rem;max-width:28rem">
         <div><label>New project name</label><input name="name" required placeholder="Product A"></div>
         <button type="submit">Create project</button>

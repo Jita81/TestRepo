@@ -12,6 +12,11 @@ from fastapi.templating import Jinja2Templates
 
 from src.context_platform.manufacturing_worker import run_stub_manufacturing_job
 from src.context_platform.context_project import get_project_id
+from src.context_platform.dashboard_auth import (
+    dashboard_password_configured,
+    verify_dashboard_credentials,
+)
+from src.context_platform.middleware_dashboard_auth import SESSION_KEY
 from src.context_platform.schemas import (
     ContextGapCreate,
     ContextPackageCreate,
@@ -469,6 +474,7 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         "roles": [e.value for e in SignOffRole],
         "queues": [e.value for e in TriageQueue],
         "meeting_types": [e.value for e in MeetingTypeRef],
+        "dashboard_login_enabled": dashboard_password_configured(),
         "package_json_example": json.dumps(
             {
                 "business_context": {
@@ -499,6 +505,47 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
             indent=2,
         ),
     }
+
+
+@page_router.get("/login", response_class=HTMLResponse)
+def dashboard_login_get(request: Request, next: str = "/context"):
+    if not dashboard_password_configured():
+        return RedirectResponse(url="/context", status_code=302)
+    return templates.TemplateResponse(
+        "dashboard_login.html",
+        {"request": request, "next": next, "error": None},
+    )
+
+
+@page_router.post("/login")
+def dashboard_login_post(
+    request: Request,
+    username: str = Form(""),
+    password: str = Form(...),
+    next: str = Form("/context"),
+):
+    if not dashboard_password_configured():
+        return RedirectResponse(url="/context", status_code=302)
+    if not verify_dashboard_credentials(username, password):
+        return templates.TemplateResponse(
+            "dashboard_login.html",
+            {
+                "request": request,
+                "next": next,
+                "error": "Invalid username or password.",
+            },
+            status_code=200,
+        )
+    request.session[SESSION_KEY] = True
+    dest = next if next.startswith("/") else "/context"
+    return RedirectResponse(url=dest, status_code=303)
+
+
+@page_router.post("/logout")
+def dashboard_logout(request: Request):
+    if dashboard_password_configured():
+        request.session.clear()
+    return RedirectResponse(url="/context/login", status_code=303)
 
 
 @page_router.get("", response_class=HTMLResponse)
