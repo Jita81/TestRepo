@@ -326,6 +326,8 @@ Pattern entries (validated/pending); link patterns to technical approach section
 **Description**  
 Pluggable **manufacturing adapter**: queued → running → succeeded/failed; store logs and output artifact refs (branch name, PR URL). Stub adapter that creates empty branch or placeholder PR acceptable.
 
+**Repo note:** Phase 3 adds an env-driven **git clone → optional `git apply` → optional shell command** path (`MANUFACTURING_*` in README). Recording **PR URL / branch** in the DB is still open.
+
 **Acceptance criteria**
 - [ ] State machine matches manufacturing_requests (extend if needed).
 - [ ] Retry and idempotency rules documented (one job per package version default).

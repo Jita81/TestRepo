@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from src.context_platform.manufacturing_worker import run_stub_manufacturing_job
+from src.context_platform.manufacturing_worker import run_manufacturing_job
 from src.context_platform.context_project import get_project_id
 from src.context_platform.dashboard_auth import (
     dashboard_password_configured,
@@ -257,7 +257,7 @@ def api_manufacturing(
 ):
     try:
         m = get_store().submit_manufacturing(package_id, body)
-        background_tasks.add_task(run_stub_manufacturing_job, m.id)
+        background_tasks.add_task(run_manufacturing_job, m.id)
         return _dump(m)
     except KeyError:
         raise HTTPException(404, "Context package not found") from None
@@ -768,7 +768,7 @@ def form_manufacturing(
         m = get_store().submit_manufacturing(
             package_id, ManufacturingSubmit(submitted_by=submitted_by)
         )
-        background_tasks.add_task(run_stub_manufacturing_job, m.id)
+        background_tasks.add_task(run_manufacturing_job, m.id)
     except KeyError:
         raise HTTPException(404, "Package not found") from None
     except ValueError as e:
