@@ -352,6 +352,7 @@ class ExtractionItemReviewBody(BaseModel):
 
 class AuditEventRead(BaseModel):
     id: str
+    project_id: str
     occurred_at: datetime
     action: str
     entity_type: str
@@ -362,6 +363,7 @@ class AuditEventRead(BaseModel):
 
 class DecisionRecordRead(BaseModel):
     id: str
+    project_id: str
     decision_code: str
     summary: str
     entity_type: str
@@ -373,6 +375,7 @@ class DecisionRecordRead(BaseModel):
 
 class ArtifactRead(BaseModel):
     id: str
+    project_id: str
     artifact_kind: str
     entity_type: str
     entity_id: str

@@ -36,7 +36,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Sprint D8 | C1 | **Partial** — sprints + commitments + D7 gate; light on dates/capacity |
 | D11 backlog | C3 | **Partial** — items from Q2/Q3; basic list/resolve |
 | Meetings / extraction D4 | D2 | **Partial** — transcript, LLM or stub, per-item review, confirm |
-| Projects / tenancy | I2 | **Partial** — `projects` + `project_id` scope; **not** org/RBAC |
+| Projects / tenancy | I2 | **Partial** — `projects` + `project_id` on core entities **and** audit / decisions / artifacts; **not** org/RBAC |
 | Auth | I1 | **Not done** — actor string + optional **API key** for `/api/*` only |
 | Integrations | F | **Not done** |
 | Codebase intelligence | G | **Not done** |
@@ -45,7 +45,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 
 ## What’s left (grouped backlog)
 
-1. **Graph & governance:** `project_id` (or org) on **audit / decisions / artifacts**; filter APIs; optional **PostgreSQL** for multi-instance deploys.
+1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
 2. **Identity:** Session or token auth for **dashboard**; roles (PO, CE, dev) beyond string actor.
 3. **Delivery depth:** D8 sprint calendar/capacity UI; **D12** release sign-off placeholder; manufacturing **real** adapter (repo + PR).
 4. **Meetings:** **D1** agenda items + status; **D3** gap-driven agenda rules; richer M1–M7 registry.
@@ -60,14 +60,14 @@ Use these as **sequenced iterations** for coding agents (or human sprints). Each
 
 | Phase | Focus | Done when |
 |-------|--------|-----------|
-| **1 — Scope completion** | Attach **project_id** (or `project_id` FK) to `audit_events`, `decision_records`, `artifacts`; filter list APIs; backfill from story/package | No cross-project leakage in traceability reads |
+| **1 — Scope completion** | Attach **project_id** to `audit_events`, `decision_records`, `artifacts`; filter list APIs; backfill | **✅ Done** — columns + `WHERE project_id = ?` on list/get; legacy rows backfilled to `prj_default` |
 | **2 — Auth MVP** | Login session OR API tokens for **dashboard**; protect `POST /context/*`; keep `CONTEXT_API_KEY` for automation | Dashboard not world-writable in prod |
 | **3 — Manufacturing v2** | Replace stub with **git clone + patch + test** adapter (configurable); status machine unchanged | One real pipeline path documented |
 | **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | API + minimal UI for agenda |
 | **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | End-to-end demo path |
 | **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | Deploy runbook validated |
 
-Phases **1–2** unlock trustworthy multi-tenant demos; **3–4** deepen Automated Agile **D9/D4**; **5–6** move toward “platform” operations.
+Phases **2** (next) unlock trustworthy multi-tenant **dashboard** demos; **3–4** deepen Automated Agile **D9/D4**; **5–6** move toward “platform” operations.
 
 ---
 
