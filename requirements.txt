@@ -1,13 +1,6 @@
 fastapi
-uvicorn
-requests
-gitpython
-pyyaml
+uvicorn[standard]
 jinja2
-docker
-openai
 python-multipart
-aiofiles
-beautifulsoup4
-markdown
 python-dotenv
+openai>=1.0.0

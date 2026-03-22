@@ -1,1 +1,1 @@
-# GitHub to App Converter - Core Modules
+# Context Engineering Platform

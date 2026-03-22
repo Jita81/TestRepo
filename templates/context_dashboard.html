@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Context Engineering Platform</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4d;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3db8a6;
+      --warn: #e6a23c;
+      --danger: #e05d5d;
+      --ok: #5cb85c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 1.5rem;
+      min-height: 100vh;
+    }
+    a { color: var(--accent); }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .grid { display: grid; gap: 1.25rem; max-width: 1100px; margin: 0 auto; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .card h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.35rem; }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    textarea { font-family: ui-monospace, monospace; min-height: 100px; resize: vertical; }
+    button, .btn {
+      background: var(--accent);
+      color: #04221e;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      width: auto;
+      padding: 0.5rem 1rem;
+    }
+    button.secondary { background: var(--border); color: var(--text); }
+    button.small { padding: 0.35rem 0.65rem; font-size: 0.8rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 0.75rem; }
+    .row > * { flex: 1; min-width: 120px; }
+    .row button { flex: 0; }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-draft { background: #3d4a5c; color: #c5d0e0; }
+    .badge-in_review { background: #5c4a2d; color: #f0d9a8; }
+    .badge-approved { background: #1e4d2e; color: #a8f0b8; }
+    .badge-rejected { background: #4d1e1e; color: #f0a8a8; }
+    .badge-queued { background: #3d4a5c; color: #c5d0e0; }
+    .badge-running { background: #2d4a6c; color: #a8c8f0; }
+    .badge-awaiting_triage { background: #3d4a2d; color: #d8f0a8; }
+    .badge-failed { background: #4d1e1e; color: #f0a8a8; }
+    .badge-completed { background: #1e3d4d; color: #a8e0f0; }
+    .badge-warn { background: #4a3d1e; color: #f5e6a8; }
+    .pkg { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
+    .pkg-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    .signoffs { font-size: 0.85rem; margin: 0.5rem 0; }
+    .gap-item { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+    .topnav { max-width: 1100px; margin: 0 auto 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+    code { font-size: 0.85em; background: var(--bg); padding: 0.1rem 0.35rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <nav class="topnav">
+    <span class="muted">Automated Agile · MVP</span>
+    <form method="post" action="/context/set-project" style="display:flex;align-items:center;gap:0.5rem;margin:0">
+      <label class="muted" style="font-size:0.85rem">Project</label>
+      <select name="project_id" onchange="this.form.submit()" style="width:auto;min-width:10rem">
+        {% for p in projects %}
+        <option value="{{ p.id }}" {% if p.id == current_project_id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <a href="/docs">API docs</a>
+  </nav>
+  <div class="grid">
+    <header>
+      <h1>Context Engineering Platform</h1>
+      <p class="sub">Roadmap → story → D7 → <strong>D8 sprints</strong> → manufacturing → D10 → D11. <strong>Audit</strong> + <strong>decision_records</strong> (D7/D8/D10/D4) + <strong>artifacts</strong>. Scope data by <strong>project</strong> (cookie / <code>X-Context-Project</code> / env <code>CONTEXT_PROJECT_ID</code>). Set actor via <code>X-Context-Actor</code> or <code>CONTEXT_ACTOR</code>.</p>
+      <form method="post" action="/context/projects" class="row" style="margin-bottom:1rem;max-width:28rem">
+        <div><label>New project name</label><input name="name" required placeholder="Product A"></div>
+        <button type="submit">Create project</button>
+      </form>
+    </header>
+
+    <div class="card">
+      <h2>Activity (audit trail)</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Recent platform events — <code>GET /api/context/audit-events</code></p>
+      {% if audit_events %}
+      <ul style="list-style:none;font-size:0.85rem;max-height:14rem;overflow:auto">
+        {% for ev in audit_events %}
+        <li style="padding:0.35rem 0;border-bottom:1px solid var(--border)">
+          <span class="muted">{{ ev.occurred_at }}</span>
+          <strong>{{ ev.action }}</strong> · {{ ev.entity_type }} <code>{{ ev.entity_id[:10] }}…</code>
+          {% if ev.actor and ev.actor != 'anonymous' %}· {{ ev.actor }}{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No events yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Decision records (D1–D12 trace)</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Structured decisions (e.g. <strong>D7</strong> approve, <strong>D8</strong> sprint commit, <strong>D10</strong> triage, <strong>D4</strong> meeting sign-off). <code>GET /api/context/decision-records</code></p>
+      {% if decision_records %}
+      <ul style="list-style:none;font-size:0.85rem;max-height:12rem;overflow:auto">
+        {% for d in decision_records %}
+        <li style="padding:0.35rem 0;border-bottom:1px solid var(--border)">
+          <span class="badge badge-approved">{{ d.decision_code }}</span>
+          {{ d.summary[:100] }}{% if d.summary|length > 100 %}…{% endif %}
+          <span class="muted"> · {{ d.entity_type }} · {{ d.actor }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No decisions recorded yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Artifacts</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Version-pinned outputs (approved package ref, triage payload, meeting extraction). <code>GET /api/context/artifacts</code></p>
+      {% if artifacts %}
+      <ul style="list-style:none;font-size:0.85rem;max-height:12rem;overflow:auto">
+        {% for a in artifacts %}
+        <li style="padding:0.35rem 0;border-bottom:1px solid var(--border)">
+          <strong>{{ a.artifact_kind }}</strong> — {{ a.title[:80] }}{% if a.title|length > 80 %}…{% endif %}
+          <span class="muted"> · {{ a.entity_type }} · {{ a.actor }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No artifacts yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Context improvement backlog (D11)</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Opened automatically on <strong>Q2</strong> or <strong>Q3</strong> triage.</p>
+      {% if open_improvements %}
+      <ul style="list-style:none">
+        {% for im in open_improvements %}
+        <li style="padding:0.5rem 0;border-bottom:1px solid var(--border)">
+          <span class="badge badge-in_review">{{ im.priority }}</span>
+          <strong>{{ im.title }}</strong>
+          <p class="muted" style="margin:0.25rem 0;font-size:0.85rem">{{ im.description[:200] }}{% if im.description|length > 200 %}…{% endif %}</p>
+          <form method="post" action="/context/improvement-items/{{ im.id }}/resolve" style="display:inline">
+            <button type="submit" class="small secondary">Mark done</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No open items.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Roadmap (cycle → phase → feature)</h2>
+      <form method="post" action="/context/roadmap-cycles" class="row" style="margin-bottom:1rem">
+        <div><label>New cycle name</label><input name="name" required placeholder="2026 Q1"></div>
+        <button type="submit">Add cycle</button>
+      </form>
+      <form method="post" action="/context/delivery-phases" class="row" style="margin-bottom:1rem">
+        <div>
+          <label>Cycle</label>
+          <select name="roadmap_cycle_id" required>
+            {% for block in roadmap_tree %}
+            <option value="{{ block.cycle.id }}">{{ block.cycle.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div><label>Phase name</label><input name="name" required placeholder="Discovery 1"></div>
+        <div>
+          <label>Kind</label>
+          <select name="phase_kind">{% for pk in phase_kinds %}<option value="{{ pk }}">{{ pk }}</option>{% endfor %}</select>
+        </div>
+        <div><label>Sort</label><input name="sort_order" type="number" value="0"></div>
+        <button type="submit">Add phase</button>
+      </form>
+      <form method="post" action="/context/features" style="margin-bottom:1rem">
+        <div class="row">
+          <div>
+            <label>Delivery phase</label>
+            <select name="delivery_phase_id" required>
+              {% for block in roadmap_tree %}
+              {% for pw in block.phases %}
+              <option value="{{ pw.phase.id }}">{{ block.cycle.name }} — {{ pw.phase.name }} ({{ pw.phase.phase_kind.value }})</option>
+              {% endfor %}
+              {% endfor %}
+            </select>
+          </div>
+          <div><label>Feature title</label><input name="title" required placeholder="Password reset"></div>
+          <button type="submit">Add feature</button>
+        </div>
+        <label>Feature description</label>
+        <textarea name="description" rows="2" placeholder="Optional"></textarea>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>New story</h2>
+      <form method="post" action="/context/stories">
+        <div class="row">
+          <div>
+            <label for="feature_id">Feature</label>
+            <select id="feature_id" name="feature_id" required>
+              {% for block in roadmap_tree %}
+              {% for pw in block.phases %}
+              {% for fw in pw.features %}
+              <option value="{{ fw.feature.id }}">{{ block.cycle.name }} › {{ pw.phase.name }} › {{ fw.feature.title }}</option>
+              {% endfor %}
+              {% endfor %}
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="stitle">Story title</label>
+            <input id="stitle" name="title" required placeholder="As a user…">
+          </div>
+        </div>
+        <label for="sdesc">Description</label>
+        <textarea id="sdesc" name="description" rows="2"></textarea>
+        <div style="margin-top:0.75rem"><button type="submit">Create story</button></div>
+      </form>
+      <p class="muted" style="margin-top:1rem">Or drop a story on the <strong>default backlog</strong> (auto-created):</p>
+      <form method="post" action="/context/stories/quick" class="row">
+        <div><input name="title" required placeholder="Quick story title"></div>
+        <button type="submit" class="secondary">Quick story</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Sprints (D8 commitment)</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Commit stories to a sprint only when the story has an <strong>approved</strong> context package (D7), unless you use an admin override.</p>
+      {% if allow_unapproved_sprint_env %}
+      <p class="muted" style="margin-bottom:0.75rem"><span class="badge badge-warn">Override</span> Env <code>CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT</code> is on — commits without D7 are allowed.</p>
+      {% endif %}
+      <form method="post" action="/context/sprints" class="row" style="margin-bottom:1rem">
+        <div><label>Sprint name</label><input name="name" required placeholder="2026.03.2"></div>
+        <div>
+          <label>Cycle (optional)</label>
+          <select name="roadmap_cycle_id">
+            <option value="">— none —</option>
+            {% for block in roadmap_tree %}
+            <option value="{{ block.cycle.id }}">{{ block.cycle.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="flex:2;min-width:200px"><label>Capacity notes</label><input name="capacity_notes" placeholder="e.g. 30 pts, 2 engineers"></div>
+        <button type="submit">Create sprint</button>
+      </form>
+      {% for board in sprint_boards %}
+      <details style="margin-top:0.75rem;border:1px solid var(--border);border-radius:8px;padding:0.75rem">
+        <summary style="cursor:pointer;font-weight:600">{{ board.sprint.name }} <span class="muted"><code>{{ board.sprint.id[:10] }}…</code></span></summary>
+        {% if board.sprint.capacity_notes %}
+        <p class="muted" style="margin:0.5rem 0 0 0;font-size:0.85rem">{{ board.sprint.capacity_notes }}</p>
+        {% endif %}
+        {% if board.commitments %}
+        <ol style="margin:0.75rem 0 0 1.1rem">
+          {% for c in board.commitments %}
+          <li style="margin:0.35rem 0">
+            <strong>{{ c.story_title }}</strong>
+            {% if c.has_approved_context %}<span class="badge badge-approved">D7</span>{% else %}<span class="badge badge-draft">no D7</span>{% endif %}
+            <form method="post" action="/context/sprints/{{ board.sprint.id }}/commitments/{{ c.story_id }}/remove" style="display:inline;margin-left:0.35rem">
+              <button type="submit" class="small secondary">Remove</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        <p class="muted" style="margin-top:0.5rem">No stories committed yet.</p>
+        {% endif %}
+        <form method="post" action="/context/sprints/{{ board.sprint.id }}/commitments" class="row" style="margin-top:0.75rem">
+          <div>
+            <label>Story</label>
+            <select name="story_id" required>
+              <option value="">— select —</option>
+              {% for b in story_blocks %}
+              <option value="{{ b.story.id }}">{{ b.story.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div><label>Order</label><input type="number" name="sort_order" value="0"></div>
+          <div>
+            <label style="display:flex;align-items:center;gap:0.35rem;cursor:pointer;font-size:0.85rem">
+              <input type="checkbox" name="allow_unapproved" value="1" style="width:auto">
+              Allow without D7
+            </label>
+          </div>
+          <button type="submit">Commit story</button>
+        </form>
+      </details>
+      {% endfor %}
+      {% if not sprint_boards %}
+      <p class="muted" style="margin-top:0.75rem">No sprints yet — create one above.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Context gap (self-curation)</h2>
+      <form method="post" action="/context/gaps">
+        <div class="row">
+          <div>
+            <label for="story_gap">Story</label>
+            <select id="story_gap" name="story_id" required>
+              <option value="">— select —</option>
+              {% for b in story_blocks %}
+              <option value="{{ b.story.id }}">{{ b.story.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="severity">Severity</label>
+            <select id="severity" name="severity">
+              <option>low</option>
+              <option selected>medium</option>
+              <option>high</option>
+            </select>
+          </div>
+        </div>
+        <label for="meeting_hint">Meeting hint (M1–M7)</label>
+        <input id="meeting_hint" name="meeting_hint" placeholder="e.g. M3">
+        <label for="gdesc">Gap description</label>
+        <textarea id="gdesc" name="description" required rows="2"></textarea>
+        <div style="margin-top:0.75rem"><button type="submit">Record gap</button></div>
+      </form>
+      {% if gaps %}
+      <div style="margin-top:1rem">
+        <p class="muted" style="margin-bottom:0.5rem">Unresolved gaps</p>
+        {% for g in gaps %}
+        <div class="gap-item">
+          <strong>{{ g.description[:80] }}{% if g.description|length > 80 %}…{% endif %}</strong>
+          <span class="muted"> · {{ g.severity }} {% if g.meeting_hint %}· {{ g.meeting_hint }}{% endif %}</span>
+          <form method="post" action="/context/gaps/{{ g.id }}/resolve" style="display:inline;margin-left:0.5rem">
+            <button type="submit" class="small secondary">Resolve</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Meetings registry</h2>
+      <form method="post" action="/context/meetings" class="row">
+        <div>
+          <label for="mt">Type</label>
+          <select id="mt" name="meeting_type">
+            {% for m in meeting_types %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="mtitle">Title</label>
+          <input id="mtitle" name="title" placeholder="Optional label">
+        </div>
+        <button type="submit">Add</button>
+      </form>
+      {% if meetings %}
+      <div style="margin-top:1rem">
+        {% for m in meetings %}
+        <details style="margin-bottom:0.75rem;border:1px solid var(--border);border-radius:8px;padding:0.75rem">
+          <summary style="cursor:pointer;font-weight:600">{{ m.meeting_type.value }} — {{ m.title or "(no title)" }} · {{ m.status }} · extraction: {{ m.extraction_status }}</summary>
+          <p class="muted" style="margin:0.5rem 0"><code>{{ m.id }}</code></p>
+          <form method="post" action="/context/meetings/{{ m.id }}/transcript" style="margin-top:0.5rem">
+            <label>Transcript (use lines like <code>DECISION:</code>, <code>ACTION:</code>, <code>REQ:</code>)</label>
+            <textarea name="transcript" rows="5" placeholder="DECISION: We ship OAuth2 first&#10;ACTION: Bob updates the diagram">{{ m.transcript or '' }}</textarea>
+            <button type="submit" class="secondary" style="margin-top:0.35rem">Save transcript</button>
+          </form>
+          <form method="post" action="/context/meetings/{{ m.id }}/extract-stub" style="margin-top:0.5rem">
+            <button type="submit">Run extraction</button>
+          </form>
+          <p class="muted" style="font-size:0.8rem;margin-top:0.25rem">Uses OpenAI if <code>OPENAI_API_KEY</code> is set; otherwise line-prefix stub.</p>
+          {% if m.extraction_draft and m.extraction_draft.get('proposed_items') %}
+          <div class="muted" style="margin-top:0.75rem">
+            <strong>Draft items</strong> — accept/reject each (or <em>Accept all</em>), then confirm.
+            <ul style="margin:0.35rem 0 0 0;list-style:none">
+              {% for it in m.extraction_draft.get('proposed_items', []) %}
+              {% set idx = loop.index0 %}
+              {% set rev = (m.extraction_draft.get('item_reviews') or {}).get(idx|string, 'pending') %}
+              <li style="padding:0.4rem 0;border-bottom:1px solid var(--border)">
+                <span class="badge {% if rev == 'accepted' %}badge-approved{% elif rev == 'rejected' %}badge-rejected{% else %}badge-draft{% endif %}">{{ rev }}</span>
+                <span class="badge badge-in_review">{{ it.get('type','?') }}</span> {{ it.get('text','') }}
+                {% if m.extraction_status == 'draft' %}
+                <span style="margin-left:0.35rem">
+                  <form method="post" action="/context/meetings/{{ m.id }}/extraction-items/{{ idx }}/review" style="display:inline">
+                    <input type="hidden" name="decision" value="accept">
+                    <button type="submit" class="small secondary">Accept</button>
+                  </form>
+                  <form method="post" action="/context/meetings/{{ m.id }}/extraction-items/{{ idx }}/review" style="display:inline">
+                    <input type="hidden" name="decision" value="reject">
+                    <button type="submit" class="small secondary">Reject</button>
+                  </form>
+                </span>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% if m.extraction_status == 'draft' %}
+            <form method="post" action="/context/meetings/{{ m.id }}/extraction-accept-all" style="margin-top:0.5rem">
+              <button type="submit" class="secondary">Accept all items</button>
+            </form>
+            <form method="post" action="/context/meetings/{{ m.id }}/confirm-extraction" style="margin-top:0.5rem">
+              <button type="submit">Confirm extraction (human sign-off)</button>
+            </form>
+            <p class="muted" style="font-size:0.75rem;margin-top:0.35rem">Confirm requires every item accepted or rejected (unless you use legacy API <code>accepted_indices</code>).</p>
+            {% endif %}
+          </div>
+          {% endif %}
+          {% if m.extraction_status == 'confirmed' and m.extraction_confirmed_at %}
+          <p class="muted" style="margin-top:0.5rem">Confirmed at {{ m.extraction_confirmed_at }}</p>
+          {% endif %}
+        </details>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    {% for b in story_blocks %}
+    <div class="card">
+      <h2>{{ b.story.title }}</h2>
+      <p class="muted">Story id <code>{{ b.story.id }}</code> · feature <code>{{ b.story.feature_id }}</code></p>
+      <form method="post" action="/context/stories/{{ b.story.id }}/packages" style="margin:0.75rem 0">
+        <button type="submit" class="secondary">New context package version</button>
+      </form>
+
+      {% for pv in b.packages %}
+      {% set p = pv.pkg %}
+      <div class="pkg">
+        <div class="pkg-head">
+          <span>Package v{{ p.version }}</span>
+          <span class="badge badge-{{ p.status.value }}">{{ p.status.value }}</span>
+          <span class="muted">readiness {{ p.readiness_score }}%</span>
+          {% if p.content_hash %}<span class="muted">· hash <code>{{ p.content_hash[:12] }}…</code></span>{% endif %}
+        </div>
+        {% if p.status.value == 'approved' %}
+        <p class="muted" style="margin:0.35rem 0">Approved snapshot frozen. {% if p.approved_at %}<span>{{ p.approved_at }}</span>{% endif %}</p>
+        {% elif p.gap_analysis and p.gap_analysis.get('gaps') %}
+        <p class="muted" style="margin:0.35rem 0">Gaps: {{ p.gap_analysis.get('gaps') | join(', ') }}</p>
+        {% endif %}
+        {% if p.sign_offs %}
+        <div class="signoffs">Sign-offs:
+          {% for s in p.sign_offs %}
+          <span class="muted">{{ s.role.value }} ({{ s.signed_by }})</span>{% if not loop.last %} · {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <details class="muted" style="margin:0.5rem 0"><summary>Example v2 section shape</summary>
+        <pre style="margin-top:0.5rem;font-size:0.75rem;overflow:auto;max-height:12rem">{{ package_json_example }}</pre>
+        </details>
+        <form method="post" action="/context/packages/{{ p.id }}/sections">
+          <label>Business context (JSON)</label>
+          <textarea name="business_json">{{ pv.business_json }}</textarea>
+          <label>Technical approach (JSON)</label>
+          <textarea name="technical_json">{{ pv.technical_json }}</textarea>
+          <label>Testing contract (JSON)</label>
+          <textarea name="testing_json">{{ pv.testing_json }}</textarea>
+          <div style="margin-top:0.5rem"><button type="submit" class="secondary">Save sections &amp; recompute readiness</button></div>
+        </form>
+
+        <p class="muted" style="margin:1rem 0 0.35rem">D7 — Context Engineer · <strong>Tech lead or Developer</strong> · Product Owner</p>
+        <form method="post" action="/context/packages/{{ p.id }}/sign-off" class="row">
+          <div>
+            <label>Role</label>
+            <select name="role">
+              {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label>Name</label>
+            <input name="signed_by" required placeholder="Signer name">
+          </div>
+          <button type="submit">Sign</button>
+        </form>
+
+        <p class="muted" style="margin:1rem 0 0.35rem">D9 — manufacturing submission (requires approved package)</p>
+        <form method="post" action="/context/packages/{{ p.id }}/manufacturing" class="row">
+          <div>
+            <label>Developer</label>
+            <input name="submitted_by" required placeholder="Who submits">
+          </div>
+          <button type="submit">Submit to manufacturing</button>
+        </form>
+
+        {% for mv in pv.manufacturing %}
+        <div style="margin-top:0.75rem;padding:0.75rem;background:var(--bg);border-radius:6px">
+          <div class="pkg-head" style="margin-bottom:0.35rem">
+            <span>Mfg {{ mv.m.id[:8] }}…</span>
+            <span class="badge badge-{{ mv.m.status.value }}">{{ mv.m.status.value }}</span>
+            <span class="muted">by {{ mv.m.submitted_by }}{% if mv.m.package_content_hash %} · pkg hash {{ mv.m.package_content_hash[:10] }}…{% endif %}</span>
+          </div>
+          {% if mv.m.output_summary %}
+          <p class="muted" style="font-size:0.9rem;margin:0.35rem 0">{{ mv.m.output_summary }}</p>
+          {% endif %}
+          {% if mv.m.error_message %}
+          <p style="color:var(--danger);font-size:0.9rem;margin:0.35rem 0">{{ mv.m.error_message }}</p>
+          {% endif %}
+          {% if mv.m.status.value == 'running' %}
+          <p class="muted" style="margin-top:0.35rem">Stub pipeline running… refresh in a moment.</p>
+          {% elif mv.m.status.value == 'failed' %}
+          <p class="muted" style="margin-top:0.35rem">No triage — job failed.</p>
+          {% elif mv.triage %}
+          <div style="margin-top:0.35rem">
+            <p><strong>{{ mv.triage.queue.value }}</strong>
+              {% if mv.triage.detail and mv.triage.detail.get('gap_items') %}
+              <span class="muted">· {{ mv.triage.detail['gap_items']|length }} gap(s)</span>
+              {% endif %}
+              {% if mv.triage.detail and mv.triage.detail.get('root_cause_category') %}
+              <span class="muted">· cause: {{ mv.triage.detail['root_cause_category'] }}</span>
+              {% endif %}
+            </p>
+            {% if mv.triage.detail and mv.triage.detail.get('gap_items') %}
+            <ul style="margin:0.35rem 0 0 1.1rem;font-size:0.85rem">
+              {% for g in mv.triage.detail['gap_items'][:8] %}
+              <li>{{ g }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% if mv.triage.detail and mv.triage.detail.get('root_cause_narrative') %}
+            <p class="muted" style="font-size:0.85rem;margin-top:0.35rem">{{ mv.triage.detail['root_cause_narrative'][:400] }}{% if mv.triage.detail['root_cause_narrative']|length > 400 %}…{% endif %}</p>
+            {% endif %}
+            <p class="muted" style="font-size:0.85rem;margin-top:0.35rem">{{ mv.triage.feedback[:300] }}{% if mv.triage.feedback|length > 300 %}…{% endif %}</p>
+          </div>
+          {% elif mv.m.status.value in ('awaiting_triage', 'queued') %}
+          <form method="post" action="/context/manufacturing/{{ mv.m.id }}/triage" style="margin-top:0.5rem">
+            <p class="muted" style="font-size:0.8rem;margin-bottom:0.5rem">D10: <strong>Q1</strong> — notes only · <strong>Q2</strong> — one gap per line (required) + optional notes · <strong>Q3</strong> — category + narrative (required) + optional notes.</p>
+            <div class="row">
+              <div>
+                <label>Queue</label>
+                <select name="queue">
+                  {% for q in queues %}<option value="{{ q }}">{{ q }}</option>{% endfor %}
+                </select>
+              </div>
+              <div style="flex:2;min-width:200px">
+                <label>Notes (required for Q1)</label>
+                <input name="feedback" placeholder="Q1 rationale; optional extra for Q2/Q3">
+              </div>
+            </div>
+            <label>Gaps — one per line (Q2)</label>
+            <textarea name="gap_lines" rows="3" placeholder="Missing acceptance criteria&#10;Unclear error handling"></textarea>
+            <div class="row" style="margin-top:0.5rem">
+              <div>
+                <label>Root cause (Q3)</label>
+                <select name="root_cause_category">
+                  <option value="">—</option>
+                  {% for rc in root_cause_categories %}<option value="{{ rc }}">{{ rc }}</option>{% endfor %}
+                </select>
+              </div>
+              <div style="flex:2">
+                <label>Narrative (Q3)</label>
+                <input name="root_cause_narrative" placeholder="What broke / why">
+              </div>
+            </div>
+            <div style="margin-top:0.5rem"><button type="submit">Submit triage</button></div>
+          </form>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+      {% if not b.packages %}
+      <p class="muted">No context packages yet.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if not story_blocks %}
+    <p class="muted">No stories yet. Add a cycle/phase/feature (or use quick story), then create a story.</p>
+    {% endif %}
+  </div>
+</body>
+</html>

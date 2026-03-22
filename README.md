@@ -1,213 +1,191 @@
-# 🚀 GitHub to App Converter
+# Context Engineering Platform
 
-**Transform any GitHub repository into a working application with just one click!**
+Reference implementation for the **Automated Agile — Context Engineering Platform**: a **self-curating context graph** (roadmap → story → **D7** context package → **D8** sprint commitment → **D9** manufacturing → **D10** triage → **D11** improvement backlog) with **meetings (D4 extraction)**, **audit trail**, **decision/artifact records**, and **project-scoped** workspaces.
 
-This tool addresses the exact pain point shown in the viral GitHub issue - making code accessible to non-technical users by automatically converting GitHub repositories into working applications.
-
-## ✨ Features
-
-- **🤖 AI-Powered Analysis**: Uses advanced AI to understand your codebase and generate the perfect application wrapper
-- **📦 Multiple Platforms**: Generate executables, Docker containers, or web applications from any GitHub repository
-- **⚡ One-Click Conversion**: Simply paste a GitHub URL and get a working application in minutes
-- **🔧 Auto-Dependency Management**: Automatically detects and installs all required dependencies
-- **📱 Beautiful Web Interface**: User-friendly interface that anyone can use
-- **🛠️ Agentic Coding**: AI agents analyze code structure and generate intelligent wrappers
-
-## 🎯 Problem Solved
-
-Remember this viral GitHub issue? 
-> "I DONT GIVE A FUCK ABOUT THE FUCKING CODE! i just want to download this stupid fucking application and use it."
-
-This tool solves exactly that problem! No more:
-- ❌ Confusing installation instructions
-- ❌ Dependency hell
-- ❌ Complex build processes
-- ❌ Technical knowledge required
-
-Just:
-- ✅ Paste a GitHub URL
-- ✅ Click "Convert to App"
-- ✅ Download and run your application
-
-## 🚀 Quick Start
-
-### 1. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Set Up Environment
-
-```bash
-cp .env.example .env
-# Edit .env and add your OpenAI API key
-```
-
-### 3. Run the Application
-
-```bash
-python run.py
-```
-
-### 4. Open Your Browser
-
-Navigate to `http://localhost:8000` and start converting!
-
-## 📋 Requirements
-
-- Python 3.7+
-- OpenAI API key (for AI features)
-- Git (for repository cloning)
-- Docker (optional, for Docker container generation)
-
-## 🎮 How to Use
-
-1. **Enter GitHub URL**: Paste any GitHub repository URL
-2. **Choose Platform**: Select executable, Docker, or web app
-3. **Click Convert**: Let AI analyze and generate your app
-4. **Download & Run**: Get your working application!
-
-## 🏗️ Architecture
-
-```
-GitHub to App Converter
-├── 🌐 Web Interface (FastAPI + HTML)
-├── 🔗 GitHub Integration (Clone & Analyze)
-├── 📖 README Parser (Extract Instructions)
-├── 🤖 Agentic Coder (AI Analysis)
-└── 📦 App Generator (Create Applications)
-```
-
-### Core Components
-
-- **`github_integration.py`**: Handles repository cloning and metadata extraction
-- **`readme_parser.py`**: Parses README files for installation and usage instructions
-- **`agentic_coder.py`**: AI-powered code analysis and understanding
-- **`app_generator.py`**: Generates working applications for different platforms
-
-## 🎯 Supported Platforms
-
-### 1. Executable (.exe, .app)
-- Standalone applications that run on any system
-- Auto-installs dependencies
-- Cross-platform support
-
-### 2. Docker Container
-- Containerized applications
-- Includes Dockerfile and docker-compose.yml
-- Easy deployment and scaling
-
-### 3. Web Application
-- Web-based interface
-- Runs in browser
-- No installation required
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```bash
-# Required
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Optional
-GITHUB_TOKEN=your_github_token_here
-DEBUG=False
-HOST=0.0.0.0
-PORT=8000
-```
-
-### API Endpoints
-
-- `GET /` - Main web interface
-- `POST /convert` - Convert repository to app
-- `GET /download/{filename}` - Download generated app
-- `GET /status/{task_id}` - Check conversion status
-
-## 🧪 Testing
-
-Try it with these popular repositories:
-
-- [Linux Kernel](https://github.com/torvalds/linux)
-- [VS Code](https://github.com/microsoft/vscode)
-- [React](https://github.com/facebook/react)
-- [TensorFlow](https://github.com/tensorflow/tensorflow)
-- [PyTorch](https://github.com/pytorch/pytorch)
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-workspace/
-├── main.py                 # FastAPI application
-├── run.py                  # Startup script
-├── requirements.txt        # Python dependencies
-├── .env.example           # Environment template
-├── src/                   # Core modules
-│   ├── github_integration.py
-│   ├── readme_parser.py
-│   ├── agentic_coder.py
-│   └── app_generator.py
-├── templates/             # HTML templates
-│   └── index.html
-├── static/               # Static files
-├── generated_apps/       # Generated applications
-└── temp_repos/          # Temporary repository clones
-```
-
-### Adding New Platforms
-
-1. Extend `AppGenerator` class
-2. Add platform-specific generation methods
-3. Update web interface options
-4. Test with various repositories
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🙏 Acknowledgments
-
-- Inspired by the viral GitHub issue about making code accessible
-- Built with FastAPI, OpenAI, and modern Python tools
-- Thanks to the open-source community for amazing tools
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **"No OpenAI API key"**: Add your API key to `.env` file
-2. **"Repository not found"**: Check the GitHub URL is correct
-3. **"Build failed"**: Some repositories may need manual configuration
-4. **"Dependencies not found"**: The tool will try to auto-install, but some may need manual setup
-
-### Getting Help
-
-- Check the logs for detailed error messages
-- Ensure all dependencies are installed
-- Verify the GitHub repository is accessible
-- Check that the repository has a README file
-
-## 🚀 Future Features
-
-- [ ] Support for more programming languages
-- [ ] Cloud deployment integration
-- [ ] Batch processing of multiple repositories
-- [ ] Custom app templates
-- [ ] Integration with package managers
-- [ ] Mobile app generation
-- [ ] Desktop app packaging
+**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
 
 ---
 
-**Made with ❤️ to solve the "I just want to download and use it" problem!**
+## Programme goals (what “done” means)
+
+The programme exists so that **the right person has the right context to make the right decision at the right time**—using three primitives everywhere: **Inputs → Decisions → Outputs**, with **decisions D1–D12** and **meetings M1–M7** as first-class process steps.
+
+| Goal | Target outcome |
+|------|----------------|
+| **Structured context** | Context packages are validated, versioned, and **D7-approved** before manufacturing. |
+| **Traceability** | Approvals, triage, extractions, and sprint commitments are **attributed** and **queryable**. |
+| **Delivery spine** | Roadmap, sprints, manufacturing, and triage connect **stories → code path → feedback**. |
+| **Self-curation** | Gaps, triage (Q2/Q3), and improvement items **feed back** into context quality. |
+| **Governance** | Multi-**project** isolation, optional **API key**, and hooks for future **org/auth**. |
+
+This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a single-process API, and a dashboard—not full enterprise auth, integrations, or real codegen.
+
+---
+
+## Implementation status
+
+| Area | Spec / epic | Status in repo |
+|------|-------------|----------------|
+| Roadmap hierarchy | A1 | **Done** — cycle → phase → feature → story |
+| Structured context package + D7 snapshot | B1, B2 | **Done** — Pydantic v2 sections, hash, frozen snapshot |
+| Gap analysis / readiness | B3 | **Partial** — readiness + gap hints from schema; not full blocking UI |
+| Decision & artifact records | A2 | **Partial** — `decision_records` + `artifacts`; **D7, D8, D10, D4** wired; not full D1–D12 UI |
+| Audit / provenance | A3 | **Partial** — append-only events; **before/after** on key package + gap actions; not full graph diff |
+| Manufacturing | H1 / D9 | **Stub** — background job + `MANUFACTURING.md`; not real codegen/CI |
+| Triage D10 | C2 | **Partial** — structured Q1/Q2/Q3 + `detail_json` + list API |
+| Sprint D8 | C1 | **Partial** — sprints + commitments + D7 gate; light on dates/capacity |
+| D11 backlog | C3 | **Partial** — items from Q2/Q3; basic list/resolve |
+| Meetings / extraction D4 | D2 | **Partial** — transcript, LLM or stub, per-item review, confirm |
+| Projects / tenancy | I2 | **Partial** — `projects` + `project_id` scope; **not** org/RBAC |
+| Auth | I1 | **Not done** — actor string + optional **API key** for `/api/*` only |
+| Integrations | F | **Not done** |
+| Codebase intelligence | G | **Not done** |
+
+---
+
+## What’s left (grouped backlog)
+
+1. **Graph & governance:** `project_id` (or org) on **audit / decisions / artifacts**; filter APIs; optional **PostgreSQL** for multi-instance deploys.
+2. **Identity:** Session or token auth for **dashboard**; roles (PO, CE, dev) beyond string actor.
+3. **Delivery depth:** D8 sprint calendar/capacity UI; **D12** release sign-off placeholder; manufacturing **real** adapter (repo + PR).
+4. **Meetings:** **D1** agenda items + status; **D3** gap-driven agenda rules; richer M1–M7 registry.
+5. **Product / analytics:** Triage trends, improvement metrics, exports; **B4** predicted queue heuristic.
+6. **Integrations:** Chat, PM, SCM webhooks (roadmap outlines in [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)).
+
+---
+
+## Agent cycle phases (suggested autonomous work units)
+
+Use these as **sequenced iterations** for coding agents (or human sprints). Each phase has a clear “done” signal without requiring calendar estimates.
+
+| Phase | Focus | Done when |
+|-------|--------|-----------|
+| **1 — Scope completion** | Attach **project_id** (or `project_id` FK) to `audit_events`, `decision_records`, `artifacts`; filter list APIs; backfill from story/package | No cross-project leakage in traceability reads |
+| **2 — Auth MVP** | Login session OR API tokens for **dashboard**; protect `POST /context/*`; keep `CONTEXT_API_KEY` for automation | Dashboard not world-writable in prod |
+| **3 — Manufacturing v2** | Replace stub with **git clone + patch + test** adapter (configurable); status machine unchanged | One real pipeline path documented |
+| **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | API + minimal UI for agenda |
+| **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | End-to-end demo path |
+| **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | Deploy runbook validated |
+
+Phases **1–2** unlock trustworthy multi-tenant demos; **3–4** deepen Automated Agile **D9/D4**; **5–6** move toward “platform” operations.
+
+---
+
+## Quick start (local)
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env   # optional
+python run.py
+```
+
+- **Dashboard:** http://localhost:8000/context ( `/` redirects here )
+- **OpenAPI:** http://localhost:8000/docs
+
+---
+
+## Deployment
+
+### Docker (recommended)
+
+```bash
+docker compose up --build
+```
+
+- App listens on **8000**.
+- SQLite and manufacturing outputs use a **named volume** (`data`) so they survive restarts—see [docker-compose.yml](docker-compose.yml).
+
+**Production checklist**
+
+| Item | Notes |
+|------|--------|
+| **Secrets** | Set `CONTEXT_API_KEY` for REST; use strong values for any future auth |
+| **Project default** | Set `CONTEXT_PROJECT_ID` or rely on UI cookie / `X-Context-Project` |
+| **Persistence** | Mount a volume at `/app/data` (see compose) or switch DB later |
+| **HTTPS** | Terminate TLS at your reverse proxy / platform load balancer |
+| **OpenAI** | Optional `OPENAI_API_KEY` for meeting extraction |
+
+**Build image only**
+
+```bash
+docker build -t context-platform .
+docker run -p 8000:8000 -v context_data:/app/data -e CONTEXT_API_KEY=secret context-platform
+```
+
+### CI
+
+The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml): each push runs **`docker build`** so the image stays buildable (no registry push unless you extend the workflow).
+
+### Platform examples
+
+- **Fly.io / Railway / Render:** Dockerfile deploy; set `PORT` if the platform injects it; bind `0.0.0.0` (default). Mount persistent disk for `/app/data`.
+- **Kubernetes:** Single Deployment + PVC for `/app/data`; Secret for env vars.
+
+---
+
+## API overview
+
+| Area | Endpoints (prefix `/api/context`) |
+|------|-----------------------------------|
+| Projects | `GET/POST /projects` — scope via `X-Context-Project`, cookie `context_project_id`, or `CONTEXT_PROJECT_ID` |
+| Roadmap | `/roadmap-cycles`, `/delivery-phases`, `/features`, `/roadmap-tree`, stories CRUD |
+| D8 | `/sprints`, `/sprints/{id}`, `/sprints/{id}/commitments` |
+| Package / D7 | `/stories/{id}/context-packages`, `PATCH`, `/sign-offs` |
+| D9 / D10 | `/context-packages/{id}/manufacturing`, `/manufacturing/{id}/triage`, `GET /triage-results` |
+| Meetings / D4 | `/meetings`, transcript, extract, confirm, per-item review |
+| Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
+
+**D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen.  
+**D8:** One story ↔ one sprint commitment; D7 required unless override env/checkbox.  
+**D10:** Q1 notes; Q2 gap lines; Q3 root cause + narrative (`detail_json`).
+
+---
+
+## Configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `CONTEXT_DB_PATH` | `data/context_platform.db` | SQLite path |
+| `CONTEXT_PROJECT_ID` | `prj_default` | Default project (override with header/cookie) |
+| `CONTEXT_ACTOR` | `anonymous` | Default actor; per request: `X-Context-Actor` |
+| `CONTEXT_API_KEY` | — | If set, `/api/*` requires `X-Context-API-Key` or `Authorization: Bearer` |
+| `CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT` | unset | `1` / `true` allows D8 without D7 |
+| `OPENAI_API_KEY` / `OPENAI_MODEL` | — / `gpt-4o-mini` | Optional LLM meeting extraction |
+| `MANUFACTURING_OUTPUT_DIR` | `data/manufacturing_outputs` | Stub artifacts |
+| `HOST` / `PORT` | `0.0.0.0` / `8000` | Server bind |
+
+See [.env.example](.env.example).
+
+---
+
+## Repository layout
+
+```
+├── main.py                 # FastAPI app + middleware
+├── run.py                  # Uvicorn entry
+├── Dockerfile              # Container image (uvicorn)
+├── docker-compose.yml      # Volume-backed SQLite + port 8000
+├── .dockerignore
+├── .github/workflows/      # Docker build CI
+├── docs/
+│   ├── context-platform-process-architecture.md
+│   └── roadmap-github-issues.md
+├── src/context_platform/
+│   ├── api.py
+│   ├── store.py
+│   ├── schemas.py
+│   ├── package_models.py
+│   ├── context_actor.py
+│   ├── context_project.py
+│   ├── middleware_*.py
+│   ├── meeting_extraction.py
+│   └── manufacturing_worker.py
+└── templates/
+    └── context_dashboard.html
+```
+
+---
+
+## SQLite migration
+
+Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions`. For production scale-out, plan a **single-writer** SQLite or move to Postgres (future phase).
