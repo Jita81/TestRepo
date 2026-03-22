@@ -1,0 +1,7 @@
+{
+  "name": "reference_dataset",
+  "version": 1,
+  "project_id": "prj_reference",
+  "description": "One roadmap cycle, discovery phase, feature, story, draft context package, and one gap. Idempotent: skipped if the project already has roadmap cycles.",
+  "loader_command": "CONTEXT_DB_PATH=data/context_platform.db python -m src.context_platform.cli seed"
+}

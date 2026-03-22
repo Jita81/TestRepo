@@ -40,6 +40,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Projects / tenancy | I2 | **Partial** — `projects` + `project_id` on core entities **and** audit / decisions / artifacts; **not** org/RBAC |
 | Auth | I1 | **Partial** — optional **dashboard** session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`); **API key** for `/api/*`; string actor; no OAuth/RBAC |
 | Integrations | F | **Phase 5 (partial)** — GitHub **push/ping** webhook → `audit_events`; optional `story_id` + `context_project` query params; **not** PR events or normalized event table |
+| Ops / hardening | I3 / Phase 6 | **Done** — **`GET /health`**, **`GET /ready`**, CLI **`python -m src.context_platform.cli`**, SQLite backup guidance, reference dataset **`prj_reference`**; **Postgres** documented as future ([docs/postgres-notes.md](docs/postgres-notes.md)) |
 | Codebase intelligence | G | **Not done** |
 
 ---
@@ -66,9 +67,9 @@ Use these as **sequenced iterations** for coding agents (or human sprints). Each
 | **3 — Manufacturing v2** | **git clone + optional `git apply` + optional shell command** (tests/build); status machine unchanged | **✅ Done** — env-driven adapter + Docker `git` + README path |
 | **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | **✅ Done** — `meeting_agenda_items`, REST + dashboard |
 | **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | **✅ Done** — `POST /webhooks/scm/github`, HMAC, audit; URL query for project/story |
-| **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | Deploy runbook validated |
+| **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | **✅ Done** — `/health` & `/ready`, CLI (`migrate` / `seed` / `backup`), [deploy runbook](docs/deploy-runbook.md), [Postgres notes](docs/postgres-notes.md), reference project `prj_reference` |
 
-Phase **6** (next) is **ops hardening**.
+Phase **6** is complete; further work is feature backlog (Epic F/G, full PG port, etc.).
 
 ---
 
@@ -124,7 +125,7 @@ docker run -p 8000:8000 -v context_data:/app/data \
 
 ### CI
 
-The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml): each push runs **`docker build`** so the image stays buildable (no registry push unless you extend the workflow).
+The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml): each push runs **`docker build`** and a **`cli`** job (`migrate` + `seed` against a temp DB) so deploy automation stays validated (no registry push unless you extend the workflow).
 
 ### Platform examples
 
@@ -144,6 +145,7 @@ The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docke
 | D9 / D10 | `/context-packages/{id}/manufacturing`, `/manufacturing/{id}/triage`, `GET /triage-results` |
 | Meetings | `/meetings`, **D1** `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda`; **D4** transcript, extract, confirm, per-item review |
 | Integrations | **`POST /webhooks/scm/github`** — GitHub **push** / **ping** (JSON); signs with **`X-Hub-Signature-256`** when secret set |
+| Health (Phase 6) | **`GET /health`** (liveness), **`GET /ready`** (DB ping — 503 if store fails) |
 | Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
 
 **D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen.  
@@ -154,6 +156,10 @@ The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docke
 **Phase 5 (SCM):** Configure GitHub → **Webhooks** → URL  
 `https://<host>/api/context/webhooks/scm/github`  
 Add **`?context_project=<project_id>`** if the default env project is wrong, and **`&story_id=<story_uuid>`** to attach a story (must exist in that project). Set **`CONTEXT_SCM_WEBHOOK_SECRET`** to a long random string; in GitHub use the same as the webhook **Secret** so `X-Hub-Signature-256` validates. Events appear in **`GET /api/context/audit-events`** as **`scm_push_received`**, **`scm_webhook_ping`**, or **`scm_webhook_event`**.
+
+**Phase 6 (hardening):** Full operator notes in **[docs/deploy-runbook.md](docs/deploy-runbook.md)** (health, backups, migrations, seed). **PostgreSQL** is not wired; see **[docs/postgres-notes.md](docs/postgres-notes.md)**. Load the bundled reference graph:  
+`python -m src.context_platform.cli seed`  
+(idempotent project **`prj_reference`** — see [data/reference_manifest.json](data/reference_manifest.json)).
 
 ---
 
@@ -218,7 +224,11 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 ├── .github/workflows/      # Docker build CI
 ├── docs/
 │   ├── context-platform-process-architecture.md
+│   ├── deploy-runbook.md
+│   ├── postgres-notes.md
 │   └── roadmap-github-issues.md
+├── data/
+│   └── reference_manifest.json
 ├── src/context_platform/
 │   ├── api.py
 │   ├── store.py
@@ -230,7 +240,9 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 │   ├── middleware_*.py
 │   ├── meeting_extraction.py
 │   ├── manufacturing_worker.py
-│   └── scm_webhook.py
+│   ├── scm_webhook.py
+│   ├── reference_seed.py
+│   └── cli.py
 └── templates/
     ├── context_dashboard.html
     └── dashboard_login.html
@@ -240,4 +252,4 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 
 ## SQLite migration
 
-Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions` (including **`meeting_agenda_items`** for Phase 4). For production scale-out, plan a **single-writer** SQLite or move to Postgres (future phase).
+Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions` (including **`meeting_agenda_items`** for Phase 4). There is **no separate Alembic migration pack**; run **`python -m src.context_platform.cli migrate`** to validate the file the same way the app does on boot. For production scale-out, plan a **single-writer** SQLite and follow [docs/deploy-runbook.md](docs/deploy-runbook.md), or plan a **Postgres port** ([docs/postgres-notes.md](docs/postgres-notes.md)).

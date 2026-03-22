@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 
 load_dotenv()
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.context_platform import api as context_platform_api
@@ -23,7 +23,7 @@ from src.context_platform.middleware_actor import ActorMiddleware
 from src.context_platform.middleware_api_key import ApiKeyMiddleware
 from src.context_platform.middleware_dashboard_auth import DashboardAuthMiddleware
 from src.context_platform.middleware_project import ProjectMiddleware
-from src.context_platform.store import init_store
+from src.context_platform.store import get_store, init_store
 
 validate_dashboard_auth_env()
 
@@ -77,3 +77,22 @@ app.include_router(context_platform_api.page_router)
 @app.get("/")
 async def root():
     return RedirectResponse(url="/context", status_code=302)
+
+
+@app.get("/health")
+def health():
+    """Liveness — process is up (Phase 6)."""
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    """Readiness — SQLite store responds (Phase 6)."""
+    try:
+        get_store().ping()
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "detail": str(e)[:300]},
+        )
+    return {"status": "ready", "db": "ok"}
