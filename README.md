@@ -36,6 +36,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Sprint D8 | C1 | **Partial** — sprints + commitments + D7 gate; light on dates/capacity |
 | D11 backlog | C3 | **Partial** — items from Q2/Q3; basic list/resolve |
 | Meetings / extraction D4 | D2 | **Partial** — transcript, LLM or stub, per-item review, confirm |
+| Meeting agenda D1 | D1 | **Phase 4** — `meeting_agenda_items` + optional `context_gap_id`; **generate from gaps** stub; dashboard + REST |
 | Projects / tenancy | I2 | **Partial** — `projects` + `project_id` on core entities **and** audit / decisions / artifacts; **not** org/RBAC |
 | Auth | I1 | **Partial** — optional **dashboard** session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`); **API key** for `/api/*`; string actor; no OAuth/RBAC |
 | Integrations | F | **Not done** |
@@ -48,7 +49,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
 2. **Identity:** OAuth / SSO; roles (PO, CE, dev) beyond shared dashboard password; service accounts for automation.
 3. **Delivery depth:** D8 sprint calendar/capacity UI; **D12** release sign-off placeholder; manufacturing **PR automation** / org-specific CI beyond env-driven git adapter.
-4. **Meetings:** **D1** agenda items + status; **D3** gap-driven agenda rules; richer M1–M7 registry.
+4. **Meetings:** **D1** item status / ordering rules beyond MVP; **D3** richer gap-driven agenda heuristics; richer M1–M7 registry.
 5. **Product / analytics:** Triage trends, improvement metrics, exports; **B4** predicted queue heuristic.
 6. **Integrations:** Chat, PM, SCM webhooks (roadmap outlines in [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)).
 
@@ -63,11 +64,11 @@ Use these as **sequenced iterations** for coding agents (or human sprints). Each
 | **1 — Scope completion** | Attach **project_id** to `audit_events`, `decision_records`, `artifacts`; filter list APIs; backfill | **✅ Done** — columns + `WHERE project_id = ?` on list/get; legacy rows backfilled to `prj_default` |
 | **2 — Auth MVP** | Session login for **`/context/*`** when password env set; **`CONTEXT_API_KEY`** unchanged for `/api/*` | **✅ Done** — `/context/login`, signed cookie, `POST`/`GET` dashboard gated |
 | **3 — Manufacturing v2** | **git clone + optional `git apply` + optional shell command** (tests/build); status machine unchanged | **✅ Done** — env-driven adapter + Docker `git` + README path |
-| **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | API + minimal UI for agenda |
+| **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | **✅ Done** — `meeting_agenda_items`, REST + dashboard |
 | **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | End-to-end demo path |
 | **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | Deploy runbook validated |
 
-Phase **4** (next) expands **meetings**; **5–6** cover integrations and ops hardening.
+Phase **5** (next) is **integrations**; **6** is ops hardening.
 
 ---
 
@@ -140,12 +141,13 @@ The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docke
 | D8 | `/sprints`, `/sprints/{id}`, `/sprints/{id}/commitments` |
 | Package / D7 | `/stories/{id}/context-packages`, `PATCH`, `/sign-offs` |
 | D9 / D10 | `/context-packages/{id}/manufacturing`, `/manufacturing/{id}/triage`, `GET /triage-results` |
-| Meetings / D4 | `/meetings`, transcript, extract, confirm, per-item review |
+| Meetings | `/meetings`, **D1** `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda`; **D4** transcript, extract, confirm, per-item review |
 | Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
 
 **D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen.  
 **D8:** One story ↔ one sprint commitment; D7 required unless override env/checkbox.  
-**D10:** Q1 notes; Q2 gap lines; Q3 root cause + narrative (`detail_json`).
+**D10:** Q1 notes; Q2 gap lines; Q3 root cause + narrative (`detail_json`).  
+**D1 (Phase 4):** Agenda lines stored in `meeting_agenda_items`; optional link to `context_gaps.id`; **generate-agenda** appends one item per unresolved gap in the project (skips gaps already linked to that meeting).
 
 ---
 
@@ -230,4 +232,4 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 
 ## SQLite migration
 
-Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions`. For production scale-out, plan a **single-writer** SQLite or move to Postgres (future phase).
+Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions` (including **`meeting_agenda_items`** for Phase 4). For production scale-out, plan a **single-writer** SQLite or move to Postgres (future phase).

@@ -2,7 +2,7 @@
 
 **Master implementation plan (goals, status, agent phases, deploy):** [README.md](../README.md)
 
-**Progress (repo):** **A1**, **B1**, **B2**; **H1** stub manufacturing + file artifact; **D2** transcript + per-item review + optional OpenAI; **`audit_events`** + **`project_id`**; **D11** from Q2/Q3; **A2 (partial):** `decision_records` + `artifacts` (both **`project_id`**) with **D7/D8/D10/D4** wiring + **`X-Context-Actor`**; **C1 (partial):** `sprints` + `sprint_commitments`, D7 gate + env/UI override, dashboard + API; **C2 (partial):** D10 **structured triage** (`detail_json` + queue rules Q1/Q2/Q3, `GET /triage-results`); **A3 (partial):** before/after snapshots on package **update** / **sign_off** + gap **resolve**; optional **`CONTEXT_API_KEY`** for **`/api/*`**; **`projects`** table + **`project_id`** on roadmap/stories/meetings/sprints + **`X-Context-Project`** / cookie / **`CONTEXT_PROJECT_ID`**. **Phase 1 (README):** traceability rows scoped by project. **Phase 2:** optional dashboard session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`), `/context/login`, gated `GET`/`POST` under `/context`. Remaining: **A2** (full D1–D12 coverage, UI per decision), **A3** (full entity diff coverage), OAuth/org-level auth, integrations, D1–D3/D12, real manufacturing, sprint dates/capacity depth, triage analytics depth.
+**Progress (repo):** **A1**, **B1**, **B2**; **H1** stub manufacturing + file artifact; **D2** transcript + per-item review + optional OpenAI; **`audit_events`** + **`project_id`**; **D11** from Q2/Q3; **A2 (partial):** `decision_records` + `artifacts` (both **`project_id`**) with **D7/D8/D10/D4** wiring + **`X-Context-Actor`**; **C1 (partial):** `sprints` + `sprint_commitments`, D7 gate + env/UI override, dashboard + API; **C2 (partial):** D10 **structured triage** (`detail_json` + queue rules Q1/Q2/Q3, `GET /triage-results`); **A3 (partial):** before/after snapshots on package **update** / **sign_off** + gap **resolve**; optional **`CONTEXT_API_KEY`** for **`/api/*`**; **`projects`** table + **`project_id`** on roadmap/stories/meetings/sprints + **`X-Context-Project`** / cookie / **`CONTEXT_PROJECT_ID`**. **Phase 1 (README):** traceability rows scoped by project. **Phase 2:** optional dashboard session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`), `/context/login`, gated `GET`/`POST` under `/context`. **Phase 3:** manufacturing git adapter (`MANUFACTURING_GIT_URL`, optional patch + run cmd). **Phase 4:** **`meeting_agenda_items`** (optional `context_gap_id`), `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda` from open gaps, dashboard block. Remaining: **A2** (full D1–D12 coverage, UI per decision), **A3** (full entity diff coverage), OAuth/org-level auth, integrations, D3 heuristics/D12, PR automation, sprint dates/capacity depth, triage analytics depth.
 
 Use this document to create **Epics** (GitHub Milestones or parent Issues) and **child Issues**. Each block below is intended as **one issue**: title = first line; body = the rest of the block.
 
@@ -166,6 +166,8 @@ Create **Context Improvement Plan** / backlog items from Q3 (immediate) and Q2 p
 **Description**  
 Extend meetings beyond registry: **scheduled_at**, participants, **agenda items** (linked to ContextGap), **transcript** text or storage ref, status (planned/live/processed).
 
+**Repo note (Phase 4):** `meeting_agenda_items` table + REST + dashboard; optional FK to `context_gaps`. Participants and richer meeting status not done.
+
 **Acceptance criteria**
 - [ ] Schema supports agenda ↔ gap links.
 - [ ] API to attach transcript and transition status.
@@ -193,6 +195,8 @@ Upload or paste transcript → LLM proposes **decisions, requirements, action it
 
 **Description**  
 Given meeting type (M1–M7) and participants, generate **agenda** from open ContextGaps and missing package sections. Output as meeting agenda entity.
+
+**Repo note (partial):** `POST /meetings/{id}/generate-agenda` seeds one agenda line per **unresolved gap** in the project (no M-type routing yet).
 
 **Acceptance criteria**
 - [ ] Rule set maps gap types / severities to meeting types (config table or code).
