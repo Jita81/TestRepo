@@ -39,7 +39,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Meeting agenda D1 | D1 | **Phase 4** — `meeting_agenda_items` + optional `context_gap_id`; **generate from gaps** stub; dashboard + REST |
 | Projects / tenancy | I2 | **Partial** — `projects` + `project_id` on core entities **and** audit / decisions / artifacts; **not** org/RBAC |
 | Auth | I1 | **Partial** — optional **dashboard** session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`); **API key** for `/api/*`; string actor; no OAuth/RBAC |
-| Integrations | F | **Not done** |
+| Integrations | F | **Phase 5 (partial)** — GitHub **push/ping** webhook → `audit_events`; optional `story_id` + `context_project` query params; **not** PR events or normalized event table |
 | Codebase intelligence | G | **Not done** |
 
 ---
@@ -51,7 +51,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 3. **Delivery depth:** D8 sprint calendar/capacity UI; **D12** release sign-off placeholder; manufacturing **PR automation** / org-specific CI beyond env-driven git adapter.
 4. **Meetings:** **D1** item status / ordering rules beyond MVP; **D3** richer gap-driven agenda heuristics; richer M1–M7 registry.
 5. **Product / analytics:** Triage trends, improvement metrics, exports; **B4** predicted queue heuristic.
-6. **Integrations:** Chat, PM, SCM webhooks (roadmap outlines in [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)).
+6. **Integrations:** Chat, PM tools; **SCM** beyond push/ping audit (PR events, repo↔story mapping table); see Epic F in [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md).
 
 ---
 
@@ -65,10 +65,10 @@ Use these as **sequenced iterations** for coding agents (or human sprints). Each
 | **2 — Auth MVP** | Session login for **`/context/*`** when password env set; **`CONTEXT_API_KEY`** unchanged for `/api/*` | **✅ Done** — `/context/login`, signed cookie, `POST`/`GET` dashboard gated |
 | **3 — Manufacturing v2** | **git clone + optional `git apply` + optional shell command** (tests/build); status machine unchanged | **✅ Done** — env-driven adapter + Docker `git` + README path |
 | **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | **✅ Done** — `meeting_agenda_items`, REST + dashboard |
-| **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | End-to-end demo path |
+| **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | **✅ Done** — `POST /webhooks/scm/github`, HMAC, audit; URL query for project/story |
 | **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | Deploy runbook validated |
 
-Phase **5** (next) is **integrations**; **6** is ops hardening.
+Phase **6** (next) is **ops hardening**.
 
 ---
 
@@ -103,7 +103,8 @@ docker compose up --build
 | Item | Notes |
 |------|--------|
 | **Dashboard auth** | Set **`CONTEXT_DASHBOARD_PASSWORD`** and **`CONTEXT_SESSION_SECRET`** (≥32 chars, e.g. `openssl rand -hex 32`). Set **`CONTEXT_SESSION_HTTPS_ONLY=1`** when TLS terminates at the app. |
-| **REST** | Set **`CONTEXT_API_KEY`** so `/api/*` is not anonymous |
+| **REST** | Set **`CONTEXT_API_KEY`** so `/api/*` is not anonymous ( **`/api/context/webhooks/*`** is exempt — use **`CONTEXT_SCM_WEBHOOK_SECRET`** + GitHub HMAC instead ) |
+| **SCM webhook** | Set **`CONTEXT_SCM_WEBHOOK_SECRET`** and the same value in the GitHub hook’s **secret**; use HTTPS; optional **`?context_project=`** / **`?story_id=`** on the payload URL |
 | **Project default** | Set `CONTEXT_PROJECT_ID` or rely on UI cookie / `X-Context-Project` |
 | **Persistence** | Mount a volume at `/app/data` (see compose) or switch DB later |
 | **Manufacturing (D9)** | Image includes **`git`**. For the git adapter set `MANUFACTURING_GIT_URL` (and optionally `MANUFACTURING_PATCH_FILE`, `MANUFACTURING_RUN_CMD`). Needs outbound network to clone. |
@@ -142,12 +143,17 @@ The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docke
 | Package / D7 | `/stories/{id}/context-packages`, `PATCH`, `/sign-offs` |
 | D9 / D10 | `/context-packages/{id}/manufacturing`, `/manufacturing/{id}/triage`, `GET /triage-results` |
 | Meetings | `/meetings`, **D1** `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda`; **D4** transcript, extract, confirm, per-item review |
+| Integrations | **`POST /webhooks/scm/github`** — GitHub **push** / **ping** (JSON); signs with **`X-Hub-Signature-256`** when secret set |
 | Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
 
 **D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen.  
 **D8:** One story ↔ one sprint commitment; D7 required unless override env/checkbox.  
 **D10:** Q1 notes; Q2 gap lines; Q3 root cause + narrative (`detail_json`).  
 **D1 (Phase 4):** Agenda lines stored in `meeting_agenda_items`; optional link to `context_gaps.id`; **generate-agenda** appends one item per unresolved gap in the project (skips gaps already linked to that meeting).
+
+**Phase 5 (SCM):** Configure GitHub → **Webhooks** → URL  
+`https://<host>/api/context/webhooks/scm/github`  
+Add **`?context_project=<project_id>`** if the default env project is wrong, and **`&story_id=<story_uuid>`** to attach a story (must exist in that project). Set **`CONTEXT_SCM_WEBHOOK_SECRET`** to a long random string; in GitHub use the same as the webhook **Secret** so `X-Hub-Signature-256` validates. Events appear in **`GET /api/context/audit-events`** as **`scm_push_received`**, **`scm_webhook_ping`**, or **`scm_webhook_event`**.
 
 ---
 
@@ -158,7 +164,8 @@ The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docke
 | `CONTEXT_DB_PATH` | `data/context_platform.db` | SQLite path |
 | `CONTEXT_PROJECT_ID` | `prj_default` | Default project (override with header/cookie) |
 | `CONTEXT_ACTOR` | `anonymous` | Default actor; per request: `X-Context-Actor` |
-| `CONTEXT_API_KEY` | — | If set, `/api/*` requires `X-Context-API-Key` or `Authorization: Bearer` |
+| `CONTEXT_API_KEY` | — | If set, `/api/*` requires `X-Context-API-Key` or `Authorization: Bearer` (webhooks under `/api/context/webhooks/` are exempt) |
+| `CONTEXT_SCM_WEBHOOK_SECRET` | — | If set, **`POST /webhooks/scm/github`** requires HMAC-SHA256 (`X-Hub-Signature-256: sha256=<hex>` or `X-Context-SCM-Signature`) |
 | `CONTEXT_DASHBOARD_PASSWORD` | — | If set, `/context/*` (except `/login`) requires session sign-in |
 | `CONTEXT_SESSION_SECRET` | — | Required with dashboard password; ≥32 chars; signs session cookie |
 | `CONTEXT_DASHBOARD_USER` | `admin` | Dashboard login username |
@@ -222,7 +229,8 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 │   ├── dashboard_auth.py
 │   ├── middleware_*.py
 │   ├── meeting_extraction.py
-│   └── manufacturing_worker.py
+│   ├── manufacturing_worker.py
+│   └── scm_webhook.py
 └── templates/
     ├── context_dashboard.html
     └── dashboard_login.html

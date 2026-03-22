@@ -25,6 +25,9 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if not path.startswith("/api/"):
             return await call_next(request)
+        # SCM webhooks use HMAC (CONTEXT_SCM_WEBHOOK_SECRET), not the REST API key.
+        if path.startswith("/api/context/webhooks/"):
+            return await call_next(request)
         provided = (request.headers.get("x-context-api-key") or "").strip()
         auth = request.headers.get("authorization") or ""
         if auth.lower().startswith("bearer "):

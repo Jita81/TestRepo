@@ -10,6 +10,7 @@ services:
       HOST: "0.0.0.0"
       PORT: "8000"
       # CONTEXT_API_KEY: change-me
+      # CONTEXT_SCM_WEBHOOK_SECRET: use same value as GitHub webhook secret (Phase 5)
       # Production: set dashboard login + session secret (see README Phase 2)
       # CONTEXT_DASHBOARD_PASSWORD: ${CONTEXT_DASHBOARD_PASSWORD}
       # CONTEXT_SESSION_SECRET: ${CONTEXT_SESSION_SECRET}
