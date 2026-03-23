@@ -347,6 +347,16 @@ def api_update_package(package_id: str, body: ContextPackageUpdate):
         raise HTTPException(400, str(e)) from e
 
 
+@api_router.post("/context-packages/{package_id}/evaluate-process-rules")
+def api_evaluate_process_rules(package_id: str):
+    """Phase 9: re-run quick-path eligibility (audit + outbox when rules match)."""
+
+    try:
+        return get_store().evaluate_context_package_process_rules(package_id)
+    except KeyError:
+        raise HTTPException(404, "Context package not found") from None
+
+
 @api_router.post("/context-packages/{package_id}/sign-offs")
 def api_sign_off(package_id: str, body: SignOffCreate):
     try:
@@ -609,6 +619,24 @@ def api_list_audit(
             limit=limit,
         )
     ]
+
+
+@api_router.get("/process-outbox")
+def api_list_process_outbox(pending_only: bool = True, limit: int = 100):
+    """Phase 9: pending (or recent) durable process events — bus / worker stub."""
+
+    return [
+        _dump(x)
+        for x in get_store().list_process_outbox(pending_only=pending_only, limit=limit)
+    ]
+
+
+@api_router.post("/process-outbox/{outbox_id}/ack")
+def api_ack_process_outbox(outbox_id: str):
+    try:
+        return _dump(get_store().ack_process_outbox(outbox_id))
+    except KeyError:
+        raise HTTPException(404, "Outbox row not found") from None
 
 
 @api_router.get("/improvement-items")
