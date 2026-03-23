@@ -337,6 +337,32 @@ def api_get_package(package_id: str):
         raise HTTPException(404, "Context package not found") from None
 
 
+@api_router.get("/context-packages/{package_id}/manufacturing-prompt")
+def api_manufacturing_prompt_preview(package_id: str):
+    """Phase 10: JSON bundle + canonical Markdown for manufacturing / codegen."""
+
+    from src.context_platform.manufacturing_gateway import (
+        build_manufacturing_prompt_bundle,
+        format_manufacturing_prompt_markdown,
+    )
+
+    try:
+        store = get_store()
+        pkg = store.get_context_package(package_id)
+        title = ""
+        try:
+            title = store.get_story(pkg.story_id).title
+        except KeyError:
+            pass
+        bundle = build_manufacturing_prompt_bundle(pkg, story_title=title)
+        return {
+            "bundle": bundle,
+            "markdown": format_manufacturing_prompt_markdown(bundle),
+        }
+    except KeyError:
+        raise HTTPException(404, "Context package not found") from None
+
+
 @api_router.patch("/context-packages/{package_id}")
 def api_update_package(package_id: str, body: ContextPackageUpdate):
     try:

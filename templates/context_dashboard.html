@@ -636,7 +636,7 @@
           <div class="pkg-head" style="margin-bottom:0.35rem">
             <span>Mfg {{ mv.m.id[:8] }}…</span>
             <span class="badge badge-{{ mv.m.status.value }}">{{ mv.m.status.value }}</span>
-            <span class="muted">by {{ mv.m.submitted_by }}{% if mv.m.package_content_hash %} · pkg hash {{ mv.m.package_content_hash[:10] }}…{% endif %}</span>
+            <span class="muted">by {{ mv.m.submitted_by }}{% if mv.m.package_content_hash %} · pkg hash {{ mv.m.package_content_hash[:10] }}…{% endif %}{% if mv.m.predicted_triage_queue %} · predicted triage {{ mv.m.predicted_triage_queue }}{% endif %}</span>
           </div>
           {% if mv.m.output_summary %}
           <p class="muted" style="font-size:0.9rem;margin:0.35rem 0">{{ mv.m.output_summary }}</p>

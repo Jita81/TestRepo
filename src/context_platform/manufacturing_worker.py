@@ -9,6 +9,10 @@ import subprocess
 import time
 from pathlib import Path
 
+from src.context_platform.manufacturing_gateway import (
+    build_manufacturing_prompt_bundle,
+    format_manufacturing_prompt_markdown,
+)
 from src.context_platform.schemas import ManufacturingStatus
 from src.context_platform.store import get_store
 
@@ -334,10 +338,24 @@ def run_manufacturing_job(request_id: str) -> None:
         summary_line = _package_one_line_summary(store, pid)
 
         snap_note = ""
+        gateway_prefix = ""
         try:
             pkg = store.get_context_package(pid)
             if pkg.status.value == "approved" and pkg.content_hash:
                 snap_note = f"\nApproved package hash: `{pkg.content_hash}`\n"
+            story_title = ""
+            try:
+                story_title = store.get_story(pkg.story_id).title
+            except KeyError:
+                pass
+            bundle = build_manufacturing_prompt_bundle(
+                pkg,
+                story_title=story_title,
+                manufacturing_request_id=request_id,
+            )
+            gateway_prefix = (
+                format_manufacturing_prompt_markdown(bundle) + "\n---\n\n## Adapter output\n\n"
+            )
         except KeyError:
             pass
 
@@ -349,6 +367,8 @@ def run_manufacturing_job(request_id: str) -> None:
             body, out_summary, err = _stub_pipeline(
                 request_id, pid, h, summary_line, snap_note
             )
+
+        body = gateway_prefix + body
 
         out_path = _write_artifact(request_id, pid, h, body)
         out_summary = f"{out_summary} Artifact: `{out_path}`."

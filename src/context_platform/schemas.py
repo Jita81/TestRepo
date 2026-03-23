@@ -274,12 +274,20 @@ class ContextGapRead(BaseModel):
 
 class ManufacturingSubmit(BaseModel):
     submitted_by: str = Field(..., min_length=1, max_length=200)
+    predicted_triage_queue: Optional[TriageQueue] = Field(
+        default=None,
+        description="Phase 10: optional D10 queue prediction (stored vs actual triage).",
+    )
 
 
 class ManufacturingRead(BaseModel):
     id: str
     context_package_id: str
     package_content_hash: Optional[str] = None
+    predicted_triage_queue: Optional[str] = Field(
+        default=None,
+        description="Phase 10: Q1/Q2/Q3 prediction at submit time, if any.",
+    )
     submitted_by: str
     submitted_at: datetime
     status: ManufacturingStatus

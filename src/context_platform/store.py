@@ -330,6 +330,7 @@ CREATE TABLE IF NOT EXISTS manufacturing_requests (
     id TEXT PRIMARY KEY,
     context_package_id TEXT NOT NULL REFERENCES context_packages(id) ON DELETE CASCADE,
     package_content_hash TEXT,
+    predicted_triage_queue TEXT,
     submitted_by TEXT NOT NULL,
     submitted_at TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'queued',
@@ -741,6 +742,22 @@ def _ensure_phase9_process_outbox(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_phase10_manufacturing_predicted_triage(conn: sqlite3.Connection) -> None:
+    """Phase 10: optional predicted D10 queue on manufacturing_requests."""
+
+    if not _table_exists(conn, "manufacturing_requests"):
+        return
+    cols = _table_columns(conn, "manufacturing_requests")
+    if "predicted_triage_queue" not in cols:
+        try:
+            conn.execute(
+                "ALTER TABLE manufacturing_requests ADD COLUMN predicted_triage_queue TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass
+    conn.commit()
+
+
 def _ensure_traceability_project_scope(conn: sqlite3.Connection) -> None:
     """Phase 1: project_id on audit_events, decision_records, artifacts."""
     for table in ("audit_events", "decision_records", "artifacts"):
@@ -795,6 +812,7 @@ class ContextStore:
                 _ensure_meeting_agenda(conn)
             _ensure_phase7_ea_contracts(conn)
             _ensure_phase9_process_outbox(conn)
+            _ensure_phase10_manufacturing_predicted_triage(conn)
             mcols = _table_columns(conn, "manufacturing_requests")
             for col, ddl in [
                 ("started_at", "ALTER TABLE manufacturing_requests ADD COLUMN started_at TEXT"),
@@ -2478,12 +2496,30 @@ class ContextStore:
         mid = _uid()
         ts = _now()
         h = pkg.content_hash
+        pred_val: Optional[str] = None
+        if data.predicted_triage_queue is not None:
+            pred_val = data.predicted_triage_queue.value
+        elif _env_truthy("CONTEXT_MANUFACTURING_AUTO_PREDICT_TRIAGE"):
+            from src.context_platform.manufacturing_gateway import (
+                predict_triage_queue_heuristic,
+            )
+
+            pred_val = predict_triage_queue_heuristic(pkg)
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO manufacturing_requests
-                (id, context_package_id, package_content_hash, submitted_by, submitted_at, status)
-                VALUES (?,?,?,?,?,?)""",
-                (mid, package_id, h, data.submitted_by, ts, ManufacturingStatus.queued.value),
+                (id, context_package_id, package_content_hash, predicted_triage_queue,
+                submitted_by, submitted_at, status)
+                VALUES (?,?,?,?,?,?,?)""",
+                (
+                    mid,
+                    package_id,
+                    h,
+                    pred_val,
+                    data.submitted_by,
+                    ts,
+                    ManufacturingStatus.queued.value,
+                ),
             )
             conn.commit()
         self.log_audit(
@@ -2491,7 +2527,11 @@ class ContextStore:
             "manufacturing_request",
             mid,
             actor=data.submitted_by,
-            detail={"context_package_id": package_id, "package_content_hash": h},
+            detail={
+                "context_package_id": package_id,
+                "package_content_hash": h,
+                "predicted_triage_queue": pred_val,
+            },
         )
         return self.get_manufacturing(mid)
 
@@ -2506,10 +2546,16 @@ class ContextStore:
         finished = row["finished_at"] if "finished_at" in keys else None
         out = row["output_summary"] if "output_summary" in keys else None
         err = row["error_message"] if "error_message" in keys else None
+        pred = (
+            row["predicted_triage_queue"]
+            if "predicted_triage_queue" in keys
+            else None
+        )
         return ManufacturingRead(
             id=row["id"],
             context_package_id=row["context_package_id"],
             package_content_hash=row["package_content_hash"],
+            predicted_triage_queue=pred if pred else None,
             submitted_by=row["submitted_by"],
             submitted_at=datetime.fromisoformat(row["submitted_at"]),
             status=st,
@@ -2634,6 +2680,10 @@ class ContextStore:
                     ),
                 )
             conn.commit()
+        pred_q = m.predicted_triage_queue
+        match = (
+            (pred_q == data.queue.value) if pred_q else None
+        )
         self.log_audit(
             "submitted",
             "triage",
@@ -2642,6 +2692,8 @@ class ContextStore:
                 "queue": data.queue.value,
                 "manufacturing_request_id": request_id,
                 "structured_keys": list(detail_obj.keys()),
+                "predicted_triage_queue": pred_q,
+                "prediction_matches_actual": match,
             },
         )
         if improvement_id:
@@ -2661,6 +2713,8 @@ class ContextStore:
                 "queue": data.queue.value,
                 "feedback_preview": fb_line[:500],
                 "structured": detail_obj,
+                "predicted_triage_queue": pred_q,
+                "prediction_matches_actual": match,
             },
         )
         self.record_artifact(
