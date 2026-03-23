@@ -15,16 +15,32 @@ def stub_extract_transcript(text: str) -> dict[str, Any]:
     """
 
     items: list[dict[str, str]] = []
+    unresolved: list[dict[str, str]] = []
     patterns = (
         (re.compile(r"^DECISION:\s*(.+)$", re.I), "decision"),
         (re.compile(r"^ACTION:\s*(.+)$", re.I), "action_item"),
         (re.compile(r"^REQ(?:UIREMENT)?S?:\s*(.+)$", re.I), "requirement"),
+    )
+    un_patterns = (
+        (re.compile(r"^UNRESOLVED:\s*(.+)$", re.I), "open_question"),
+        (re.compile(r"^OPEN:\s*(.+)$", re.I), "open_question"),
+        (re.compile(r"^\?\?\s*(.+)$"), "ambiguity"),
     )
     for line in text.splitlines():
         s = line.strip()
         if not s:
             continue
         matched = False
+        for rx, kind in un_patterns:
+            m = rx.match(s)
+            if m:
+                unresolved.append(
+                    {"text": m.group(1).strip(), "kind": kind}
+                )
+                matched = True
+                break
+        if matched:
+            continue
         for rx, kind in patterns:
             m = rx.match(s)
             if m:
@@ -43,8 +59,9 @@ def stub_extract_transcript(text: str) -> dict[str, Any]:
         )
 
     return {
-        "extractor": "stub_v1",
+        "extractor": "stub_v2",
         "proposed_items": items,
+        "unresolved": unresolved,
     }
 
 

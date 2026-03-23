@@ -27,15 +27,15 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Area | Spec / epic | Status in repo |
 |------|-------------|----------------|
 | Roadmap hierarchy | A1 | **Done** — cycle → phase → feature → story |
-| Structured context package + D7 snapshot | B1, B2 | **Done** — Pydantic v2 sections, hash, frozen snapshot |
-| Gap analysis / readiness | B3 | **Partial** — readiness + gap hints from schema; not full blocking UI |
+| Structured context package + D7 snapshot | B1, B2 | **Done** — Pydantic v2 core sections; **Phase 7** adds EA extensions (`success_patterns`, `risks_and_dependencies`, `section_provenance`) + snapshot **schema v3**; `technical_context` API alias |
+| Gap analysis / readiness | B3 | **Partial** — readiness + gap hints + **Phase 7** `ea_hints` for extensions; **gap contract** fields (`severity_tier` blocking/degrading/minor, evidence, resolution, impact); not full blocking workflow UI |
 | Decision & artifact records | A2 | **Partial** — `decision_records` + `artifacts`; **D7, D8, D10, D4** wired; not full D1–D12 UI |
 | Audit / provenance | A3 | **Partial** — append-only events; **before/after** on key package + gap actions; not full graph diff |
 | Manufacturing | H1 / D9 | **Phase 3** — configurable **git clone → optional patch → optional test/cmd**; same status machine; stub when `MANUFACTURING_GIT_URL` unset |
 | Triage D10 | C2 | **Partial** — structured Q1/Q2/Q3 + `detail_json` + list API |
 | Sprint D8 | C1 | **Partial** — sprints + commitments + D7 gate; light on dates/capacity |
 | D11 backlog | C3 | **Partial** — items from Q2/Q3; basic list/resolve |
-| Meetings / extraction D4 | D2 | **Partial** — transcript, LLM or stub, per-item review, confirm |
+| Meetings / extraction D4 | D2 | **Partial** — transcript, LLM or stub, per-item review, confirm; **Phase 8** — EA draft **`unresolved[]`**, promote to gaps, **`GET .../meetings/pending-extraction-confirmation`** |
 | Meeting agenda D1 | D1 | **Phase 4** — `meeting_agenda_items` + optional `context_gap_id`; **generate from gaps** stub; dashboard + REST |
 | Projects / tenancy | I2 | **Partial** — `projects` + `project_id` on core entities **and** audit / decisions / artifacts; **not** org/RBAC |
 | Auth | I1 | **Partial** — optional **dashboard** session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`); **API key** for `/api/*`; string actor; no OAuth/RBAC |
@@ -48,7 +48,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 
 ## What’s left (grouped backlog)
 
-**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
+**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–8 done**; **Phases 9–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
 
 1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
 2. **Identity:** OAuth / SSO; roles (PO, CE, dev) beyond shared dashboard password; service accounts for automation.
@@ -78,8 +78,8 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 
 | Phase | Theme |
 |-------|--------|
-| **7** | EA context package & gap **contracts** |
-| **8** | Meeting intelligence v2 (extraction shape, sufficiency) |
+| **7** | EA context package & gap **contracts** — **✅ Done** (extensions + migration + dashboard) |
+| **8** | Meeting intelligence v2 — **✅ Done** (`unresolved[]`, gaps pipeline, pending-confirmation API) |
 | **9** | Process orchestration & **tiered confirmation** |
 | **10** | **Manufacturing gateway** module + prediction |
 | **11** | **Codebase intelligence** + **indexed regex** search |
@@ -179,18 +179,20 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 | Projects | `GET/POST /projects` — scope via `X-Context-Project`, cookie `context_project_id`, or `CONTEXT_PROJECT_ID` |
 | Roadmap | `/roadmap-cycles`, `/delivery-phases`, `/features`, `/roadmap-tree`, stories CRUD |
 | D8 | `/sprints`, `/sprints/{id}`, `/sprints/{id}/commitments` |
-| Package / D7 | `/stories/{id}/context-packages`, `PATCH`, `/sign-offs` |
+| Package / D7 | `/stories/{id}/context-packages`, `PATCH` (body may use **`technical_context`** instead of `technical_approach`; optional **`success_patterns`**, **`risks_and_dependencies`**, **`section_provenance`**), `/sign-offs` |
 | D9 / D10 | `/context-packages/{id}/manufacturing`, `/manufacturing/{id}/triage`, `GET /triage-results` |
-| Meetings | `/meetings`, **D1** `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda`; **D4** transcript, extract, confirm, per-item review |
+| Meetings | `/meetings`, **`GET /meetings/pending-extraction-confirmation`** (Phase 8), **D1** `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda`; **D4** transcript, extract, **`POST /meetings/{id}/unresolved-to-gaps`**, confirm, per-item review |
 | Decision agents (D1–D12) | `GET /decision-agents`, `POST /decision-agents/{D1..D12}/invoke` — shared LLM pipeline; see [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) |
 | Integrations | **`POST /webhooks/scm/github`** — GitHub **push** / **ping** (JSON); signs with **`X-Hub-Signature-256`** when secret set |
 | Health (Phase 6) | **`GET /health`** (liveness), **`GET /ready`** (DB ping — 503 if store fails) |
 | Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
 
-**D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen.  
+**D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen (**Phase 7:** canonical snapshot includes EA extension JSON; `schema_version` **3** in stored snapshot).  
 **D8:** One story ↔ one sprint commitment; D7 required unless override env/checkbox.  
 **D10:** Q1 notes; Q2 gap lines; Q3 root cause + narrative (`detail_json`).  
 **D1 (Phase 4):** Agenda lines stored in `meeting_agenda_items`; optional link to `context_gaps.id`; **generate-agenda** appends one item per unresolved gap in the project (skips gaps already linked to that meeting).
+
+**Phase 8 (meeting extraction v2):** Draft JSON uses **`extraction_schema_version` 2** with **`proposed_items`** + **`unresolved[]`** (normalized via `meeting_extraction_schema.normalize_extraction_draft`). Stub recognizes **`UNRESOLVED:`**, **`OPEN:`**, **`??`** lines; LLM returns the same shape when configured. **`POST /meetings/{id}/unresolved-to-gaps`** creates **`context_gaps`** on a chosen story (indices or all); audit action **`meeting_unresolved_promoted_to_gaps`**.
 
 **Phase 5 (SCM):** Configure GitHub → **Webhooks** → URL  
 `https://<host>/api/context/webhooks/scm/github`  
@@ -283,6 +285,7 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 │   ├── dashboard_auth.py
 │   ├── middleware_*.py
 │   ├── meeting_extraction.py
+│   ├── meeting_extraction_schema.py  # Phase 8 — EA draft shape + summaries
 │   ├── manufacturing_worker.py
 │   ├── scm_webhook.py
 │   ├── llm_client.py

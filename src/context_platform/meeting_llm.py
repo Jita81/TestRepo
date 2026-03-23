@@ -24,12 +24,16 @@ def try_llm_extract(text: str) -> Optional[dict[str, Any]]:
 
     system = """You extract structured items from a meeting transcript for software delivery.
 Return ONLY valid JSON with exactly this shape:
-{"proposed_items": [{"type": "decision"|"action_item"|"requirement"|"note", "text": "string"}]}
+{
+  "proposed_items": [{"type": "decision"|"action_item"|"requirement"|"note", "text": "string"}],
+  "unresolved": [{"text": "string", "kind": "open_question"|"ambiguity"|"risk"|"dependency"}]
+}
 Rules:
 - decision: commitments, choices, agreed direction
 - action_item: tasks; include assignee in text if mentioned
 - requirement: functional or non-functional constraints
 - note: other important context
+- unresolved: explicit open questions, ambiguities, or risks left unanswered (empty array if none)
 - Omit empty items; keep text concise."""
 
     data, err, model = chat_json(system, text[:_MAX_TRANSCRIPT_CHARS], temperature=0.2)
@@ -39,8 +43,8 @@ Rules:
         return None
 
     items = data.get("proposed_items")
-    if not isinstance(items, list) or not items:
-        return None
+    if not isinstance(items, list):
+        items = []
 
     normalized: list[dict[str, str]] = []
     for it in items:
@@ -56,10 +60,26 @@ Rules:
             }
         )
 
-    if not normalized:
+    un_raw = data.get("unresolved")
+    unresolved: list[dict[str, str]] = []
+    if isinstance(un_raw, list):
+        for u in un_raw:
+            if isinstance(u, dict):
+                tx = u.get("text")
+                if not tx or not str(tx).strip():
+                    continue
+                unresolved.append(
+                    {
+                        "text": str(tx).strip()[:4000],
+                        "kind": str(u.get("kind", "open_question"))[:64],
+                    }
+                )
+
+    if not normalized and not unresolved:
         return None
 
     return {
         "extractor": f"llm:{model}",
         "proposed_items": normalized,
+        "unresolved": unresolved,
     }

@@ -121,6 +121,46 @@ def compute_readiness_v2(sec: ContextPackageSectionsV2) -> float:
     return round(min(100.0, score), 1)
 
 
+def compute_readiness_with_extensions(
+    sec: ContextPackageSectionsV2,
+    success_patterns: dict[str, Any],
+    risks_and_dependencies: dict[str, Any],
+) -> float:
+    """Phase 7: small bonuses when EA extension sections are populated."""
+
+    base = compute_readiness_v2(sec)
+    pats = success_patterns.get("patterns") if isinstance(success_patterns, dict) else None
+    if isinstance(pats, list) and len(pats) > 0:
+        base = min(100.0, base + 5.0)
+    if isinstance(risks_and_dependencies, dict) and any(
+        risks_and_dependencies.get(k)
+        for k in ("risks", "technical_dependencies", "team_dependencies", "notes")
+    ):
+        base = min(100.0, base + 3.0)
+    return round(min(100.0, base), 1)
+
+
+def ea_gap_hints(
+    success_patterns: dict[str, Any],
+    risks_and_dependencies: dict[str, Any],
+    section_provenance: dict[str, Any],
+) -> list[str]:
+    """Non-blocking EA completeness hints (dashboard / API)."""
+
+    hints: list[str] = []
+    pats = success_patterns.get("patterns") if isinstance(success_patterns, dict) else None
+    if not isinstance(pats, list) or len(pats) == 0:
+        hints.append("ea: success_patterns.patterns empty")
+    if not isinstance(risks_and_dependencies, dict) or not any(
+        risks_and_dependencies.get(k)
+        for k in ("risks", "technical_dependencies", "team_dependencies")
+    ):
+        hints.append("ea: risks_and_dependencies thin")
+    if not isinstance(section_provenance, dict) or len(section_provenance) == 0:
+        hints.append("ea: section_provenance empty")
+    return hints
+
+
 def gap_analysis_dict(sec: ContextPackageSectionsV2) -> dict[str, Any]:
     """Human-readable gap list for D7 / dashboard."""
 

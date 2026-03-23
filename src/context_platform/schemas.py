@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, computed_field, model_validator
 
 
 class PhaseKind(str, Enum):
@@ -185,11 +185,20 @@ class ContextPackageCreate(BaseModel):
 
 
 class ContextPackageSections(BaseModel):
-    """API body: three JSON objects (validated as v2 sections on write)."""
+    """
+    Core v2 sections + EA Phase 7 extensions.
+    ``technical_context`` aliases ``technical_approach`` (enterprise architecture).
+    """
 
     business_context: dict[str, Any] = Field(default_factory=dict)
-    technical_approach: dict[str, Any] = Field(default_factory=dict)
+    technical_approach: dict[str, Any] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("technical_approach", "technical_context"),
+    )
     testing_contract: dict[str, Any] = Field(default_factory=dict)
+    success_patterns: dict[str, Any] = Field(default_factory=dict)
+    risks_and_dependencies: dict[str, Any] = Field(default_factory=dict)
+    section_provenance: dict[str, Any] = Field(default_factory=dict)
 
 
 class ContextPackageUpdate(BaseModel):
@@ -218,11 +227,20 @@ class ContextPackageRead(BaseModel):
     business_context: dict[str, Any]
     technical_approach: dict[str, Any]
     testing_contract: dict[str, Any]
+    success_patterns: dict[str, Any] = Field(default_factory=dict)
+    risks_and_dependencies: dict[str, Any] = Field(default_factory=dict)
+    section_provenance: dict[str, Any] = Field(default_factory=dict)
     gap_analysis: dict[str, Any] = Field(default_factory=dict)
     content_hash: Optional[str] = None
     approved_at: Optional[datetime] = None
     created_at: datetime
     sign_offs: list[SignOffRead] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def technical_context(self) -> dict[str, Any]:
+        """EA naming — same payload as ``technical_approach``."""
+        return self.technical_approach
 
 
 class ContextGapCreate(BaseModel):
@@ -232,6 +250,10 @@ class ContextGapCreate(BaseModel):
     gap_type: str = ""
     severity: str = "medium"
     meeting_hint: str = ""
+    severity_tier: Literal["blocking", "degrading", "minor"] = "degrading"
+    evidence: str = Field(default="", max_length=8000)
+    resolution_strategy: str = Field(default="", max_length=4000)
+    impact_notes: str = Field(default="", max_length=4000)
 
 
 class ContextGapRead(BaseModel):
@@ -242,6 +264,10 @@ class ContextGapRead(BaseModel):
     gap_type: str
     severity: str
     meeting_hint: str
+    severity_tier: str = "degrading"
+    evidence: str = ""
+    resolution_strategy: str = ""
+    impact_notes: str = ""
     resolved: bool
     created_at: datetime
 
@@ -362,6 +388,22 @@ class MeetingExtractionConfirm(BaseModel):
     """
 
     accepted_indices: list[int] = Field(default_factory=list)
+
+
+class UnresolvedToGapsBody(BaseModel):
+    """Phase 8: promote ``extraction_draft.unresolved[]`` entries to ``context_gaps``."""
+
+    story_id: str = Field(..., min_length=1)
+    indices: list[int] = Field(default_factory=list)
+    all_unresolved: bool = False
+    gap_type: str = Field(default="meeting_unresolved", max_length=120)
+    meeting_hint_override: str = Field(default="", max_length=200)
+
+    @model_validator(mode="after")
+    def _need_selection(self) -> UnresolvedToGapsBody:
+        if not self.all_unresolved and not self.indices:
+            raise ValueError("provide_indices_or_all_unresolved")
+        return self
 
 
 class ExtractionItemReviewBody(BaseModel):

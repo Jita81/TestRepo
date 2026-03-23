@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from src.context_platform.manufacturing_worker import run_manufacturing_job
+from src.context_platform.meeting_extraction_schema import summarize_meeting_extraction_draft
 from src.context_platform.context_project import (
     get_project_id,
     reset_project_token,
@@ -43,6 +44,7 @@ from src.context_platform.schemas import (
     ExtractionItemReviewBody,
     MeetingExtractionConfirm,
     MeetingTranscriptUpdate,
+    UnresolvedToGapsBody,
     MeetingTypeRef,
     PhaseKind,
     RoadmapCycleCreate,
@@ -418,6 +420,23 @@ def api_list_meetings():
     return [_dump(m) for m in get_store().list_meetings()]
 
 
+@api_router.get("/meetings/pending-extraction-confirmation")
+def api_meetings_pending_extraction_confirmation():
+    """Phase 8: list meetings whose extraction is in ``draft`` (awaiting review / confirm)."""
+
+    out = []
+    for m in get_store().list_meetings_pending_extraction_confirmation():
+        out.append(
+            {
+                "meeting": _dump(m),
+                "draft_summary": summarize_meeting_extraction_draft(
+                    m.extraction_draft or {}
+                ),
+            }
+        )
+    return out
+
+
 @api_router.get("/meetings/{meeting_id}")
 def api_get_meeting(meeting_id: str):
     try:
@@ -646,6 +665,23 @@ def api_meeting_confirm(
         raise HTTPException(400, str(e)) from e
 
 
+@api_router.post("/meetings/{meeting_id}/unresolved-to-gaps")
+def api_meeting_unresolved_to_gaps(meeting_id: str, body: UnresolvedToGapsBody):
+    """Phase 8: create ``context_gaps`` from draft ``unresolved[]`` (by index or all)."""
+
+    try:
+        gaps = get_store().promote_meeting_unresolved_to_gaps(meeting_id, body)
+        return {
+            "meeting_id": meeting_id,
+            "gaps_created": len(gaps),
+            "gaps": [_dump(g) for g in gaps],
+        }
+    except KeyError:
+        raise HTTPException(404, "Meeting or story not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 # --- HTML dashboard ---
 
 
@@ -674,6 +710,9 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
                     "business_json": json.dumps(p.business_context, indent=2),
                     "technical_json": json.dumps(p.technical_approach, indent=2),
                     "testing_json": json.dumps(p.testing_contract, indent=2),
+                    "success_patterns_json": json.dumps(p.success_patterns, indent=2),
+                    "risks_json": json.dumps(p.risks_and_dependencies, indent=2),
+                    "provenance_json": json.dumps(p.section_provenance, indent=2),
                 }
             )
         story_blocks.append({"story": s, "packages": pkg_views})
@@ -686,6 +725,14 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         "gaps": store.list_gaps(unresolved_only=True),
         "meetings": meetings_list,
         "meeting_agendas": meeting_agendas,
+        "pending_meeting_extractions": [
+            {
+                "meeting": m,
+                "summary": summarize_meeting_extraction_draft(m.extraction_draft or {}),
+            }
+            for m in meetings_list
+            if m.extraction_status == "draft"
+        ],
         "audit_events": store.list_audit_events(limit=30),
         "decision_records": store.list_decision_records(limit=25),
         "artifacts": store.list_artifacts(limit=25),
@@ -723,6 +770,24 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
                     "scenarios": [
                         {"name": "happy path", "scenario_type": "happy_path", "steps": "..."}
                     ],
+                },
+                "success_patterns": {
+                    "patterns": [
+                        {
+                            "title": "Similar reset flow in billing",
+                            "reference": "svc/billing/reset.go",
+                            "confidence": "high",
+                        }
+                    ]
+                },
+                "risks_and_dependencies": {
+                    "risks": ["Email deliverability in sandbox"],
+                    "team_dependencies": ["Platform team for SMTP config"],
+                    "technical_dependencies": ["SendGrid API"],
+                },
+                "section_provenance": {
+                    "business": {"source": "workshop_notes", "confidence": "medium"},
+                    "technical": {"source": "arch_review", "confidence": "high"},
                 },
             },
             indent=2,
@@ -937,11 +1002,17 @@ def form_update_sections(
     business_json: str = Form("{}"),
     technical_json: str = Form("{}"),
     testing_json: str = Form("{}"),
+    success_patterns_json: str = Form("{}"),
+    risks_json: str = Form("{}"),
+    provenance_json: str = Form("{}"),
 ):
     try:
         business = json.loads(business_json or "{}")
         technical = json.loads(technical_json or "{}")
         testing = json.loads(testing_json or "{}")
+        success_patterns = json.loads(success_patterns_json or "{}")
+        risks_and_dependencies = json.loads(risks_json or "{}")
+        section_provenance = json.loads(provenance_json or "{}")
     except json.JSONDecodeError:
         raise HTTPException(400, "Invalid JSON in sections") from None
     try:
@@ -952,6 +1023,9 @@ def form_update_sections(
                     business_context=business,
                     technical_approach=technical,
                     testing_contract=testing,
+                    success_patterns=success_patterns,
+                    risks_and_dependencies=risks_and_dependencies,
+                    section_provenance=section_provenance,
                 )
             ),
         )
@@ -1041,7 +1115,16 @@ def form_create_gap(
     description: str = Form(...),
     meeting_hint: str = Form(""),
     severity: str = Form("medium"),
+    severity_tier: str = Form("degrading"),
+    evidence: str = Form(""),
+    resolution_strategy: str = Form(""),
+    impact_notes: str = Form(""),
 ):
+    st = (
+        severity_tier
+        if severity_tier in ("blocking", "degrading", "minor")
+        else "degrading"
+    )
     try:
         get_store().create_gap(
             ContextGapCreate(
@@ -1049,6 +1132,10 @@ def form_create_gap(
                 description=description,
                 meeting_hint=meeting_hint,
                 severity=severity,
+                severity_tier=st,
+                evidence=evidence,
+                resolution_strategy=resolution_strategy,
+                impact_notes=impact_notes,
             )
         )
     except KeyError:
@@ -1173,6 +1260,41 @@ def form_extraction_accept_all(request: Request, meeting_id: str):
         get_store().meeting_extraction_accept_all(meeting_id)
     except KeyError:
         raise HTTPException(404, "Meeting not found") from None
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    return RedirectResponse(url="/context", status_code=303)
+
+
+@page_router.post("/meetings/{meeting_id}/unresolved-to-gaps")
+def form_unresolved_to_gaps(
+    request: Request,
+    meeting_id: str,
+    story_id: str = Form(...),
+    indices: str = Form(""),
+    all_unresolved: str = Form(""),
+    gap_type: str = Form("meeting_unresolved"),
+    meeting_hint_override: str = Form(""),
+):
+    idx_list: list[int] = []
+    for part in (indices or "").replace(",", " ").split():
+        p = part.strip()
+        if p.isdigit():
+            idx_list.append(int(p))
+    all_u = all_unresolved in ("1", "on", "true", "yes")
+    try:
+        body = UnresolvedToGapsBody(
+            story_id=story_id,
+            indices=idx_list,
+            all_unresolved=all_u,
+            gap_type=(gap_type or "meeting_unresolved")[:120],
+            meeting_hint_override=(meeting_hint_override or "")[:200],
+        )
+    except ValidationError as e:
+        raise HTTPException(422, detail=e.errors()) from None
+    try:
+        get_store().promote_meeting_unresolved_to_gaps(meeting_id, body)
+    except KeyError:
+        raise HTTPException(404, "Meeting or story not found") from None
     except ValueError as e:
         raise HTTPException(400, str(e)) from None
     return RedirectResponse(url="/context", status_code=303)

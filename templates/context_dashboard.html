@@ -345,16 +345,30 @@
             </select>
           </div>
           <div>
-            <label for="severity">Severity</label>
+            <label for="severity">Severity (legacy label)</label>
             <select id="severity" name="severity">
               <option>low</option>
               <option selected>medium</option>
               <option>high</option>
             </select>
           </div>
+          <div>
+            <label for="severity_tier">EA tier</label>
+            <select id="severity_tier" name="severity_tier">
+              <option value="blocking">blocking</option>
+              <option value="degrading" selected>degrading</option>
+              <option value="minor">minor</option>
+            </select>
+          </div>
         </div>
         <label for="meeting_hint">Meeting hint (M1–M7)</label>
         <input id="meeting_hint" name="meeting_hint" placeholder="e.g. M3">
+        <label for="evidence">Evidence (optional)</label>
+        <textarea id="evidence" name="evidence" rows="2" placeholder="What we observed"></textarea>
+        <label for="resolution_strategy">Resolution strategy (optional)</label>
+        <textarea id="resolution_strategy" name="resolution_strategy" rows="2"></textarea>
+        <label for="impact_notes">Impact notes (optional)</label>
+        <textarea id="impact_notes" name="impact_notes" rows="2"></textarea>
         <label for="gdesc">Gap description</label>
         <textarea id="gdesc" name="description" required rows="2"></textarea>
         <div style="margin-top:0.75rem"><button type="submit">Record gap</button></div>
@@ -365,7 +379,7 @@
         {% for g in gaps %}
         <div class="gap-item">
           <strong>{{ g.description[:80] }}{% if g.description|length > 80 %}…{% endif %}</strong>
-          <span class="muted"> · {{ g.severity }} {% if g.meeting_hint %}· {{ g.meeting_hint }}{% endif %}</span>
+          <span class="muted"> · {{ g.severity }} / tier {{ g.severity_tier }}{% if g.meeting_hint %} · {{ g.meeting_hint }}{% endif %}{% if g.evidence %} · evidence set{% endif %}</span>
           <form method="post" action="/context/gaps/{{ g.id }}/resolve" style="display:inline;margin-left:0.5rem">
             <button type="submit" class="small secondary">Resolve</button>
           </form>
@@ -377,6 +391,17 @@
 
     <div class="card">
       <h2>Meetings registry</h2>
+      {% if pending_meeting_extractions %}
+      <div style="margin:0 0 0.85rem 0;padding:0.75rem;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+        <strong>Pending extraction confirmation</strong>
+        <span class="muted" style="font-size:0.85rem"> — <code>GET /api/context/meetings/pending-extraction-confirmation</code></span>
+        <ul style="margin:0.35rem 0 0 0;padding-left:1.1rem;font-size:0.9rem">
+          {% for pe in pending_meeting_extractions %}
+          <li class="muted"><code>{{ pe.meeting.id[:8] }}…</code> {{ pe.meeting.meeting_type.value }} — {{ pe.summary.n_proposed }} proposed · {{ pe.summary.n_unresolved }} unresolved · {{ pe.summary.n_pending_item_reviews }} item reviews pending</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
       <form method="post" action="/context/meetings" class="row">
         <div>
           <label for="mt">Type</label>
@@ -439,8 +464,8 @@
             </form>
           </div>
           <form method="post" action="/context/meetings/{{ m.id }}/transcript" style="margin-top:0.5rem">
-            <label>Transcript (use lines like <code>DECISION:</code>, <code>ACTION:</code>, <code>REQ:</code>)</label>
-            <textarea name="transcript" rows="5" placeholder="DECISION: We ship OAuth2 first&#10;ACTION: Bob updates the diagram">{{ m.transcript or '' }}</textarea>
+            <label>Transcript — <code>DECISION:</code> / <code>ACTION:</code> / <code>REQ:</code>; <code>UNRESOLVED:</code> or <code>OPEN:</code> or <code>??</code> (ambiguity) → EA <code>unresolved[]</code></label>
+            <textarea name="transcript" rows="5" placeholder="DECISION: We ship OAuth2 first&#10;UNRESOLVED: SLA for password reset still TBD&#10;ACTION: Bob updates the diagram">{{ m.transcript or '' }}</textarea>
             <button type="submit" class="secondary" style="margin-top:0.35rem">Save transcript</button>
           </form>
           <form method="post" action="/context/meetings/{{ m.id }}/extract-stub" style="margin-top:0.5rem">
@@ -483,6 +508,44 @@
             {% endif %}
           </div>
           {% endif %}
+          {% if m.extraction_draft and m.extraction_draft.get('unresolved') %}
+          <div class="muted" style="margin-top:0.75rem">
+            <strong>Unresolved (EA Phase 8)</strong>
+            <span class="muted" style="font-size:0.8rem"> — <code>POST /api/context/meetings/{id}/unresolved-to-gaps</code></span>
+            <ol style="margin:0.35rem 0 0 0;padding-left:1.25rem">
+              {% for ur in m.extraction_draft.get('unresolved', []) %}
+              <li style="margin:0.25rem 0"><span class="badge badge-draft">{{ ur.get('kind', 'open_question') }}</span> {{ ur.get('text', '') }}</li>
+              {% endfor %}
+            </ol>
+            {% if m.extraction_status == 'draft' %}
+            <form method="post" action="/context/meetings/{{ m.id }}/unresolved-to-gaps" class="row" style="margin-top:0.5rem;flex-wrap:wrap;gap:0.5rem;align-items:flex-end">
+              <div>
+                <label>Story</label>
+                <select name="story_id" required>
+                  <option value="">— select —</option>
+                  {% for b in story_blocks %}
+                  <option value="{{ b.story.id }}">{{ b.story.title }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label>Indices</label>
+                <input name="indices" placeholder="0 or 0,1" style="width:7rem" title="Comma or space separated">
+              </div>
+              <div>
+                <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.85rem;cursor:pointer;white-space:nowrap">
+                  <input type="checkbox" name="all_unresolved" value="1" style="width:auto"> All unresolved
+                </label>
+              </div>
+              <div style="flex:1;min-width:8rem">
+                <label>Gap type</label>
+                <input name="gap_type" value="meeting_unresolved">
+              </div>
+              <button type="submit" class="secondary">Promote to gaps</button>
+            </form>
+            {% endif %}
+          </div>
+          {% endif %}
           {% if m.extraction_status == 'confirmed' and m.extraction_confirmed_at %}
           <p class="muted" style="margin-top:0.5rem">Confirmed at {{ m.extraction_confirmed_at }}</p>
           {% endif %}
@@ -514,6 +577,9 @@
         {% elif p.gap_analysis and p.gap_analysis.get('gaps') %}
         <p class="muted" style="margin:0.35rem 0">Gaps: {{ p.gap_analysis.get('gaps') | join(', ') }}</p>
         {% endif %}
+        {% if p.gap_analysis and p.gap_analysis.get('ea_hints') %}
+        <p class="muted" style="margin:0.35rem 0">EA hints: {{ p.gap_analysis.get('ea_hints') | join(' · ') }}</p>
+        {% endif %}
         {% if p.sign_offs %}
         <div class="signoffs">Sign-offs:
           {% for s in p.sign_offs %}
@@ -528,10 +594,16 @@
         <form method="post" action="/context/packages/{{ p.id }}/sections">
           <label>Business context (JSON)</label>
           <textarea name="business_json">{{ pv.business_json }}</textarea>
-          <label>Technical approach (JSON)</label>
+          <label>Technical approach (JSON) — API alias: <code>technical_context</code></label>
           <textarea name="technical_json">{{ pv.technical_json }}</textarea>
           <label>Testing contract (JSON)</label>
           <textarea name="testing_json">{{ pv.testing_json }}</textarea>
+          <label>Success patterns (JSON, EA Phase 7)</label>
+          <textarea name="success_patterns_json">{{ pv.success_patterns_json }}</textarea>
+          <label>Risks &amp; dependencies (JSON)</label>
+          <textarea name="risks_json">{{ pv.risks_json }}</textarea>
+          <label>Section provenance (JSON)</label>
+          <textarea name="provenance_json">{{ pv.provenance_json }}</textarea>
           <div style="margin-top:0.5rem"><button type="submit" class="secondary">Save sections &amp; recompute readiness</button></div>
         </form>
 

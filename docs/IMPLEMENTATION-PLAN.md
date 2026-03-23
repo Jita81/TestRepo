@@ -16,7 +16,7 @@
 | **Integrations** | GitHub SCM webhook (push/ping) — **shipped**; PM/chat/MCP — **not**. |
 | **Decision intelligence** | **D1–D12 decision agent fleet** + shared **`llm_client`** (`CONTEXT_LLM_MODEL`) — **shipped** (`GET/POST /api/context/decision-agents/...`). |
 | **Codebase intelligence** | **Policy** ([agent-context-retrieval.md](agent-context-retrieval.md)); **indexed regex** implementation — **Phase 11** below. |
-| **Enterprise target** | Seven systems, five UX surfaces, event bus, EA data contracts — **Phases 7–14**. |
+| **Enterprise target** | Seven systems, five UX surfaces, event bus, EA data contracts — **Phases 7–8 shipped**; **Phases 9–14** remain. |
 
 ---
 
@@ -34,6 +34,8 @@ These map to README **agent phases 1–6** plus adjacent features.
 | **P6 — Ops** | `/health`, `/ready`, `cli migrate|seed|backup`, deploy runbook, reference dataset. |
 | **Satellite — Agent context policy** | Indexed regex + semantic dual-mode documented. |
 | **Satellite — Decision fleet** | Twelve LLM agents, one model config, `invoke` API + audits. |
+| **P7 — EA contracts** | Package snapshot **schema v3**: `success_patterns`, `risks_and_dependencies`, `section_provenance`; API `technical_context` alias; gap `severity_tier` + evidence / resolution / impact. |
+| **P8 — Meeting intelligence v2** | Extraction draft **schema v2** (`unresolved[]`); promote to `context_gaps`; `GET .../pending-extraction-confirmation`. |
 
 ---
 
@@ -41,8 +43,8 @@ These map to README **agent phases 1–6** plus adjacent features.
 
 | Phase | Theme | Primary outcome |
 |-------|--------|-----------------|
-| **7** | **Contracts** | EA context package sections + gap contract; migrate from three JSON blobs. |
-| **8** | **Meeting intelligence v2** | Extraction schema → EA arrays; `unresolved` → gaps; sufficiency stub. |
+| **7** | **Contracts** | **Done** — EA package extensions + gap contract fields; SQLite migration; D7 hash includes extensions. |
+| **8** | **Meeting intelligence v2** | **Done** — EA extraction subset + `unresolved[]` → gaps + pending-confirmation API. |
 | **9** | **Process & tiers** | Readiness score; auto/quick/full confirmation; `process.*` events / outbox. |
 | **10** | **Manufacturing gateway** | Explicit prompt compiler module; predicted queue heuristic. |
 | **11** | **Codebase intel + regex index** | Mirror + trigram/sparse index; search API; pattern candidates. |
@@ -97,14 +99,14 @@ Align storage/API with EA **context package** sections (`technical_context`, `su
 ## 8. Phase 7–14 — “done when” checklists
 
 ### Phase 7 — Context package & gap contracts
-- [ ] Versioned package schema + migration from current JSON.
-- [ ] Dashboard minimal support for new sections.
-- [ ] D7 hash/snapshot rules preserved.
+- [x] Versioned package schema + migration from current JSON (`package_schema_version` **3**; snapshot `schema_version` **3**; new SQLite columns + idempotent `ALTER`).
+- [x] Dashboard minimal support for new sections (success patterns, risks & dependencies, provenance JSON; EA gap tier + evidence fields).
+- [x] D7 hash/snapshot rules preserved (canonical payload includes extensions; `content_hash` covers full frozen document).
 
 ### Phase 8 — Meeting intelligence v2
-- [ ] Draft JSON ↔ EA meeting extraction subset schema.
-- [ ] `unresolved[]` → gap pipeline.
-- [ ] API to list pending confirmations.
+- [x] Draft JSON ↔ EA meeting extraction subset schema (`extraction_schema_version` **2**; `proposed_items` + `unresolved[]`; `normalize_extraction_draft` / `meeting_extraction_schema.py`; LLM + stub emit `unresolved`).
+- [x] `unresolved[]` → gap pipeline (`POST .../unresolved-to-gaps`, dashboard form; audit `meeting_unresolved_promoted_to_gaps`).
+- [x] API to list pending confirmations (`GET .../meetings/pending-extraction-confirmation`).
 
 ### Phase 9 — Process orchestration & tiered confirmation
 - [ ] Readiness score stored and documented.
