@@ -410,6 +410,19 @@ class ExtractionItemReviewBody(BaseModel):
     decision: Literal["accept", "reject"]
 
 
+class ProcessOutboxRead(BaseModel):
+    """Phase 9: pending process events for external bus / workers (MVP outbox)."""
+
+    id: str
+    project_id: str
+    created_at: datetime
+    event_type: str
+    entity_type: str = ""
+    entity_id: str = ""
+    payload: dict[str, Any] = Field(default_factory=dict)
+    processed_at: Optional[datetime] = None
+
+
 class AuditEventRead(BaseModel):
     id: str
     project_id: str

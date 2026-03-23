@@ -17,6 +17,10 @@ from src.context_platform.context_actor import get_actor
 from src.context_platform.context_project import DEFAULT_PROJECT_ID, get_project_id
 from src.context_platform.meeting_extraction import extract_transcript_auto
 from src.context_platform.meeting_extraction_schema import normalize_extraction_draft
+from src.context_platform.process_orchestration import (
+    package_qualifies_quick_path,
+    quick_path_min_readiness_threshold,
+)
 from src.context_platform.package_models import (
     ContextPackageSectionsV2,
     compute_readiness_v2,
@@ -56,6 +60,7 @@ from src.context_platform.schemas import (
     MeetingTypeRef,
     PackageStatus,
     PhaseKind,
+    ProcessOutboxRead,
     RoadmapCycleCreate,
     RoadmapCycleRead,
     SignOffCreate,
@@ -419,6 +424,20 @@ CREATE TABLE IF NOT EXISTS artifacts (
     actor TEXT NOT NULL DEFAULT 'anonymous',
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS process_outbox (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    created_at TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL DEFAULT '',
+    entity_id TEXT NOT NULL DEFAULT '',
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    processed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_process_outbox_project_pending
+ON process_outbox(project_id, processed_at);
 """
 
 
@@ -696,6 +715,32 @@ def _ensure_phase7_ea_contracts(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_phase9_process_outbox(conn: sqlite3.Connection) -> None:
+    """Phase 9: durable outbox rows for process orchestration (bus stub)."""
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS process_outbox (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id),
+            created_at TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            entity_type TEXT NOT NULL DEFAULT '',
+            entity_id TEXT NOT NULL DEFAULT '',
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            processed_at TEXT
+        )
+        """
+    )
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_process_outbox_project_pending ON process_outbox(project_id, processed_at)"
+        )
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+
+
 def _ensure_traceability_project_scope(conn: sqlite3.Connection) -> None:
     """Phase 1: project_id on audit_events, decision_records, artifacts."""
     for table in ("audit_events", "decision_records", "artifacts"):
@@ -749,6 +794,7 @@ class ContextStore:
             if _table_exists(conn, "meetings"):
                 _ensure_meeting_agenda(conn)
             _ensure_phase7_ea_contracts(conn)
+            _ensure_phase9_process_outbox(conn)
             mcols = _table_columns(conn, "manufacturing_requests")
             for col, ddl in [
                 ("started_at", "ALTER TABLE manufacturing_requests ADD COLUMN started_at TEXT"),
@@ -896,6 +942,197 @@ class ContextStore:
         """Cheap connectivity check for `/ready` (Phase 6)."""
         with self._connect() as conn:
             conn.execute("SELECT 1").fetchone()
+
+    def _enqueue_process_outbox(
+        self,
+        event_type: str,
+        payload: dict[str, Any],
+        *,
+        entity_type: str = "",
+        entity_id: str = "",
+        project_id: Optional[str] = None,
+    ) -> str:
+        pid = project_id if project_id is not None else get_project_id()
+        oid = _uid()
+        ts = _now()
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO process_outbox
+                (id, project_id, created_at, event_type, entity_type, entity_id, payload_json)
+                VALUES (?,?,?,?,?,?,?)""",
+                (
+                    oid,
+                    pid,
+                    ts,
+                    event_type,
+                    entity_type,
+                    entity_id,
+                    json.dumps(payload, ensure_ascii=False),
+                ),
+            )
+            conn.commit()
+        return oid
+
+    def _process_outbox_pending_duplicate(
+        self,
+        *,
+        project_id: str,
+        event_type: str,
+        entity_type: str,
+        entity_id: str,
+    ) -> bool:
+        with self._connect() as conn:
+            r = conn.execute(
+                """SELECT 1 FROM process_outbox WHERE project_id = ? AND event_type = ?
+                AND entity_type = ? AND entity_id = ? AND processed_at IS NULL LIMIT 1""",
+                (project_id, event_type, entity_type, entity_id),
+            ).fetchone()
+        return r is not None
+
+    def _emit_package_quick_path_if_applicable(
+        self, out: ContextPackageRead, *, force: bool = False
+    ) -> bool:
+        if not package_qualifies_quick_path(out.readiness_score, out.gap_analysis):
+            return False
+        prj = self.get_project_id_for_package(out.id)
+        if not force and self._process_outbox_pending_duplicate(
+            project_id=prj,
+            event_type="package.quick_path_eligible",
+            entity_type="context_package",
+            entity_id=out.id,
+        ):
+            return False
+        th = quick_path_min_readiness_threshold()
+        self.log_audit(
+            "process.package_quick_path_eligible",
+            "context_package",
+            out.id,
+            project_id=prj,
+            detail={
+                "readiness_score": out.readiness_score,
+                "min_readiness": th,
+                "rule": "readiness_min_and_zero_gaps",
+            },
+        )
+        self._enqueue_process_outbox(
+            "package.quick_path_eligible",
+            {
+                "context_package_id": out.id,
+                "story_id": out.story_id,
+                "readiness_score": out.readiness_score,
+                "min_readiness": th,
+            },
+            entity_type="context_package",
+            entity_id=out.id,
+            project_id=prj,
+        )
+        return True
+
+    def _maybe_auto_accept_note_only_extraction(self, meeting_id: str) -> bool:
+        if not _env_truthy("CONTEXT_PROCESS_AUTO_ACCEPT_NOTE_ONLY_EXTRACTION"):
+            return False
+        m = self.get_meeting(meeting_id)
+        if m.extraction_status != "draft":
+            return False
+        draft = dict(m.extraction_draft or {})
+        items = list(draft.get("proposed_items") or [])
+        if not items:
+            return False
+        if not all(
+            isinstance(x, dict) and str(x.get("type", "note")).lower() == "note"
+            for x in items
+        ):
+            return False
+        self.meeting_extraction_accept_all(meeting_id)
+        prj = m.project_id
+        self.log_audit(
+            "process.meeting_extraction_auto_accepted",
+            "meeting",
+            meeting_id,
+            project_id=prj,
+            detail={"n_items": len(items), "rule": "note_only_items"},
+        )
+        self._enqueue_process_outbox(
+            "meeting.extraction_auto_accepted",
+            {
+                "meeting_id": meeting_id,
+                "n_items": len(items),
+                "rule": "note_only_items",
+            },
+            entity_type="meeting",
+            entity_id=meeting_id,
+            project_id=prj,
+        )
+        return True
+
+    def list_process_outbox(
+        self, *, pending_only: bool = True, limit: int = 100
+    ) -> list[ProcessOutboxRead]:
+        prj = get_project_id()
+        lim = min(max(limit, 1), 500)
+        q = "SELECT * FROM process_outbox WHERE project_id = ?"
+        params: list[Any] = [prj]
+        if pending_only:
+            q += " AND processed_at IS NULL"
+        q += " ORDER BY created_at DESC LIMIT ?"
+        params.append(lim)
+        with self._connect() as conn:
+            rows = conn.execute(q, params).fetchall()
+        return [self._row_to_process_outbox(row) for row in rows]
+
+    def _row_to_process_outbox(self, row: sqlite3.Row) -> ProcessOutboxRead:
+        raw = row["payload_json"] or "{}"
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        proc = row["processed_at"] if "processed_at" in row.keys() else None
+        return ProcessOutboxRead(
+            id=row["id"],
+            project_id=row["project_id"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+            event_type=row["event_type"],
+            entity_type=row["entity_type"] or "",
+            entity_id=row["entity_id"] or "",
+            payload=payload,
+            processed_at=datetime.fromisoformat(proc) if proc else None,
+        )
+
+    def ack_process_outbox(self, outbox_id: str) -> ProcessOutboxRead:
+        prj = get_project_id()
+        ts = _now()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """UPDATE process_outbox SET processed_at = ? WHERE id = ? AND project_id = ?
+                AND processed_at IS NULL""",
+                (ts, outbox_id, prj),
+            )
+            if cur.rowcount == 0:
+                raise KeyError("process_outbox_not_found")
+            conn.commit()
+            row = conn.execute(
+                "SELECT * FROM process_outbox WHERE id = ?", (outbox_id,)
+            ).fetchone()
+        if not row:
+            raise KeyError("process_outbox_not_found")
+        return self._row_to_process_outbox(row)
+
+    def evaluate_context_package_process_rules(self, package_id: str) -> dict[str, Any]:
+        """Re-run quick-path rule (dedupes against pending outbox rows)."""
+
+        out = self.get_context_package(package_id)
+        eligible = package_qualifies_quick_path(out.readiness_score, out.gap_analysis)
+        emitted = False
+        if eligible:
+            emitted = self._emit_package_quick_path_if_applicable(out, force=False)
+        return {
+            "context_package_id": package_id,
+            "quick_path_eligible_now": eligible,
+            "min_readiness_configured": quick_path_min_readiness_threshold(),
+            "process_event_emitted": emitted,
+        }
 
     def log_audit(
         self,
@@ -2027,6 +2264,7 @@ class ContextStore:
                 "after": _package_audit_snapshot(out),
             },
         )
+        self._emit_package_quick_path_if_applicable(out, force=False)
         return out
 
     def _approval_snapshot_payload_conn(
@@ -2759,6 +2997,7 @@ class ContextStore:
                 "extraction_schema_version": draft.get("extraction_schema_version"),
             },
         )
+        self._maybe_auto_accept_note_only_extraction(meeting_id)
         return self.get_meeting(meeting_id)
 
     def set_meeting_extraction_item_review(
