@@ -352,6 +352,16 @@ Every output document has a defined owner, reviewer, and sign-off authority. Not
 
 ---
 
+## 07 — Agent context retrieval (semantic + indexed text search)
+
+Agents need **two kinds of retrieval** from the codebase: **semantic** (embeddings / similarity) for fuzzy “what is this about?” questions, and **fast text / regex search** for tasks that only resolve by matching concrete patterns in source. In large repositories, **unindexed** full-tree grep scales poorly and stalls interactive agent loops.
+
+**Platform policy:** treat **indexed regex search** (trigram-style inverted indexes and successors — sparse n-grams, augmented posting lists, etc.) as a **first-class complement** to semantic indexes and to LSP-style structure, not an afterthought. Keep **context packages** and other outputs **grep-friendly** where it helps (stable strings, paths, identifiers).
+
+**Detail:** [docs/agent-context-retrieval.md](agent-context-retrieval.md) (synthesis + implications for manufacturing, Epic G, and context package authoring).
+
+---
+
 ## Closing Principle
 
 > **The platform proposes. Humans approve. Every time.**

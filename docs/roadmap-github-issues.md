@@ -295,6 +295,8 @@ Post agenda before meeting; notify when extraction ready for review; optional re
 
 ## Epic G — Codebase intelligence
 
+**Platform note:** Agent-facing retrieval should combine **semantic indexes** with **indexed regex / text search** (trigram-style and successors); see [agent-context-retrieval.md](agent-context-retrieval.md) and **§07** in [context-platform-process-architecture.md](context-platform-process-architecture.md).
+
 ### Issue G1 — Repository clone + static scan job
 
 **Labels:** `codebase-intel`

@@ -2,7 +2,7 @@
 
 Reference implementation for the **Automated Agile — Context Engineering Platform**: a **self-curating context graph** (roadmap → story → **D7** context package → **D8** sprint commitment → **D9** manufacturing → **D10** triage → **D11** improvement backlog) with **meetings (D4 extraction)**, **audit trail**, **decision/artifact records**, and **project-scoped** workspaces.
 
-**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Deploy / ops:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
+**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Deploy / ops:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
 
 ---
 
@@ -41,7 +41,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Auth | I1 | **Partial** — optional **dashboard** session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`); **API key** for `/api/*`; string actor; no OAuth/RBAC |
 | Integrations | F | **Phase 5 (partial)** — GitHub **push/ping** webhook → `audit_events`; optional `story_id` + `context_project` query params; **not** PR events or normalized event table |
 | Ops / hardening | I3 / Phase 6 | **Done** — **`GET /health`**, **`GET /ready`**, CLI **`python -m src.context_platform.cli`**, SQLite backup guidance, reference dataset **`prj_reference`**; **Postgres** documented as future ([docs/postgres-notes.md](docs/postgres-notes.md)) |
-| Codebase intelligence | G | **Not done** |
+| Codebase intelligence | G | **Not done** — policy for **indexed regex + semantic** retrieval: [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) |
 
 ---
 
@@ -242,6 +242,7 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 ├── .github/workflows/      # Docker build CI
 ├── docs/
 │   ├── context-platform-process-architecture.md
+│   ├── agent-context-retrieval.md
 │   ├── deploy-runbook.md
 │   ├── postgres-notes.md
 │   └── roadmap-github-issues.md
