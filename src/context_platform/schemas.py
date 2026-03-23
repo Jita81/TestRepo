@@ -414,3 +414,13 @@ class ImprovementItemRead(BaseModel):
     priority: str
     status: str
     created_at: datetime
+
+
+class DecisionAgentInvoke(BaseModel):
+    """
+    Shared body for D1–D12 decision agents: same LLM pipeline, per-decision prompt.
+    Put graph excerpts, story ids, package summaries, etc. in ``context``.
+    """
+
+    context: dict[str, Any] = Field(default_factory=dict)
+    extra_instructions: str = Field(default="", max_length=8000)

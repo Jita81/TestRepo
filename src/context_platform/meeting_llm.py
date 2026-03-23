@@ -1,11 +1,11 @@
-"""Optional OpenAI extraction for meeting transcripts (D2). Falls back via caller."""
+"""Optional OpenAI extraction for meeting transcripts (D4/D2 pipeline). Falls back via caller."""
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 from typing import Any, Optional
+
+from src.context_platform.llm_client import chat_json, llm_configured
 
 logger = logging.getLogger(__name__)
 
@@ -16,20 +16,11 @@ def try_llm_extract(text: str) -> Optional[dict[str, Any]]:
     """
     If OPENAI_API_KEY is set and openai is installed, return structured extraction.
     Returns None on skip, import failure, or API/parse errors (caller uses stub).
+    Uses the shared :mod:`llm_client` (``CONTEXT_LLM_MODEL`` / ``OPENAI_MODEL``).
     """
 
-    key = (os.environ.get("OPENAI_API_KEY") or "").strip()
-    if not key:
+    if not llm_configured():
         return None
-
-    try:
-        from openai import OpenAI
-    except ImportError:
-        logger.warning("openai package not installed; skipping LLM extraction")
-        return None
-
-    model = (os.environ.get("OPENAI_MODEL") or "gpt-4o-mini").strip()
-    client = OpenAI(api_key=key)
 
     system = """You extract structured items from a meeting transcript for software delivery.
 Return ONLY valid JSON with exactly this shape:
@@ -41,20 +32,10 @@ Rules:
 - note: other important context
 - Omit empty items; keep text concise."""
 
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": text[:_MAX_TRANSCRIPT_CHARS]},
-            ],
-            temperature=0.2,
-            response_format={"type": "json_object"},
-        )
-        raw = resp.choices[0].message.content or "{}"
-        data = json.loads(raw)
-    except Exception as e:
-        logger.warning("LLM extraction failed: %s", e)
+    data, err, model = chat_json(system, text[:_MAX_TRANSCRIPT_CHARS], temperature=0.2)
+    if err or data is None:
+        if err and err not in ("no_api_key", "openai_not_installed"):
+            logger.warning("LLM extraction failed: %s", err)
         return None
 
     items = data.get("proposed_items")
@@ -79,6 +60,6 @@ Rules:
         return None
 
     return {
-        "extractor": f"openai:{model}",
+        "extractor": f"llm:{model}",
         "proposed_items": normalized,
     }
