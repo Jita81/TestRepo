@@ -2,7 +2,7 @@
 
 Reference implementation for the **Automated Agile — Context Engineering Platform**: a **self-curating context graph** (roadmap → story → **D7** context package → **D8** sprint commitment → **D9** manufacturing → **D10** triage → **D11** improvement backlog) with **meetings (D4 extraction)**, **audit trail**, **decision/artifact records**, and **project-scoped** workspaces.
 
-**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
+**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Deploy / ops:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
 
 ---
 
@@ -78,11 +78,12 @@ Phase **6** is complete; further work is feature backlog (Epic F/G, full PG port
 ```bash
 pip install -r requirements.txt
 cp .env.example .env   # optional
-python run.py
+python3 run.py         # or: python run.py
 ```
 
-- **Dashboard:** http://localhost:8000/context ( `/` redirects here )
+- **Dashboard:** http://localhost:8000/context (`/` redirects here)
 - **OpenAPI:** http://localhost:8000/docs
+- **Health:** http://localhost:8000/health · **Readiness (DB):** http://localhost:8000/ready
 
 With **`CONTEXT_DASHBOARD_PASSWORD`** + **`CONTEXT_SESSION_SECRET`** (≥32 chars) set, the browser must sign in at **`/context/login`** before using the dashboard. Omit them for local open access.
 
@@ -90,47 +91,66 @@ With **`CONTEXT_DASHBOARD_PASSWORD`** + **`CONTEXT_SESSION_SECRET`** (≥32 char
 
 ## Deployment
 
-### Docker (recommended)
+**Full operator guide:** [docs/deploy-runbook.md](docs/deploy-runbook.md) (backups, migrations CLI, seed data, restore). This section is the short path.
 
-```bash
-docker compose up --build
-```
+### Run with Docker Compose (recommended)
 
-- App listens on **8000**.
-- SQLite and manufacturing outputs use a **named volume** (`data`) so they survive restarts—see [docker-compose.yml](docker-compose.yml).
+1. **Build and start** (foreground logs):
 
-**Production checklist**
+   ```bash
+   docker compose up --build
+   ```
 
-| Item | Notes |
-|------|--------|
-| **Dashboard auth** | Set **`CONTEXT_DASHBOARD_PASSWORD`** and **`CONTEXT_SESSION_SECRET`** (≥32 chars, e.g. `openssl rand -hex 32`). Set **`CONTEXT_SESSION_HTTPS_ONLY=1`** when TLS terminates at the app. |
-| **REST** | Set **`CONTEXT_API_KEY`** so `/api/*` is not anonymous ( **`/api/context/webhooks/*`** is exempt — use **`CONTEXT_SCM_WEBHOOK_SECRET`** + GitHub HMAC instead ) |
-| **SCM webhook** | Set **`CONTEXT_SCM_WEBHOOK_SECRET`** and the same value in the GitHub hook’s **secret**; use HTTPS; optional **`?context_project=`** / **`?story_id=`** on the payload URL |
-| **Project default** | Set `CONTEXT_PROJECT_ID` or rely on UI cookie / `X-Context-Project` |
-| **Persistence** | Mount a volume at `/app/data` (see compose) or switch DB later |
-| **Manufacturing (D9)** | Image includes **`git`**. For the git adapter set `MANUFACTURING_GIT_URL` (and optionally `MANUFACTURING_PATCH_FILE`, `MANUFACTURING_RUN_CMD`). Needs outbound network to clone. |
-| **HTTPS** | Terminate TLS at your reverse proxy / platform load balancer |
-| **OpenAI** | Optional `OPENAI_API_KEY` for meeting extraction |
+2. **Check** the app is up:
 
-**Build image only**
+   ```bash
+   curl -sSf http://127.0.0.1:8000/health
+   curl -sSf http://127.0.0.1:8000/ready
+   ```
+
+3. **Open** the dashboard at http://localhost:8000/context
+
+The Compose file maps **8000 → 8000**, stores SQLite and manufacturing outputs on a **named volume** (`context_platform_data` → `/app/data`). The image includes a **container healthcheck** against `/ready` (see [docker-compose.yml](docker-compose.yml)).
+
+### Build and run the image alone
 
 ```bash
 docker build -t context-platform .
-docker run -p 8000:8000 -v context_data:/app/data \
+docker run -d --name ctx -p 8000:8000 \
+  -v context_data:/app/data \
   -e CONTEXT_API_KEY=your-api-key \
   -e CONTEXT_DASHBOARD_PASSWORD=your-dashboard-password \
-  -e CONTEXT_SESSION_SECRET=$(openssl rand -hex 32) \
+  -e CONTEXT_SESSION_SECRET="$(openssl rand -hex 32)" \
   context-platform
+curl -sSf http://127.0.0.1:8000/ready
 ```
 
-### CI
+Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respects `HOST` / `PORT`).
 
-The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml): each push runs **`docker build`** and a **`cli`** job (`migrate` + `seed` against a temp DB) so deploy automation stays validated (no registry push unless you extend the workflow).
+### Production checklist
 
-### Platform examples
+| Item | Notes |
+|------|--------|
+| **TLS** | Terminate HTTPS at your reverse proxy or platform; set **`CONTEXT_SESSION_HTTPS_ONLY=1`** when the app sees HTTPS. |
+| **Probes** | Liveness: **`GET /health`**. Readiness / dependency: **`GET /ready`** (503 if SQLite cannot be opened). |
+| **Dashboard auth** | **`CONTEXT_DASHBOARD_PASSWORD`** + **`CONTEXT_SESSION_SECRET`** (≥32 chars). |
+| **REST** | **`CONTEXT_API_KEY`** on `/api/*` — **`/api/context/webhooks/*`** is exempt; use **`CONTEXT_SCM_WEBHOOK_SECRET`** + GitHub HMAC for SCM. |
+| **SCM webhook** | Same secret in GitHub and **`CONTEXT_SCM_WEBHOOK_SECRET`**; webhook URL over HTTPS; optional **`?context_project=`** / **`?story_id=`**. |
+| **Persistence** | Mount a volume on **`/app/data`** (Compose does this). Back up the SQLite file per [docs/deploy-runbook.md](docs/deploy-runbook.md). |
+| **Manufacturing** | Image includes **`git`**. Set **`MANUFACTURING_*`** only if you use the git adapter; requires outbound network to clone. |
+| **OpenAI** | Optional **`OPENAI_API_KEY`** for meeting extraction. |
 
-- **Fly.io / Railway / Render:** Dockerfile deploy; set `PORT` if the platform injects it; bind `0.0.0.0` (default). Mount persistent disk for `/app/data`.
-- **Kubernetes:** Single Deployment + PVC for `/app/data`; Secret for env vars.
+### After deploy (optional)
+
+- **Reference demo data** (idempotent, project `prj_reference`):  
+  `docker compose exec web python -m src.context_platform.cli seed`  
+  (or run the same command on the host against `CONTEXT_DB_PATH`.)
+- **CI:** [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml) runs **`docker build`** plus a **`cli`** job (`migrate` + `seed`) on each push.
+
+### Platform notes
+
+- **Fly.io / Railway / Render:** Dockerfile deploy; bind **`0.0.0.0`**; mount persistent disk for **`/app/data`**; align **`PORT`** with the platform.
+- **Kubernetes:** Deployment + Service; **livenessProbe** → `/health`, **readinessProbe** → `/ready`; PVC for **`/app/data`**; Secrets for env vars.
 
 ---
 
@@ -157,9 +177,7 @@ The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docke
 `https://<host>/api/context/webhooks/scm/github`  
 Add **`?context_project=<project_id>`** if the default env project is wrong, and **`&story_id=<story_uuid>`** to attach a story (must exist in that project). Set **`CONTEXT_SCM_WEBHOOK_SECRET`** to a long random string; in GitHub use the same as the webhook **Secret** so `X-Hub-Signature-256` validates. Events appear in **`GET /api/context/audit-events`** as **`scm_push_received`**, **`scm_webhook_ping`**, or **`scm_webhook_event`**.
 
-**Phase 6 (hardening):** Full operator notes in **[docs/deploy-runbook.md](docs/deploy-runbook.md)** (health, backups, migrations, seed). **PostgreSQL** is not wired; see **[docs/postgres-notes.md](docs/postgres-notes.md)**. Load the bundled reference graph:  
-`python -m src.context_platform.cli seed`  
-(idempotent project **`prj_reference`** — see [data/reference_manifest.json](data/reference_manifest.json)).
+**Phase 6:** Operator procedures, backups, and **`python -m src.context_platform.cli`** (`migrate` / `seed` / `backup`) — [docs/deploy-runbook.md](docs/deploy-runbook.md). **PostgreSQL:** [docs/postgres-notes.md](docs/postgres-notes.md). Reference seed: [data/reference_manifest.json](data/reference_manifest.json).
 
 ---
 

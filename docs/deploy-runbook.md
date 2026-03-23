@@ -79,7 +79,7 @@ sqlite3 data/context_platform.db ".backup 'data/backups/snapshot.db'"
 docker compose up --build
 ```
 
-Mount a volume on `/app/data` so the DB survives restarts (see `docker-compose.yml`).
+Mount a volume on `/app/data` so the DB survives restarts (see `docker-compose.yml`). The Compose service and the **Dockerfile** both define a **`HEALTHCHECK`** that hits **`GET /ready`** (uses `PORT` inside the container, default 8000). Use **`docker compose ps`** to confirm `healthy`.
 
 ## 8. PostgreSQL
 
