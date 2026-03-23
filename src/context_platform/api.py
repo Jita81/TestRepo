@@ -665,6 +665,26 @@ def api_ack_process_outbox(outbox_id: str):
         raise HTTPException(404, "Outbox row not found") from None
 
 
+@api_router.get("/codebase-search")
+def api_codebase_search(
+    q: str = Query(..., min_length=1, max_length=500, description="Space-separated substrings (AND)."),
+    verify_pattern: Optional[str] = Query(
+        None,
+        max_length=800,
+        description="Optional regex; when set, candidates must match (disk if CONTEXT_CODEBASE_INDEX_ROOT else snippet).",
+    ),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Phase 11: indexed substring search + optional regex verify pass."""
+
+    try:
+        return get_store().search_codebase_index(
+            q, verify_pattern=verify_pattern, limit=limit
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @api_router.get("/improvement-items")
 def api_list_improvements(status: Optional[str] = "open", limit: int = 200):
     return [_dump(x) for x in get_store().list_improvement_items(status=status, limit=limit)]
