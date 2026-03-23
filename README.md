@@ -27,7 +27,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Area | Spec / epic | Status in repo |
 |------|-------------|----------------|
 | Roadmap hierarchy | A1 | **Done** — cycle → phase → feature → story |
-| Structured context package + D7 snapshot | B1, B2 | **Done** — Pydantic v2 core sections; **Phase 7** adds EA extensions (`success_patterns`, `risks_and_dependencies`, `section_provenance`) + snapshot **schema v3**; `technical_context` API alias |
+| Structured context package + D7 snapshot | B1, B2 | **Done** — Pydantic v2 core sections; **Phase 7** EA extensions + snapshot **schema v3**; **`readiness_score`** persisted on `context_packages` (recomputed on save); **Phase 9** env-gated **quick-path** rule (`process.*` + outbox) |
 | Gap analysis / readiness | B3 | **Partial** — readiness + gap hints + **Phase 7** `ea_hints` for extensions; **gap contract** fields (`severity_tier` blocking/degrading/minor, evidence, resolution, impact); not full blocking workflow UI |
 | Decision & artifact records | A2 | **Partial** — `decision_records` + `artifacts`; **D7, D8, D10, D4** wired; not full D1–D12 UI |
 | Audit / provenance | A3 | **Partial** — append-only events; **before/after** on key package + gap actions; not full graph diff |
@@ -48,7 +48,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 
 ## What’s left (grouped backlog)
 
-**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–8 done**; **Phases 9–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
+**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–9 done**; **Phases 10–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
 
 1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
 2. **Identity:** OAuth / SSO; roles (PO, CE, dev) beyond shared dashboard password; service accounts for automation.
@@ -80,7 +80,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 |-------|--------|
 | **7** | EA context package & gap **contracts** — **✅ Done** (extensions + migration + dashboard) |
 | **8** | Meeting intelligence v2 — **✅ Done** (`unresolved[]`, gaps pipeline, pending-confirmation API) |
-| **9** | Process orchestration & **tiered confirmation** |
+| **9** | Process orchestration & **tiered confirmation** — **✅ Done** (outbox, `process.*` audits, optional auto-accept) |
 | **10** | **Manufacturing gateway** module + prediction |
 | **11** | **Codebase intelligence** + **indexed regex** search |
 | **12** | Feedback hub & **Observatory** (baseline metrics) |
@@ -186,6 +186,7 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 | Integrations | **`POST /webhooks/scm/github`** — GitHub **push** / **ping** (JSON); signs with **`X-Hub-Signature-256`** when secret set |
 | Health (Phase 6) | **`GET /health`** (liveness), **`GET /ready`** (DB ping — 503 if store fails) |
 | Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
+| Process (Phase 9) | **`GET /process-outbox`**, **`POST /process-outbox/{id}/ack`**, **`POST /context-packages/{id}/evaluate-process-rules`** — filter audits with `action` prefix `process.` |
 
 **D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen (**Phase 7:** canonical snapshot includes EA extension JSON; `schema_version` **3** in stored snapshot).  
 **D8:** One story ↔ one sprint commitment; D7 required unless override env/checkbox.  
@@ -193,6 +194,8 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 **D1 (Phase 4):** Agenda lines stored in `meeting_agenda_items`; optional link to `context_gaps.id`; **generate-agenda** appends one item per unresolved gap in the project (skips gaps already linked to that meeting).
 
 **Phase 8 (meeting extraction v2):** Draft JSON uses **`extraction_schema_version` 2** with **`proposed_items`** + **`unresolved[]`** (normalized via `meeting_extraction_schema.normalize_extraction_draft`). Stub recognizes **`UNRESOLVED:`**, **`OPEN:`**, **`??`** lines; LLM returns the same shape when configured. **`POST /meetings/{id}/unresolved-to-gaps`** creates **`context_gaps`** on a chosen story (indices or all); audit action **`meeting_unresolved_promoted_to_gaps`**.
+
+**Phase 9 (process orchestration):** **`readiness_score`** is the canonical stored metric on each context package (0–100, from `compute_readiness_with_extensions` on PATCH). Set **`CONTEXT_PROCESS_QUICK_PATH_MIN_READINESS`** (e.g. `90`) to enable quick-path: when readiness ≥ threshold and **`gap_analysis.gaps`** is empty, the platform logs **`process.package_quick_path_eligible`** and enqueues **`process_outbox`**. Set **`CONTEXT_PROCESS_AUTO_ACCEPT_NOTE_ONLY_EXTRACTION=1`** to auto-run per-item accept-all after extraction when every draft line is type **`note`** — audit **`process.meeting_extraction_auto_accepted`**. List pending rows via **`GET /api/context/process-outbox`**; acknowledge with **`POST .../process-outbox/{id}/ack`** (worker stub).
 
 **Phase 5 (SCM):** Configure GitHub → **Webhooks** → URL  
 `https://<host>/api/context/webhooks/scm/github`  
@@ -216,6 +219,8 @@ Add **`?context_project=<project_id>`** if the default env project is wrong, and
 | `CONTEXT_DASHBOARD_USER` | `admin` | Dashboard login username |
 | `CONTEXT_SESSION_HTTPS_ONLY` | unset | `1` / `true` — `Secure` session cookie (use behind HTTPS) |
 | `CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT` | unset | `1` / `true` allows D8 without D7 |
+| `CONTEXT_PROCESS_QUICK_PATH_MIN_READINESS` | unset | Phase 9: e.g. `90` — emit **`process.package_quick_path_eligible`** + outbox when package readiness ≥ value and structural **`gaps`** list is empty |
+| `CONTEXT_PROCESS_AUTO_ACCEPT_NOTE_ONLY_EXTRACTION` | unset | `1` / `true` — after draft extraction, if all items are type **`note`**, auto-accept reviews + **`process.meeting_extraction_auto_accepted`** |
 | `OPENAI_API_KEY` | — | Required for LLM features (meeting extraction, **D1–D12 decision agents**) |
 | `CONTEXT_LLM_MODEL` | — | Preferred model id for **all** shared LLM calls (else `OPENAI_MODEL`) |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Fallback model when `CONTEXT_LLM_MODEL` unset |
@@ -286,6 +291,7 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 │   ├── middleware_*.py
 │   ├── meeting_extraction.py
 │   ├── meeting_extraction_schema.py  # Phase 8 — EA draft shape + summaries
+│   ├── process_orchestration.py      # Phase 9 — quick-path env helpers
 │   ├── manufacturing_worker.py
 │   ├── scm_webhook.py
 │   ├── llm_client.py
