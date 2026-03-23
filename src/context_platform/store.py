@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 from src.context_platform.context_actor import get_actor
 from src.context_platform.context_project import DEFAULT_PROJECT_ID, get_project_id
 from src.context_platform.meeting_extraction import extract_transcript_auto
+from src.context_platform.meeting_extraction_schema import normalize_extraction_draft
 from src.context_platform.package_models import (
     ContextPackageSectionsV2,
     compute_readiness_v2,
@@ -50,6 +51,7 @@ from src.context_platform.schemas import (
     ImprovementItemRead,
     MeetingExtractionConfirm,
     MeetingRead,
+    UnresolvedToGapsBody,
     MeetingTranscriptUpdate,
     MeetingTypeRef,
     PackageStatus,
@@ -1169,14 +1171,13 @@ class ContextStore:
 
     @staticmethod
     def _coerce_extraction_draft(draft: dict[str, Any]) -> dict[str, Any]:
-        out = dict(draft)
+        out = normalize_extraction_draft(dict(draft))
         items = list(out.get("proposed_items") or [])
         rev = dict(out.get("item_reviews") or {})
         for i in range(len(items)):
             k = str(i)
             if k not in rev:
                 rev[k] = "pending"
-        out["proposed_items"] = items
         out["item_reviews"] = rev
         return out
 
@@ -2584,6 +2585,19 @@ class ContextStore:
             ).fetchall()
         return [self._meeting_row_to_read(r) for r in rows]
 
+    def list_meetings_pending_extraction_confirmation(self) -> list[MeetingRead]:
+        """Phase 8: meetings with a draft extraction awaiting human review / confirm."""
+
+        prj = get_project_id()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM meetings WHERE project_id = ?
+                AND extraction_status = 'draft'
+                ORDER BY created_at DESC""",
+                (prj,),
+            ).fetchall()
+        return [self._meeting_row_to_read(r) for r in rows]
+
     def _agenda_row_to_read(self, row: sqlite3.Row) -> MeetingAgendaItemRead:
         return MeetingAgendaItemRead(
             id=row["id"],
@@ -2738,7 +2752,12 @@ class ContextStore:
             "extraction_drafted",
             "meeting",
             meeting_id,
-            detail={"extractor": draft.get("extractor"), "n_items": len(draft.get("proposed_items") or [])},
+            detail={
+                "extractor": draft.get("extractor"),
+                "n_items": len(draft.get("proposed_items") or []),
+                "n_unresolved": len(draft.get("unresolved") or []),
+                "extraction_schema_version": draft.get("extraction_schema_version"),
+            },
         )
         return self.get_meeting(meeting_id)
 
@@ -2882,6 +2901,65 @@ class ContextStore:
             detail={"n_confirmed": len(ci)},
         )
         return self.get_meeting(meeting_id)
+
+    def promote_meeting_unresolved_to_gaps(
+        self, meeting_id: str, data: UnresolvedToGapsBody
+    ) -> list[ContextGapRead]:
+        """Phase 8: turn draft ``unresolved[]`` lines into ``context_gaps`` on a story."""
+
+        m = self.get_meeting(meeting_id)
+        if m.extraction_status != "draft":
+            raise ValueError("no_active_draft")
+        self.get_story(data.story_id)
+        draft = self._coerce_extraction_draft(dict(m.extraction_draft))
+        unresolved = list(draft.get("unresolved") or [])
+        if not unresolved:
+            raise ValueError("no_unresolved_items")
+        if data.all_unresolved:
+            target_idx = list(range(len(unresolved)))
+        else:
+            target_idx = sorted({i for i in data.indices if isinstance(i, int)})
+        if not target_idx:
+            raise ValueError("no_unresolved_indices")
+        hint_base = (data.meeting_hint_override or "").strip() or m.meeting_type.value
+        created: list[ContextGapRead] = []
+        for i in target_idx:
+            if i < 0 or i >= len(unresolved):
+                raise ValueError("invalid_unresolved_index")
+            u = unresolved[i]
+            text = (u.get("text") or "").strip()
+            kind = (u.get("kind") or "open_question").strip()
+            desc = f"[{kind}] {text}"[:4000]
+            ev = (
+                f"meeting_id={meeting_id} unresolved_index={i} "
+                f"meeting_type={m.meeting_type.value}"
+            )
+            g = self.create_gap(
+                ContextGapCreate(
+                    story_id=data.story_id,
+                    context_package_id=None,
+                    description=desc,
+                    gap_type=(data.gap_type or "meeting_unresolved")[:120],
+                    severity="medium",
+                    meeting_hint=hint_base[:200],
+                    severity_tier="degrading",
+                    evidence=ev[:7990],
+                    resolution_strategy="",
+                    impact_notes="Promoted from meeting extraction unresolved[] (EA Phase 8).",
+                )
+            )
+            created.append(g)
+        self.log_audit(
+            "meeting_unresolved_promoted_to_gaps",
+            "meeting",
+            meeting_id,
+            detail={
+                "story_id": data.story_id,
+                "n_gaps": len(created),
+                "indices": target_idx,
+            },
+        )
+        return created
 
     def list_improvement_items(
         self, *, status: Optional[str] = "open", limit: int = 200
