@@ -33,6 +33,7 @@ from src.context_platform.schemas import (
     ContextPackageCreate,
     ContextPackageSections,
     ContextPackageUpdate,
+    DecisionAgentInvoke,
     DeliveryPhaseCreate,
     FeatureCreate,
     ManufacturingSubmit,
@@ -482,6 +483,59 @@ def api_meeting_extract_stub(meeting_id: str):
         raise HTTPException(404, "Meeting not found") from None
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+@api_router.get("/decision-agents")
+def api_list_decision_agents():
+    """D1–D12 assistant agents — shared LLM config (``CONTEXT_LLM_MODEL`` / ``OPENAI_*``)."""
+    from src.context_platform.decision_agents import DECISION_AGENT_REGISTRY
+
+    return [
+        {
+            "code": s.code,
+            "title": s.title,
+            "process_question": s.process_question,
+        }
+        for s in sorted(DECISION_AGENT_REGISTRY.values(), key=lambda x: x.code)
+    ]
+
+
+@api_router.post("/decision-agents/{decision_code}/invoke")
+def api_invoke_decision_agent(decision_code: str, body: DecisionAgentInvoke):
+    """
+    Invoke one decision agent with JSON ``context`` (same API for every D1–D12).
+    Audit event: ``decision_agent_invoked`` or ``decision_agent_failed``.
+    """
+    from src.context_platform.decision_agents import (
+        invoke_decision_agent,
+        normalize_decision_code,
+    )
+
+    store = get_store()
+    out = invoke_decision_agent(
+        decision_code,
+        body.context,
+        extra_instructions=body.extra_instructions,
+    )
+    aid = normalize_decision_code(decision_code) or (decision_code or "")[:24] or "unknown"
+    if out.get("ok"):
+        store.log_audit(
+            "decision_agent_invoked",
+            "decision_agent",
+            aid,
+            detail={
+                "model": out.get("model"),
+                "decision_code": out.get("decision_code"),
+            },
+        )
+    else:
+        store.log_audit(
+            "decision_agent_failed",
+            "decision_agent",
+            aid,
+            detail={"error": out.get("error"), "valid_codes": out.get("valid_codes")},
+        )
+    return out
 
 
 @api_router.get("/decision-records")

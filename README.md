@@ -174,6 +174,7 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 | Package / D7 | `/stories/{id}/context-packages`, `PATCH`, `/sign-offs` |
 | D9 / D10 | `/context-packages/{id}/manufacturing`, `/manufacturing/{id}/triage`, `GET /triage-results` |
 | Meetings | `/meetings`, **D1** `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda`; **D4** transcript, extract, confirm, per-item review |
+| Decision agents (D1–D12) | `GET /decision-agents`, `POST /decision-agents/{D1..D12}/invoke` — shared LLM pipeline; see [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) |
 | Integrations | **`POST /webhooks/scm/github`** — GitHub **push** / **ping** (JSON); signs with **`X-Hub-Signature-256`** when secret set |
 | Health (Phase 6) | **`GET /health`** (liveness), **`GET /ready`** (DB ping — 503 if store fails) |
 | Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
@@ -205,7 +206,10 @@ Add **`?context_project=<project_id>`** if the default env project is wrong, and
 | `CONTEXT_DASHBOARD_USER` | `admin` | Dashboard login username |
 | `CONTEXT_SESSION_HTTPS_ONLY` | unset | `1` / `true` — `Secure` session cookie (use behind HTTPS) |
 | `CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT` | unset | `1` / `true` allows D8 without D7 |
-| `OPENAI_API_KEY` / `OPENAI_MODEL` | — / `gpt-4o-mini` | Optional LLM meeting extraction |
+| `OPENAI_API_KEY` | — | Required for LLM features (meeting extraction, **D1–D12 decision agents**) |
+| `CONTEXT_LLM_MODEL` | — | Preferred model id for **all** shared LLM calls (else `OPENAI_MODEL`) |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Fallback model when `CONTEXT_LLM_MODEL` unset |
+| `CONTEXT_LLM_BASE_URL` / `OPENAI_BASE_URL` | — | OpenAI-compatible API base (optional) |
 | `MANUFACTURING_OUTPUT_DIR` | `data/manufacturing_outputs` | Per-request output dir + `MANUFACTURING.md` |
 | `MANUFACTURING_GIT_URL` | — | If set, **Phase 3 adapter**: shallow `git clone` into `<output>/<request_id>/repo` |
 | `MANUFACTURING_GIT_REF` | — | Optional branch or tag for `git clone --branch …` |
@@ -253,6 +257,7 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 ├── docs/
 │   ├── context-platform-process-architecture.md
 │   ├── agent-context-retrieval.md
+│   ├── decision-agent-fleet.md
 │   ├── implementation-phase-plan-enterprise-v2.md
 │   ├── deploy-runbook.md
 │   ├── postgres-notes.md
@@ -271,6 +276,8 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 │   ├── meeting_extraction.py
 │   ├── manufacturing_worker.py
 │   ├── scm_webhook.py
+│   ├── llm_client.py
+│   ├── decision_agents.py
 │   ├── reference_seed.py
 │   └── cli.py
 └── templates/
