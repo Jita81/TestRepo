@@ -345,16 +345,30 @@
             </select>
           </div>
           <div>
-            <label for="severity">Severity</label>
+            <label for="severity">Severity (legacy label)</label>
             <select id="severity" name="severity">
               <option>low</option>
               <option selected>medium</option>
               <option>high</option>
             </select>
           </div>
+          <div>
+            <label for="severity_tier">EA tier</label>
+            <select id="severity_tier" name="severity_tier">
+              <option value="blocking">blocking</option>
+              <option value="degrading" selected>degrading</option>
+              <option value="minor">minor</option>
+            </select>
+          </div>
         </div>
         <label for="meeting_hint">Meeting hint (M1–M7)</label>
         <input id="meeting_hint" name="meeting_hint" placeholder="e.g. M3">
+        <label for="evidence">Evidence (optional)</label>
+        <textarea id="evidence" name="evidence" rows="2" placeholder="What we observed"></textarea>
+        <label for="resolution_strategy">Resolution strategy (optional)</label>
+        <textarea id="resolution_strategy" name="resolution_strategy" rows="2"></textarea>
+        <label for="impact_notes">Impact notes (optional)</label>
+        <textarea id="impact_notes" name="impact_notes" rows="2"></textarea>
         <label for="gdesc">Gap description</label>
         <textarea id="gdesc" name="description" required rows="2"></textarea>
         <div style="margin-top:0.75rem"><button type="submit">Record gap</button></div>
@@ -365,7 +379,7 @@
         {% for g in gaps %}
         <div class="gap-item">
           <strong>{{ g.description[:80] }}{% if g.description|length > 80 %}…{% endif %}</strong>
-          <span class="muted"> · {{ g.severity }} {% if g.meeting_hint %}· {{ g.meeting_hint }}{% endif %}</span>
+          <span class="muted"> · {{ g.severity }} / tier {{ g.severity_tier }}{% if g.meeting_hint %} · {{ g.meeting_hint }}{% endif %}{% if g.evidence %} · evidence set{% endif %}</span>
           <form method="post" action="/context/gaps/{{ g.id }}/resolve" style="display:inline;margin-left:0.5rem">
             <button type="submit" class="small secondary">Resolve</button>
           </form>
@@ -514,6 +528,9 @@
         {% elif p.gap_analysis and p.gap_analysis.get('gaps') %}
         <p class="muted" style="margin:0.35rem 0">Gaps: {{ p.gap_analysis.get('gaps') | join(', ') }}</p>
         {% endif %}
+        {% if p.gap_analysis and p.gap_analysis.get('ea_hints') %}
+        <p class="muted" style="margin:0.35rem 0">EA hints: {{ p.gap_analysis.get('ea_hints') | join(' · ') }}</p>
+        {% endif %}
         {% if p.sign_offs %}
         <div class="signoffs">Sign-offs:
           {% for s in p.sign_offs %}
@@ -528,10 +545,16 @@
         <form method="post" action="/context/packages/{{ p.id }}/sections">
           <label>Business context (JSON)</label>
           <textarea name="business_json">{{ pv.business_json }}</textarea>
-          <label>Technical approach (JSON)</label>
+          <label>Technical approach (JSON) — API alias: <code>technical_context</code></label>
           <textarea name="technical_json">{{ pv.technical_json }}</textarea>
           <label>Testing contract (JSON)</label>
           <textarea name="testing_json">{{ pv.testing_json }}</textarea>
+          <label>Success patterns (JSON, EA Phase 7)</label>
+          <textarea name="success_patterns_json">{{ pv.success_patterns_json }}</textarea>
+          <label>Risks &amp; dependencies (JSON)</label>
+          <textarea name="risks_json">{{ pv.risks_json }}</textarea>
+          <label>Section provenance (JSON)</label>
+          <textarea name="provenance_json">{{ pv.provenance_json }}</textarea>
           <div style="margin-top:0.5rem"><button type="submit" class="secondary">Save sections &amp; recompute readiness</button></div>
         </form>
 

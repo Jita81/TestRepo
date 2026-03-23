@@ -674,6 +674,9 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
                     "business_json": json.dumps(p.business_context, indent=2),
                     "technical_json": json.dumps(p.technical_approach, indent=2),
                     "testing_json": json.dumps(p.testing_contract, indent=2),
+                    "success_patterns_json": json.dumps(p.success_patterns, indent=2),
+                    "risks_json": json.dumps(p.risks_and_dependencies, indent=2),
+                    "provenance_json": json.dumps(p.section_provenance, indent=2),
                 }
             )
         story_blocks.append({"story": s, "packages": pkg_views})
@@ -723,6 +726,24 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
                     "scenarios": [
                         {"name": "happy path", "scenario_type": "happy_path", "steps": "..."}
                     ],
+                },
+                "success_patterns": {
+                    "patterns": [
+                        {
+                            "title": "Similar reset flow in billing",
+                            "reference": "svc/billing/reset.go",
+                            "confidence": "high",
+                        }
+                    ]
+                },
+                "risks_and_dependencies": {
+                    "risks": ["Email deliverability in sandbox"],
+                    "team_dependencies": ["Platform team for SMTP config"],
+                    "technical_dependencies": ["SendGrid API"],
+                },
+                "section_provenance": {
+                    "business": {"source": "workshop_notes", "confidence": "medium"},
+                    "technical": {"source": "arch_review", "confidence": "high"},
                 },
             },
             indent=2,
@@ -937,11 +958,17 @@ def form_update_sections(
     business_json: str = Form("{}"),
     technical_json: str = Form("{}"),
     testing_json: str = Form("{}"),
+    success_patterns_json: str = Form("{}"),
+    risks_json: str = Form("{}"),
+    provenance_json: str = Form("{}"),
 ):
     try:
         business = json.loads(business_json or "{}")
         technical = json.loads(technical_json or "{}")
         testing = json.loads(testing_json or "{}")
+        success_patterns = json.loads(success_patterns_json or "{}")
+        risks_and_dependencies = json.loads(risks_json or "{}")
+        section_provenance = json.loads(provenance_json or "{}")
     except json.JSONDecodeError:
         raise HTTPException(400, "Invalid JSON in sections") from None
     try:
@@ -952,6 +979,9 @@ def form_update_sections(
                     business_context=business,
                     technical_approach=technical,
                     testing_contract=testing,
+                    success_patterns=success_patterns,
+                    risks_and_dependencies=risks_and_dependencies,
+                    section_provenance=section_provenance,
                 )
             ),
         )
@@ -1041,7 +1071,16 @@ def form_create_gap(
     description: str = Form(...),
     meeting_hint: str = Form(""),
     severity: str = Form("medium"),
+    severity_tier: str = Form("degrading"),
+    evidence: str = Form(""),
+    resolution_strategy: str = Form(""),
+    impact_notes: str = Form(""),
 ):
+    st = (
+        severity_tier
+        if severity_tier in ("blocking", "degrading", "minor")
+        else "degrading"
+    )
     try:
         get_store().create_gap(
             ContextGapCreate(
@@ -1049,6 +1088,10 @@ def form_create_gap(
                 description=description,
                 meeting_hint=meeting_hint,
                 severity=severity,
+                severity_tier=st,
+                evidence=evidence,
+                resolution_strategy=resolution_strategy,
+                impact_notes=impact_notes,
             )
         )
     except KeyError:
