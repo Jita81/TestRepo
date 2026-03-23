@@ -33,6 +33,19 @@ curl -sSf http://127.0.0.1:8000/ready    # {"status":"ready","db":"ok"}
 
 Orchestrators should use **`/ready`** for dependency checks; use **`/health`** only if you must not touch the DB during probes.
 
+## 3b. Logging & troubleshooting
+
+The app logs to **stderr / stdout** (visible in `docker logs`, systemd, or the terminal running `python3 run.py`).
+
+| Variable | Purpose |
+|----------|---------|
+| `CONTEXT_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` — app loggers + uvicorn (`run.py`). Default `INFO`. |
+| `CONTEXT_ACCESS_LOG` | Set `1` / `true` to log **every** request (method, path, status, duration). Default: only 4xx/5xx. |
+| `CONTEXT_DEBUG_ERRORS` | Set `1` / `true` to include `exception_type` and `message` in **500** JSON responses (dev only; do not enable in production facing untrusted clients). |
+
+Unhandled exceptions log a full **traceback** with `error_id` and `request_id` (correlate with the JSON body on 500 responses).  
+Generic browser messages such as “something went wrong” usually come from **GitHub, Cursor, or a proxy**, not this repo — check that product’s status or network tab for the failing request, then server logs for the same time window.
+
 ## 4. Migrations
 
 There is **no separate Alembic graph** in this MVP. Schema changes are applied **idempotently** on startup (`ContextStore._ensure_extensions` and related helpers), matching what happens when the API boots.

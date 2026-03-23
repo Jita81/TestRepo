@@ -219,6 +219,9 @@ Add **`?context_project=<project_id>`** if the default env project is wrong, and
 | `CONTEXT_DASHBOARD_USER` | `admin` | Dashboard login username |
 | `CONTEXT_SESSION_HTTPS_ONLY` | unset | `1` / `true` — `Secure` session cookie (use behind HTTPS) |
 | `CONTEXT_ALLOW_UNAPPROVED_SPRINT_COMMIT` | unset | `1` / `true` allows D8 without D7 |
+| `CONTEXT_LOG_LEVEL` | `INFO` | App + uvicorn log verbosity (`DEBUG` … `ERROR`); logs to stderr |
+| `CONTEXT_ACCESS_LOG` | unset | `1` / `true` — log every HTTP request (path, status, duration) |
+| `CONTEXT_DEBUG_ERRORS` | unset | `1` / `true` — include exception type/message in **500** JSON (**dev only**) |
 | `CONTEXT_PROCESS_QUICK_PATH_MIN_READINESS` | unset | Phase 9: e.g. `90` — emit **`process.package_quick_path_eligible`** + outbox when package readiness ≥ value and structural **`gaps`** list is empty |
 | `CONTEXT_PROCESS_AUTO_ACCEPT_NOTE_ONLY_EXTRACTION` | unset | `1` / `true` — after draft extraction, if all items are type **`note`**, auto-accept reviews + **`process.meeting_extraction_auto_accepted`** |
 | `OPENAI_API_KEY` | — | Required for LLM features (meeting extraction, **D1–D12 decision agents**) |
