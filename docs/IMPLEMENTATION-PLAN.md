@@ -3,7 +3,7 @@
 **Version:** 2.1 · March 2026  
 **Canonical roadmap** for this repository relative to **Enterprise Architecture v2.0** & **Process Architecture v2.0** (Automated Agile / Context Engineering Platform).
 
-**Companion docs:** [context-platform-process-architecture.md](context-platform-process-architecture.md) · [roadmap-github-issues.md](roadmap-github-issues.md) · [agent-context-retrieval.md](agent-context-retrieval.md) · [decision-agent-fleet.md](decision-agent-fleet.md) · [deploy-runbook.md](deploy-runbook.md)
+**Companion docs:** [context-platform-process-architecture.md](context-platform-process-architecture.md) · [roadmap-github-issues.md](roadmap-github-issues.md) · [agent-context-retrieval.md](agent-context-retrieval.md) · [codebase-index-phase11.md](codebase-index-phase11.md) · [decision-agent-fleet.md](decision-agent-fleet.md) · [deploy-runbook.md](deploy-runbook.md)
 
 ---
 
@@ -15,8 +15,8 @@
 | **Platform hardening** | Projects, auth, health, CLI seed/backup, Docker healthchecks — **shipped**. |
 | **Integrations** | GitHub SCM webhook (push/ping) — **shipped**; PM/chat/MCP — **not**. |
 | **Decision intelligence** | **D1–D12 decision agent fleet** + shared **`llm_client`** (`CONTEXT_LLM_MODEL`) — **shipped** (`GET/POST /api/context/decision-agents/...`). |
-| **Codebase intelligence** | **Policy** ([agent-context-retrieval.md](agent-context-retrieval.md)); **indexed regex** implementation — **Phase 11** below. |
-| **Enterprise target** | Seven systems, five UX surfaces, event bus, EA data contracts — **Phases 7–10 shipped**; **Phases 11–14** remain. |
+| **Codebase intelligence** | **Policy** + **Phase 11 MVP** ([codebase-index-phase11.md](codebase-index-phase11.md)) — CLI mirror, **`/codebase-search`**, regex verify, **`codebase.*`** audits. |
+| **Enterprise target** | Seven systems, five UX surfaces, event bus, EA data contracts — **Phases 7–11 shipped**; **Phases 12–14** remain. |
 
 ---
 
@@ -38,6 +38,7 @@ These map to README **agent phases 1–6** plus adjacent features.
 | **P8 — Meeting intelligence v2** | Extraction draft **schema v2** (`unresolved[]`); promote to `context_gaps`; `GET .../pending-extraction-confirmation`. |
 | **P9 — Process orchestration** | Stored `readiness_score` documented; quick-path rule + `process.*` audits + `process_outbox`; optional note-only extraction auto-accept. |
 | **P10 — Manufacturing gateway** | `manufacturing_gateway` prompt bundle + Markdown; CI tests; `predicted_triage_queue` vs actual D10 in audits. |
+| **P11 — Codebase index** | `codebase_index` + `codebase_index_entries`; CLI **`index-codebase`**; **`GET .../codebase-search`** + verify; docs + unittest. |
 
 ---
 
@@ -49,12 +50,12 @@ These map to README **agent phases 1–6** plus adjacent features.
 | **8** | **Meeting intelligence v2** | **Done** — EA extraction subset + `unresolved[]` → gaps + pending-confirmation API. |
 | **9** | **Process & tiers** | **Done** — readiness on `context_packages`; env-gated quick path + note-only auto-accept; `process_outbox` + `GET/POST .../process-outbox`. |
 | **10** | **Manufacturing gateway** | **Done** — `manufacturing_gateway` module; `GET .../manufacturing-prompt`; prediction column + audit match fields. |
-| **11** | **Codebase intel + regex index** | Mirror + trigram/sparse index; search API; pattern candidates. |
+| **11** | **Codebase intel + regex index** | **Done (MVP)** — SQLite mirror + substring `LIKE` + optional regex verify; **`codebase.*`** audits; [codebase-index-phase11.md](codebase-index-phase11.md). |
 | **12** | **Feedback & observatory** | Q2 diff metadata; Q1/2/3 dashboards; baseline metrics (EA §9). |
 | **13** | **MCP & bus** | MCP tools (graph, search, **decision invoke**); integration stubs; bus ADR. |
 | **14** | **Enterprise scale** | HA/Postgres path; SSO; five UX surfaces map. |
 
-**Fast regex** is delivered in **Phase 11**; **exposed to agents** in **Phase 13** (MCP). **grep-friendly package text** starts in **Phase 7** UX/contracts.
+**Phase 11** ships a **portable substring index + verify** (trigram/FTS scale-up later). **Exposed to agents** broadly in **Phase 13** (MCP). **grep-friendly package text** starts in **Phase 7** UX/contracts.
 
 ---
 
@@ -65,7 +66,7 @@ These map to README **agent phases 1–6** plus adjacent features.
 | Phase 0 — Manual proof | **External** validation assumed complete. |
 | EA Phase 1 — Core loop | **Partial** — graph + meetings + workbench exist; depth in 7–8. |
 | EA Phase 2 — Closed loop | **Partial** — manufacturing + triage; gateway/MCP/bus in 10/13. |
-| EA Phase 3 — Intelligence | **Starting** — decision fleet ✓; codebase index in **11**. |
+| EA Phase 3 — Intelligence | **Advancing** — decision fleet ✓; codebase index **MVP (11)** ✓. |
 | EA Phase 4 — Scale | **14** |
 
 ---
@@ -75,7 +76,7 @@ These map to README **agent phases 1–6** plus adjacent features.
 | # | System | Now | Next focus |
 |---|--------|-----|------------|
 | 4.1 | Meeting intelligence | Transcript + extract + D1 agenda | EA extraction shape, sufficiency, tiered confirm (8–9) |
-| 4.2 | Codebase intelligence | Policy doc | **Indexed search** + patterns (**11**) |
+| 4.2 | Codebase intelligence | Policy + **CLI/API index (11)** | Trigram / FTS scale-up; MCP (**13**) |
 | 4.3 | Context graph | SQLite relational | Richer contracts, auto-assembly (**7**) |
 | 4.4 | Manufacturing gateway | Worker + API + **gateway Markdown** | Compiler/tests (**10**); deeper codegen in later phases |
 | 4.5 | Feedback hub | D10 + improvements | Q2 diff, taxonomy (**12**) |
@@ -120,9 +121,9 @@ Align storage/API with EA **context package** sections (`technical_context`, `su
 - [x] Optional prediction field vs actual triage (`predicted_triage_queue` on `manufacturing_requests`; `prediction_matches_actual` on D10 audit/decision; optional `CONTEXT_MANUFACTURING_AUTO_PREDICT_TRIAGE`).
 
 ### Phase 11 — Codebase intelligence + indexed regex
-- [ ] Mirror/index job + CLI/CI doc.
-- [ ] Candidate search API + verify pass.
-- [ ] `codebase.*` audit events + perf note.
+- [x] Mirror/index job + CLI/CI doc (`cli index-codebase`, [codebase-index-phase11.md](codebase-index-phase11.md), deploy runbook §4b, CI unittest).
+- [x] Candidate search API + verify pass (`GET /api/context/codebase-search`, `verify_pattern`, `CONTEXT_CODEBASE_INDEX_ROOT`).
+- [x] `codebase.*` audit events + perf note (`codebase.index_completed`, `codebase.search` with `duration_ms`; perf section in doc).
 
 ### Phase 12 — Feedback hub & observatory
 - [ ] Q2 optional diff attachment.
