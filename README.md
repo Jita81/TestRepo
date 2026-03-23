@@ -31,7 +31,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Gap analysis / readiness | B3 | **Partial** — readiness + gap hints + **Phase 7** `ea_hints` for extensions; **gap contract** fields (`severity_tier` blocking/degrading/minor, evidence, resolution, impact); not full blocking workflow UI |
 | Decision & artifact records | A2 | **Partial** — `decision_records` + `artifacts`; **D7, D8, D10, D4** wired; not full D1–D12 UI |
 | Audit / provenance | A3 | **Partial** — append-only events; **before/after** on key package + gap actions; not full graph diff |
-| Manufacturing | H1 / D9 | **Phase 3** — configurable **git clone → optional patch → optional test/cmd**; same status machine; stub when `MANUFACTURING_GIT_URL` unset |
+| Manufacturing | H1 / D9 | **Phase 3** — git/stub adapter; **Phase 10** — **`manufacturing_gateway`** prompt bundle + Markdown in `MANUFACTURING.md`; **`GET .../manufacturing-prompt`**; optional **`predicted_triage_queue`** vs D10 actual (audit `prediction_matches_actual`) |
 | Triage D10 | C2 | **Partial** — structured Q1/Q2/Q3 + `detail_json` + list API |
 | Sprint D8 | C1 | **Partial** — sprints + commitments + D7 gate; light on dates/capacity |
 | D11 backlog | C3 | **Partial** — items from Q2/Q3; basic list/resolve |
@@ -48,7 +48,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 
 ## What’s left (grouped backlog)
 
-**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–9 done**; **Phases 10–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
+**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–10 done**; **Phases 11–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
 
 1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
 2. **Identity:** OAuth / SSO; roles (PO, CE, dev) beyond shared dashboard password; service accounts for automation.
@@ -81,7 +81,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | **7** | EA context package & gap **contracts** — **✅ Done** (extensions + migration + dashboard) |
 | **8** | Meeting intelligence v2 — **✅ Done** (`unresolved[]`, gaps pipeline, pending-confirmation API) |
 | **9** | Process orchestration & **tiered confirmation** — **✅ Done** (outbox, `process.*` audits, optional auto-accept) |
-| **10** | **Manufacturing gateway** module + prediction |
+| **10** | **Manufacturing gateway** — **✅ Done** (prompt module, tests, triage prediction field) |
 | **11** | **Codebase intelligence** + **indexed regex** search |
 | **12** | Feedback hub & **Observatory** (baseline metrics) |
 | **13** | **MCP** + event bus + wrap decision/search tools |
@@ -179,7 +179,7 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 | Projects | `GET/POST /projects` — scope via `X-Context-Project`, cookie `context_project_id`, or `CONTEXT_PROJECT_ID` |
 | Roadmap | `/roadmap-cycles`, `/delivery-phases`, `/features`, `/roadmap-tree`, stories CRUD |
 | D8 | `/sprints`, `/sprints/{id}`, `/sprints/{id}/commitments` |
-| Package / D7 | `/stories/{id}/context-packages`, `PATCH` (body may use **`technical_context`** instead of `technical_approach`; optional **`success_patterns`**, **`risks_and_dependencies`**, **`section_provenance`**), `/sign-offs` |
+| Package / D7 | `/stories/{id}/context-packages`, `PATCH` ( **`technical_context`** alias; EA extension dicts ), **`GET /context-packages/{id}/manufacturing-prompt`** (Phase 10), `/sign-offs` |
 | D9 / D10 | `/context-packages/{id}/manufacturing`, `/manufacturing/{id}/triage`, `GET /triage-results` |
 | Meetings | `/meetings`, **`GET /meetings/pending-extraction-confirmation`** (Phase 8), **D1** `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda`; **D4** transcript, extract, **`POST /meetings/{id}/unresolved-to-gaps`**, confirm, per-item review |
 | Decision agents (D1–D12) | `GET /decision-agents`, `POST /decision-agents/{D1..D12}/invoke` — shared LLM pipeline; see [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) |
@@ -196,6 +196,8 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 **Phase 8 (meeting extraction v2):** Draft JSON uses **`extraction_schema_version` 2** with **`proposed_items`** + **`unresolved[]`** (normalized via `meeting_extraction_schema.normalize_extraction_draft`). Stub recognizes **`UNRESOLVED:`**, **`OPEN:`**, **`??`** lines; LLM returns the same shape when configured. **`POST /meetings/{id}/unresolved-to-gaps`** creates **`context_gaps`** on a chosen story (indices or all); audit action **`meeting_unresolved_promoted_to_gaps`**.
 
 **Phase 9 (process orchestration):** **`readiness_score`** is the canonical stored metric on each context package (0–100, from `compute_readiness_with_extensions` on PATCH). Set **`CONTEXT_PROCESS_QUICK_PATH_MIN_READINESS`** (e.g. `90`) to enable quick-path: when readiness ≥ threshold and **`gap_analysis.gaps`** is empty, the platform logs **`process.package_quick_path_eligible`** and enqueues **`process_outbox`**. Set **`CONTEXT_PROCESS_AUTO_ACCEPT_NOTE_ONLY_EXTRACTION=1`** to auto-run per-item accept-all after extraction when every draft line is type **`note`** — audit **`process.meeting_extraction_auto_accepted`**. List pending rows via **`GET /api/context/process-outbox`**; acknowledge with **`POST .../process-outbox/{id}/ack`** (worker stub).
+
+**Phase 10 (manufacturing gateway):** [`manufacturing_gateway.py`](src/context_platform/manufacturing_gateway.py) builds a versioned **JSON bundle** and **canonical Markdown** (embedded ahead of adapter output in `MANUFACTURING.md`). **`POST /context-packages/{id}/manufacturing`** accepts optional **`predicted_triage_queue`** (`Q1`/`Q2`/`Q3`); set **`CONTEXT_MANUFACTURING_AUTO_PREDICT_TRIAGE=1`** to store a heuristic prediction when omitted. D10 **`submit_triage`** audits include **`predicted_triage_queue`** and **`prediction_matches_actual`** for analytics.
 
 **Phase 5 (SCM):** Configure GitHub → **Webhooks** → URL  
 `https://<host>/api/context/webhooks/scm/github`  
@@ -235,6 +237,7 @@ Add **`?context_project=<project_id>`** if the default env project is wrong, and
 | `MANUFACTURING_PATCH_FILE` | — | Optional unified diff on disk; `git apply` in repo after clone (mount into container if using Docker) |
 | `MANUFACTURING_RUN_CMD` | — | Optional shell command run **in repo root** (e.g. `pytest -q` or `npm test`). **Runs as the app user** — treat like CI. |
 | `MANUFACTURING_TIMEOUT_SEC` | `600` | Timeout for clone, apply, and run command |
+| `CONTEXT_MANUFACTURING_AUTO_PREDICT_TRIAGE` | unset | `1` / `true` — set **`predicted_triage_queue`** on manufacturing submit using readiness/gaps heuristic when not provided in JSON body |
 | `HOST` / `PORT` | `0.0.0.0` / `8000` | Server bind |
 
 See [.env.example](.env.example).
@@ -251,6 +254,8 @@ When **`MANUFACTURING_GIT_URL`** is set, each manufacturing request:
 4. Optionally runs **`MANUFACTURING_RUN_CMD`** via `/bin/sh -c` from the repo root — use this for **tests**, linters, or a thin codegen wrapper.
 
 If **`MANUFACTURING_GIT_URL`** is unset, behaviour matches the original **stub** (short sleep + accountability `MANUFACTURING.md`).
+
+**Phase 10:** `MANUFACTURING.md` starts with the **gateway** block (structured package sections + metadata). Preview with **`GET /api/context/context-packages/{id}/manufacturing-prompt`**.
 
 **Example (host)**
 
@@ -271,7 +276,8 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 ├── Dockerfile              # Container image (uvicorn)
 ├── docker-compose.yml      # Volume-backed SQLite + port 8000
 ├── .dockerignore
-├── .github/workflows/      # Docker build CI
+├── .github/workflows/      # Docker build CI + gateway unit tests
+├── tests/                    # Phase 10 — manufacturing_gateway unittest
 ├── docs/
 │   ├── context-platform-process-architecture.md
 │   ├── agent-context-retrieval.md
@@ -295,6 +301,7 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 │   ├── meeting_extraction.py
 │   ├── meeting_extraction_schema.py  # Phase 8 — EA draft shape + summaries
 │   ├── process_orchestration.py      # Phase 9 — quick-path env helpers
+│   ├── manufacturing_gateway.py      # Phase 10 — prompt bundle + Markdown + triage hint
 │   ├── manufacturing_worker.py
 │   ├── scm_webhook.py
 │   ├── llm_client.py

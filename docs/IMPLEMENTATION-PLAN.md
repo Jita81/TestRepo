@@ -16,7 +16,7 @@
 | **Integrations** | GitHub SCM webhook (push/ping) — **shipped**; PM/chat/MCP — **not**. |
 | **Decision intelligence** | **D1–D12 decision agent fleet** + shared **`llm_client`** (`CONTEXT_LLM_MODEL`) — **shipped** (`GET/POST /api/context/decision-agents/...`). |
 | **Codebase intelligence** | **Policy** ([agent-context-retrieval.md](agent-context-retrieval.md)); **indexed regex** implementation — **Phase 11** below. |
-| **Enterprise target** | Seven systems, five UX surfaces, event bus, EA data contracts — **Phases 7–9 shipped**; **Phases 10–14** remain. |
+| **Enterprise target** | Seven systems, five UX surfaces, event bus, EA data contracts — **Phases 7–10 shipped**; **Phases 11–14** remain. |
 
 ---
 
@@ -37,6 +37,7 @@ These map to README **agent phases 1–6** plus adjacent features.
 | **P7 — EA contracts** | Package snapshot **schema v3**: `success_patterns`, `risks_and_dependencies`, `section_provenance`; API `technical_context` alias; gap `severity_tier` + evidence / resolution / impact. |
 | **P8 — Meeting intelligence v2** | Extraction draft **schema v2** (`unresolved[]`); promote to `context_gaps`; `GET .../pending-extraction-confirmation`. |
 | **P9 — Process orchestration** | Stored `readiness_score` documented; quick-path rule + `process.*` audits + `process_outbox`; optional note-only extraction auto-accept. |
+| **P10 — Manufacturing gateway** | `manufacturing_gateway` prompt bundle + Markdown; CI tests; `predicted_triage_queue` vs actual D10 in audits. |
 
 ---
 
@@ -47,7 +48,7 @@ These map to README **agent phases 1–6** plus adjacent features.
 | **7** | **Contracts** | **Done** — EA package extensions + gap contract fields; SQLite migration; D7 hash includes extensions. |
 | **8** | **Meeting intelligence v2** | **Done** — EA extraction subset + `unresolved[]` → gaps + pending-confirmation API. |
 | **9** | **Process & tiers** | **Done** — readiness on `context_packages`; env-gated quick path + note-only auto-accept; `process_outbox` + `GET/POST .../process-outbox`. |
-| **10** | **Manufacturing gateway** | Explicit prompt compiler module; predicted queue heuristic. |
+| **10** | **Manufacturing gateway** | **Done** — `manufacturing_gateway` module; `GET .../manufacturing-prompt`; prediction column + audit match fields. |
 | **11** | **Codebase intel + regex index** | Mirror + trigram/sparse index; search API; pattern candidates. |
 | **12** | **Feedback & observatory** | Q2 diff metadata; Q1/2/3 dashboards; baseline metrics (EA §9). |
 | **13** | **MCP & bus** | MCP tools (graph, search, **decision invoke**); integration stubs; bus ADR. |
@@ -76,7 +77,7 @@ These map to README **agent phases 1–6** plus adjacent features.
 | 4.1 | Meeting intelligence | Transcript + extract + D1 agenda | EA extraction shape, sufficiency, tiered confirm (8–9) |
 | 4.2 | Codebase intelligence | Policy doc | **Indexed search** + patterns (**11**) |
 | 4.3 | Context graph | SQLite relational | Richer contracts, auto-assembly (**7**) |
-| 4.4 | Manufacturing gateway | Worker + API | Module boundary + prediction (**10**) |
+| 4.4 | Manufacturing gateway | Worker + API + **gateway Markdown** | Compiler/tests (**10**); deeper codegen in later phases |
 | 4.5 | Feedback hub | D10 + improvements | Q2 diff, taxonomy (**12**) |
 | 4.6 | Process orchestration | D7/D8 gates + Phase 9 outbox / `process.*` | Adaptive tiers deepen in ops (**9** shipped MVP) |
 | 4.7 | Analytics | Audit lists | Observatory (**12**) |
@@ -115,8 +116,8 @@ Align storage/API with EA **context package** sections (`technical_context`, `su
 - [x] Outbox or `process.*` audit events (`process_outbox` table; audits `process.package_quick_path_eligible`, `process.meeting_extraction_auto_accepted`; `GET/POST /api/context/process-outbox/*`).
 
 ### Phase 10 — Manufacturing gateway
-- [ ] `manufacturing_gateway` module + tests for prompt layout.
-- [ ] Optional prediction field vs actual triage.
+- [x] `manufacturing_gateway` module + tests for prompt layout (`tests/test_manufacturing_gateway.py`, CI `unittest discover`).
+- [x] Optional prediction field vs actual triage (`predicted_triage_queue` on `manufacturing_requests`; `prediction_matches_actual` on D10 audit/decision; optional `CONTEXT_MANUFACTURING_AUTO_PREDICT_TRIAGE`).
 
 ### Phase 11 — Codebase intelligence + indexed regex
 - [ ] Mirror/index job + CLI/CI doc.
