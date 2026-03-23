@@ -2,7 +2,7 @@
 
 Reference implementation for the **Automated Agile — Context Engineering Platform**: a **self-curating context graph** (roadmap → story → **D7** context package → **D8** sprint commitment → **D9** manufacturing → **D10** triage → **D11** improvement backlog) with **meetings (D4 extraction)**, **audit trail**, **decision/artifact records**, and **project-scoped** workspaces.
 
-**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Deploy / ops:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
+**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Enterprise v2.0 phase plan (next):** [docs/implementation-phase-plan-enterprise-v2.md](docs/implementation-phase-plan-enterprise-v2.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Deploy / ops:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
 
 ---
 
@@ -47,6 +47,8 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 
 ## What’s left (grouped backlog)
 
+**Sequenced plan:** [docs/implementation-phase-plan-enterprise-v2.md](docs/implementation-phase-plan-enterprise-v2.md) (phases **7–14** vs enterprise seven systems).
+
 1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
 2. **Identity:** OAuth / SSO; roles (PO, CE, dev) beyond shared dashboard password; service accounts for automation.
 3. **Delivery depth:** D8 sprint calendar/capacity UI; **D12** release sign-off placeholder; manufacturing **PR automation** / org-specific CI beyond env-driven git adapter.
@@ -70,6 +72,14 @@ Use these as **sequenced iterations** for coding agents (or human sprints). Each
 | **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | **✅ Done** — `/health` & `/ready`, CLI (`migrate` / `seed` / `backup`), [deploy runbook](docs/deploy-runbook.md), [Postgres notes](docs/postgres-notes.md), reference project `prj_reference` |
 
 Phase **6** is complete; further work is feature backlog (Epic F/G, full PG port, etc.).
+
+### Roadmap to enterprise & process architecture v2.0
+
+README phases **1–6** were **delivery slices** for this repo. The **Automated Agile** *Enterprise Architecture v2.0* and *Process Architecture v2.0* (seven systems, four value streams, MCP, event bus, five UX surfaces) are tracked as **implementation phases 7–14** in:
+
+**[docs/implementation-phase-plan-enterprise-v2.md](docs/implementation-phase-plan-enterprise-v2.md)**
+
+That plan includes: **data contract** alignment (context package, gaps, triage, meeting extraction), **Meeting / Process / Manufacturing gateway** depth, **Codebase Intelligence** with **indexed regex search** ([docs/agent-context-retrieval.md](docs/agent-context-retrieval.md)), **Feedback + Observatory** metrics (baseline-first), **MCP + integrations**, and **enterprise scale** (HA, SSO, surfaces).
 
 ---
 
@@ -243,6 +253,7 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 ├── docs/
 │   ├── context-platform-process-architecture.md
 │   ├── agent-context-retrieval.md
+│   ├── implementation-phase-plan-enterprise-v2.md
 │   ├── deploy-runbook.md
 │   ├── postgres-notes.md
 │   └── roadmap-github-issues.md
