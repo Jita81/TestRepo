@@ -19,6 +19,8 @@ from src.context_platform.meeting_extraction import extract_transcript_auto
 from src.context_platform.package_models import (
     ContextPackageSectionsV2,
     compute_readiness_v2,
+    compute_readiness_with_extensions,
+    ea_gap_hints,
     gap_analysis_dict,
     sections_from_legacy_dicts,
     sections_to_storage_tuple,
@@ -105,9 +107,49 @@ def _package_audit_snapshot(pkg: ContextPackageRead) -> dict[str, Any]:
             "business": _h(pkg.business_context),
             "technical": _h(pkg.technical_approach),
             "testing": _h(pkg.testing_contract),
+            "success_patterns": _h(pkg.success_patterns),
+            "risks_dependencies": _h(pkg.risks_and_dependencies),
+            "section_provenance": _h(pkg.section_provenance),
         },
         "content_hash": pkg.content_hash,
     }
+
+
+def _json_col_from_row(row: sqlite3.Row, key: str) -> dict[str, Any]:
+    if key not in row.keys():
+        return {}
+    raw = row[key]
+    if raw is None or raw == "":
+        return {}
+    try:
+        o = json.loads(raw)
+        return o if isinstance(o, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def _gap_row_to_read(row: sqlite3.Row) -> ContextGapRead:
+    rk = row.keys()
+    tier = row["severity_tier"] if "severity_tier" in rk else "degrading"
+    if tier not in ("blocking", "degrading", "minor"):
+        tier = "degrading"
+    return ContextGapRead(
+        id=row["id"],
+        story_id=row["story_id"],
+        context_package_id=row["context_package_id"],
+        description=row["description"],
+        gap_type=row["gap_type"],
+        severity=row["severity"],
+        meeting_hint=row["meeting_hint"],
+        severity_tier=tier,
+        evidence=(row["evidence"] if "evidence" in rk else "") or "",
+        resolution_strategy=(
+            (row["resolution_strategy"] if "resolution_strategy" in rk else "") or ""
+        ),
+        impact_notes=(row["impact_notes"] if "impact_notes" in rk else "") or "",
+        resolved=bool(row["resolved"]),
+        created_at=datetime.fromisoformat(row["created_at"]),
+    )
 
 
 def _triage_feedback_and_detail(data: TriageSubmit) -> tuple[str, dict[str, Any]]:
@@ -241,6 +283,9 @@ CREATE TABLE IF NOT EXISTS context_packages (
     business_context TEXT NOT NULL DEFAULT '{}',
     technical_approach TEXT NOT NULL DEFAULT '{}',
     testing_contract TEXT NOT NULL DEFAULT '{}',
+    success_patterns_json TEXT NOT NULL DEFAULT '{}',
+    risks_dependencies_json TEXT NOT NULL DEFAULT '{}',
+    section_provenance_json TEXT NOT NULL DEFAULT '{}',
     package_schema_version INTEGER NOT NULL DEFAULT 2,
     approved_at TEXT,
     content_hash TEXT,
@@ -266,6 +311,10 @@ CREATE TABLE IF NOT EXISTS context_gaps (
     gap_type TEXT NOT NULL DEFAULT '',
     severity TEXT NOT NULL DEFAULT 'medium',
     meeting_hint TEXT NOT NULL DEFAULT '',
+    severity_tier TEXT NOT NULL DEFAULT 'degrading',
+    evidence TEXT NOT NULL DEFAULT '',
+    resolution_strategy TEXT NOT NULL DEFAULT '',
+    impact_notes TEXT NOT NULL DEFAULT '',
     resolved INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
@@ -585,6 +634,66 @@ def _ensure_meeting_agenda(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_phase7_ea_contracts(conn: sqlite3.Connection) -> None:
+    """Phase 7: EA context package extensions + gap contract columns."""
+    if _table_exists(conn, "context_packages"):
+        cp = _table_columns(conn, "context_packages")
+        for col, ddl in [
+            (
+                "success_patterns_json",
+                "ALTER TABLE context_packages ADD COLUMN success_patterns_json TEXT DEFAULT '{}'",
+            ),
+            (
+                "risks_dependencies_json",
+                "ALTER TABLE context_packages ADD COLUMN risks_dependencies_json TEXT DEFAULT '{}'",
+            ),
+            (
+                "section_provenance_json",
+                "ALTER TABLE context_packages ADD COLUMN section_provenance_json TEXT DEFAULT '{}'",
+            ),
+        ]:
+            if col not in cp:
+                try:
+                    conn.execute(ddl)
+                except sqlite3.OperationalError:
+                    pass
+    gap_tier_backfill = False
+    if _table_exists(conn, "context_gaps"):
+        gc = _table_columns(conn, "context_gaps")
+        for col, ddl in [
+            (
+                "severity_tier",
+                "ALTER TABLE context_gaps ADD COLUMN severity_tier TEXT DEFAULT 'degrading'",
+            ),
+            ("evidence", "ALTER TABLE context_gaps ADD COLUMN evidence TEXT DEFAULT ''"),
+            (
+                "resolution_strategy",
+                "ALTER TABLE context_gaps ADD COLUMN resolution_strategy TEXT DEFAULT ''",
+            ),
+            ("impact_notes", "ALTER TABLE context_gaps ADD COLUMN impact_notes TEXT DEFAULT ''"),
+        ]:
+            if col not in gc:
+                try:
+                    conn.execute(ddl)
+                    if col == "severity_tier":
+                        gap_tier_backfill = True
+                except sqlite3.OperationalError:
+                    pass
+        if gap_tier_backfill:
+            try:
+                conn.execute(
+                    """
+                    UPDATE context_gaps SET severity_tier = CASE
+                        WHEN lower(severity) IN ('high','critical','blocker','blocking') THEN 'blocking'
+                        WHEN lower(severity) IN ('low') THEN 'minor'
+                        ELSE 'degrading' END
+                    """
+                )
+            except sqlite3.OperationalError:
+                pass
+    conn.commit()
+
+
 def _ensure_traceability_project_scope(conn: sqlite3.Connection) -> None:
     """Phase 1: project_id on audit_events, decision_records, artifacts."""
     for table in ("audit_events", "decision_records", "artifacts"):
@@ -637,6 +746,7 @@ class ContextStore:
             _ensure_traceability_project_scope(conn)
             if _table_exists(conn, "meetings"):
                 _ensure_meeting_agenda(conn)
+            _ensure_phase7_ea_contracts(conn)
             mcols = _table_columns(conn, "manufacturing_requests")
             for col, ddl in [
                 ("started_at", "ALTER TABLE manufacturing_requests ADD COLUMN started_at TEXT"),
@@ -1700,18 +1810,42 @@ class ContextStore:
             row["status"] == PackageStatus.approved.value
             and row["approved_snapshot_json"]
         )
+        sp: dict[str, Any] = {}
+        rd: dict[str, Any] = {}
+        prov: dict[str, Any] = {}
         if use_snapshot:
             snap = json.loads(row["approved_snapshot_json"])
             biz = snap.get("business", {})
             tech = snap.get("technical", {})
             tst = snap.get("testing", {})
-            ga = snap.get("gap_analysis", {})
+            sp = snap.get("success_patterns") or {}
+            rd = snap.get("risks_and_dependencies") or {}
+            prov = snap.get("section_provenance") or {}
+            if not isinstance(sp, dict):
+                sp = {}
+            if not isinstance(rd, dict):
+                rd = {}
+            if not isinstance(prov, dict):
+                prov = {}
+            ga_raw = snap.get("gap_analysis")
+            if isinstance(ga_raw, dict):
+                ga = ga_raw
+            else:
+                sec0 = sections_from_legacy_dicts(biz, tech, tst)
+                ga = gap_analysis_dict(sec0)
         else:
             biz = json.loads(row["business_context"] or "{}")
             tech = json.loads(row["technical_approach"] or "{}")
             tst = json.loads(row["testing_contract"] or "{}")
+            sp = _json_col_from_row(row, "success_patterns_json")
+            rd = _json_col_from_row(row, "risks_dependencies_json")
+            prov = _json_col_from_row(row, "section_provenance_json")
             sec = sections_from_legacy_dicts(biz, tech, tst)
             ga = gap_analysis_dict(sec)
+        if isinstance(ga, dict):
+            ga = {**ga, "ea_hints": ea_gap_hints(sp, rd, prov)}
+        else:
+            ga = {"ea_hints": ea_gap_hints(sp, rd, prov)}
 
         return ContextPackageRead(
             id=row["id"],
@@ -1723,6 +1857,9 @@ class ContextStore:
             business_context=biz,
             technical_approach=tech,
             testing_contract=tst,
+            success_patterns=sp,
+            risks_and_dependencies=rd,
+            section_provenance=prov,
             gap_analysis=ga if isinstance(ga, dict) else {},
             content_hash=row["content_hash"] if row["content_hash"] else None,
             approved_at=(
@@ -1755,8 +1892,9 @@ class ContextStore:
                 """INSERT INTO context_packages
                 (id, story_id, version, status, readiness_score,
                 business_context, technical_approach, testing_contract,
+                success_patterns_json, risks_dependencies_json, section_provenance_json,
                 package_schema_version, created_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     pid,
                     data.story_id,
@@ -1766,7 +1904,10 @@ class ContextStore:
                     "{}",
                     "{}",
                     "{}",
-                    2,
+                    "{}",
+                    "{}",
+                    "{}",
+                    3,
                     ts,
                 ),
             )
@@ -1828,18 +1969,27 @@ class ContextStore:
         biz_d = pkg.business_context
         tech_d = pkg.technical_approach
         tst_d = pkg.testing_contract
+        sp_d = pkg.success_patterns
+        rd_d = pkg.risks_and_dependencies
+        prov_d = pkg.section_provenance
         if data.sections:
             biz_d = data.sections.business_context
             tech_d = data.sections.technical_approach
             tst_d = data.sections.testing_contract
+            sp_d = data.sections.success_patterns
+            rd_d = data.sections.risks_and_dependencies
+            prov_d = data.sections.section_provenance
 
         sec = sections_from_legacy_dicts(biz_d, tech_d, tst_d)
         readiness = (
             data.readiness_score
             if data.readiness_score is not None
-            else compute_readiness_v2(sec)
+            else compute_readiness_with_extensions(sec, sp_d, rd_d)
         )
         bj, tj, ttj = sections_to_storage_tuple(sec)
+        spj = json.dumps(sp_d, ensure_ascii=False)
+        rdj = json.dumps(rd_d, ensure_ascii=False)
+        pvj = json.dumps(prov_d, ensure_ascii=False)
 
         status = pkg.status
         if status == PackageStatus.draft and readiness >= 70:
@@ -1849,15 +1999,19 @@ class ContextStore:
             conn.execute(
                 """UPDATE context_packages SET
                 business_context = ?, technical_approach = ?, testing_contract = ?,
+                success_patterns_json = ?, risks_dependencies_json = ?, section_provenance_json = ?,
                 readiness_score = ?, status = ?, package_schema_version = ?
                 WHERE id = ?""",
                 (
                     bj,
                     tj,
                     ttj,
+                    spj,
+                    rdj,
+                    pvj,
                     readiness,
                     status.value,
-                    2,
+                    3,
                     package_id,
                 ),
             )
@@ -1878,7 +2032,9 @@ class ContextStore:
         self, conn: sqlite3.Connection, package_id: str
     ) -> tuple[str, str]:
         row = conn.execute(
-            "SELECT business_context, technical_approach, testing_contract FROM context_packages WHERE id = ?",
+            """SELECT business_context, technical_approach, testing_contract,
+            success_patterns_json, risks_dependencies_json, section_provenance_json
+            FROM context_packages WHERE id = ?""",
             (package_id,),
         ).fetchone()
         if not row:
@@ -1886,14 +2042,21 @@ class ContextStore:
         biz = json.loads(row["business_context"] or "{}")
         tech = json.loads(row["technical_approach"] or "{}")
         tst = json.loads(row["testing_contract"] or "{}")
+        sp = _json_col_from_row(row, "success_patterns_json")
+        rd = _json_col_from_row(row, "risks_dependencies_json")
+        prov = _json_col_from_row(row, "section_provenance_json")
         sec = sections_from_legacy_dicts(biz, tech, tst)
         ga = gap_analysis_dict(sec)
+        ga = {**ga, "ea_hints": ea_gap_hints(sp, rd, prov)}
         payload = {
             "business": sec.business.model_dump(),
             "technical": sec.technical.model_dump(),
             "testing": sec.testing.model_dump(),
+            "success_patterns": sp,
+            "risks_and_dependencies": rd,
+            "section_provenance": prov,
             "gap_analysis": ga,
-            "schema_version": 2,
+            "schema_version": 3,
         }
         canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False)
         digest = hashlib.sha256(canonical.encode()).hexdigest()
@@ -1996,8 +2159,9 @@ class ContextStore:
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO context_gaps
-                (id, story_id, context_package_id, description, gap_type, severity, meeting_hint, resolved, created_at)
-                VALUES (?,?,?,?,?,?,?,?,?)""",
+                (id, story_id, context_package_id, description, gap_type, severity, meeting_hint,
+                severity_tier, evidence, resolution_strategy, impact_notes, resolved, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     gid,
                     data.story_id,
@@ -2006,6 +2170,10 @@ class ContextStore:
                     data.gap_type,
                     data.severity,
                     data.meeting_hint,
+                    data.severity_tier,
+                    data.evidence,
+                    data.resolution_strategy,
+                    data.impact_notes,
                     0,
                     ts,
                 ),
@@ -2022,17 +2190,7 @@ class ContextStore:
         if not row:
             raise KeyError("gap_not_found")
         self.get_story(row["story_id"])
-        return ContextGapRead(
-            id=row["id"],
-            story_id=row["story_id"],
-            context_package_id=row["context_package_id"],
-            description=row["description"],
-            gap_type=row["gap_type"],
-            severity=row["severity"],
-            meeting_hint=row["meeting_hint"],
-            resolved=bool(row["resolved"]),
-            created_at=datetime.fromisoformat(row["created_at"]),
-        )
+        return _gap_row_to_read(row)
 
     def list_gaps(
         self, story_id: Optional[str] = None, unresolved_only: bool = False
@@ -2050,20 +2208,7 @@ class ContextStore:
         q += " ORDER BY g.created_at DESC"
         with self._connect() as conn:
             rows = conn.execute(q, params).fetchall()
-        return [
-            ContextGapRead(
-                id=r["id"],
-                story_id=r["story_id"],
-                context_package_id=r["context_package_id"],
-                description=r["description"],
-                gap_type=r["gap_type"],
-                severity=r["severity"],
-                meeting_hint=r["meeting_hint"],
-                resolved=bool(r["resolved"]),
-                created_at=datetime.fromisoformat(r["created_at"]),
-            )
-            for r in rows
-        ]
+        return [_gap_row_to_read(r) for r in rows]
 
     def resolve_gap(self, gap_id: str) -> ContextGapRead:
         prev = self.get_gap(gap_id)
