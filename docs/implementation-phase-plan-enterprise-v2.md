@@ -153,7 +153,7 @@ Phases **7–14** continue after README **agent phases 1–6**. Each phase has a
 
 ### Phase 13 — MCP & integration backbone (EA §6)
 
-**Outcome:** **MCP server** exposing read-only context graph + **indexed code search** tool; expand webhooks (Jira/Linear stub); **event bus** design doc + optional SQLite outbox pattern.
+**Outcome:** **MCP server** exposing read-only context graph + **indexed code search** tool + **wrap `POST /decision-agents/{code}/invoke`** (or `invoke_decision_agent`) as tools; expand webhooks (Jira/Linear stub); **event bus** design doc + optional SQLite outbox pattern.
 
 **Done when:**
 - [ ] MCP server package runs beside API (or separate container) with documented tool list.
