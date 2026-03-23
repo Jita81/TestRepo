@@ -2,7 +2,7 @@
 
 Reference implementation for the **Automated Agile — Context Engineering Platform**: a **self-curating context graph** (roadmap → story → **D7** context package → **D8** sprint commitment → **D9** manufacturing → **D10** triage → **D11** improvement backlog) with **meetings (D4 extraction)**, **audit trail**, **decision/artifact records**, and **project-scoped** workspaces.
 
-**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Enterprise v2.0 phase plan (next):** [docs/implementation-phase-plan-enterprise-v2.md](docs/implementation-phase-plan-enterprise-v2.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Deploy / ops:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
+**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Master plan:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) · **Backlog issues:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Decision agents (D1–D12):** [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) · **Deploy:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
 
 ---
 
@@ -41,13 +41,14 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Auth | I1 | **Partial** — optional **dashboard** session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`); **API key** for `/api/*`; string actor; no OAuth/RBAC |
 | Integrations | F | **Phase 5 (partial)** — GitHub **push/ping** webhook → `audit_events`; optional `story_id` + `context_project` query params; **not** PR events or normalized event table |
 | Ops / hardening | I3 / Phase 6 | **Done** — **`GET /health`**, **`GET /ready`**, CLI **`python -m src.context_platform.cli`**, SQLite backup guidance, reference dataset **`prj_reference`**; **Postgres** documented as future ([docs/postgres-notes.md](docs/postgres-notes.md)) |
-| Codebase intelligence | G | **Not done** — policy for **indexed regex + semantic** retrieval: [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) |
+| Decision agents (LLM) | Process D1–D12 | **Done (MVP)** — shared **`llm_client`**; **`GET/POST /api/context/decision-agents`**; see [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) |
+| Codebase intelligence | G | **Not done** — policy: [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md); implementation **Phase 11** in [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) |
 
 ---
 
 ## What’s left (grouped backlog)
 
-**Sequenced plan:** [docs/implementation-phase-plan-enterprise-v2.md](docs/implementation-phase-plan-enterprise-v2.md) (phases **7–14** vs enterprise seven systems).
+**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
 
 1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
 2. **Identity:** OAuth / SSO; roles (PO, CE, dev) beyond shared dashboard password; service accounts for automation.
@@ -58,28 +59,35 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 
 ---
 
-## Agent cycle phases (suggested autonomous work units)
+## Master implementation plan
 
-Use these as **sequenced iterations** for coding agents (or human sprints). Each phase has a clear “done” signal without requiring calendar estimates.
+**Canonical document:** **[docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md)** — completed milestones (**P1–P6** + decision-agent fleet + agent-context policy), **Phases 7–14** toward Enterprise/Process Architecture v2.0, seven-systems matrix, **indexed regex** in Phase 11, MCP in Phase 13.
 
-| Phase | Focus | Done when |
-|-------|--------|-----------|
-| **1 — Scope completion** | Attach **project_id** to `audit_events`, `decision_records`, `artifacts`; filter list APIs; backfill | **✅ Done** — columns + `WHERE project_id = ?` on list/get; legacy rows backfilled to `prj_default` |
-| **2 — Auth MVP** | Session login for **`/context/*`** when password env set; **`CONTEXT_API_KEY`** unchanged for `/api/*` | **✅ Done** — `/context/login`, signed cookie, `POST`/`GET` dashboard gated |
-| **3 — Manufacturing v2** | **git clone + optional `git apply` + optional shell command** (tests/build); status machine unchanged | **✅ Done** — env-driven adapter + Docker `git` + README path |
-| **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | **✅ Done** — `meeting_agenda_items`, REST + dashboard |
-| **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | **✅ Done** — `POST /webhooks/scm/github`, HMAC, audit; URL query for project/story |
-| **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | **✅ Done** — `/health` & `/ready`, CLI (`migrate` / `seed` / `backup`), [deploy runbook](docs/deploy-runbook.md), [Postgres notes](docs/postgres-notes.md), reference project `prj_reference` |
+### Completed delivery slices (historical agent phases 1–6)
 
-Phase **6** is complete; further work is feature backlog (Epic F/G, full PG port, etc.).
+| Phase | Focus | Status |
+|-------|--------|--------|
+| **1** | Scope — `project_id` on traceability | **✅ Done** |
+| **2** | Auth — dashboard session + API key | **✅ Done** |
+| **3** | Manufacturing — git adapter + stub | **✅ Done** |
+| **4** | Meetings — agenda + generate from gaps | **✅ Done** |
+| **5** | SCM webhook — GitHub push/ping | **✅ Done** |
+| **6** | Ops — `/health`, `/ready`, CLI, runbook, seed | **✅ Done** |
 
-### Roadmap to enterprise & process architecture v2.0
+### Next phases (summary)
 
-README phases **1–6** were **delivery slices** for this repo. The **Automated Agile** *Enterprise Architecture v2.0* and *Process Architecture v2.0* (seven systems, four value streams, MCP, event bus, five UX surfaces) are tracked as **implementation phases 7–14** in:
+| Phase | Theme |
+|-------|--------|
+| **7** | EA context package & gap **contracts** |
+| **8** | Meeting intelligence v2 (extraction shape, sufficiency) |
+| **9** | Process orchestration & **tiered confirmation** |
+| **10** | **Manufacturing gateway** module + prediction |
+| **11** | **Codebase intelligence** + **indexed regex** search |
+| **12** | Feedback hub & **Observatory** (baseline metrics) |
+| **13** | **MCP** + event bus + wrap decision/search tools |
+| **14** | Enterprise **scale** — HA, Postgres path, SSO, five UX surfaces |
 
-**[docs/implementation-phase-plan-enterprise-v2.md](docs/implementation-phase-plan-enterprise-v2.md)**
-
-That plan includes: **data contract** alignment (context package, gaps, triage, meeting extraction), **Meeting / Process / Manufacturing gateway** depth, **Codebase Intelligence** with **indexed regex search** ([docs/agent-context-retrieval.md](docs/agent-context-retrieval.md)), **Feedback + Observatory** metrics (baseline-first), **MCP + integrations**, and **enterprise scale** (HA, SSO, surfaces).
+Full checklists, dependencies, and EA mapping live in **[IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md)**. The older filename `implementation-phase-plan-enterprise-v2.md` now **redirects** there.
 
 ---
 
@@ -257,6 +265,7 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 ├── docs/
 │   ├── context-platform-process-architecture.md
 │   ├── agent-context-retrieval.md
+│   ├── IMPLEMENTATION-PLAN.md
 │   ├── decision-agent-fleet.md
 │   ├── implementation-phase-plan-enterprise-v2.md
 │   ├── deploy-runbook.md
