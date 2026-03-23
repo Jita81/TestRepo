@@ -17,3 +17,18 @@ jobs:
           context: .
           push: false
           tags: context-platform:ci
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: migrate + seed (Phase 6)
+        run: |
+          export CONTEXT_DB_PATH="${RUNNER_TEMP}/ctx_cli.db"
+          python -m src.context_platform.cli migrate
+          python -m src.context_platform.cli seed
+          python -m src.context_platform.cli seed

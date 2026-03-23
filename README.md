@@ -2,7 +2,7 @@
 
 Reference implementation for the **Automated Agile — Context Engineering Platform**: a **self-curating context graph** (roadmap → story → **D7** context package → **D8** sprint commitment → **D9** manufacturing → **D10** triage → **D11** improvement backlog) with **meetings (D4 extraction)**, **audit trail**, **decision/artifact records**, and **project-scoped** workspaces.
 
-**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)
+**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Issue-style backlog:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Deploy / ops:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
 
 ---
 
@@ -39,8 +39,9 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Meeting agenda D1 | D1 | **Phase 4** — `meeting_agenda_items` + optional `context_gap_id`; **generate from gaps** stub; dashboard + REST |
 | Projects / tenancy | I2 | **Partial** — `projects` + `project_id` on core entities **and** audit / decisions / artifacts; **not** org/RBAC |
 | Auth | I1 | **Partial** — optional **dashboard** session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`); **API key** for `/api/*`; string actor; no OAuth/RBAC |
-| Integrations | F | **Not done** |
-| Codebase intelligence | G | **Not done** |
+| Integrations | F | **Phase 5 (partial)** — GitHub **push/ping** webhook → `audit_events`; optional `story_id` + `context_project` query params; **not** PR events or normalized event table |
+| Ops / hardening | I3 / Phase 6 | **Done** — **`GET /health`**, **`GET /ready`**, CLI **`python -m src.context_platform.cli`**, SQLite backup guidance, reference dataset **`prj_reference`**; **Postgres** documented as future ([docs/postgres-notes.md](docs/postgres-notes.md)) |
+| Codebase intelligence | G | **Not done** — policy for **indexed regex + semantic** retrieval: [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) |
 
 ---
 
@@ -51,7 +52,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 3. **Delivery depth:** D8 sprint calendar/capacity UI; **D12** release sign-off placeholder; manufacturing **PR automation** / org-specific CI beyond env-driven git adapter.
 4. **Meetings:** **D1** item status / ordering rules beyond MVP; **D3** richer gap-driven agenda heuristics; richer M1–M7 registry.
 5. **Product / analytics:** Triage trends, improvement metrics, exports; **B4** predicted queue heuristic.
-6. **Integrations:** Chat, PM, SCM webhooks (roadmap outlines in [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md)).
+6. **Integrations:** Chat, PM tools; **SCM** beyond push/ping audit (PR events, repo↔story mapping table); see Epic F in [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md).
 
 ---
 
@@ -65,10 +66,10 @@ Use these as **sequenced iterations** for coding agents (or human sprints). Each
 | **2 — Auth MVP** | Session login for **`/context/*`** when password env set; **`CONTEXT_API_KEY`** unchanged for `/api/*` | **✅ Done** — `/context/login`, signed cookie, `POST`/`GET` dashboard gated |
 | **3 — Manufacturing v2** | **git clone + optional `git apply` + optional shell command** (tests/build); status machine unchanged | **✅ Done** — env-driven adapter + Docker `git` + README path |
 | **4 — Meetings v2** | Meeting **agenda** entity + link to gaps; `generate-agenda` stub from open gaps | **✅ Done** — `meeting_agenda_items`, REST + dashboard |
-| **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | End-to-end demo path |
-| **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | Deploy runbook validated |
+| **5 — Integrations slice** | One **SCM webhook** (e.g. push) → audit event + optional story link | **✅ Done** — `POST /webhooks/scm/github`, HMAC, audit; URL query for project/story |
+| **6 — Hardening** | Postgres option, migrations tool, backup notes, load **one** reference dataset | **✅ Done** — `/health` & `/ready`, CLI (`migrate` / `seed` / `backup`), [deploy runbook](docs/deploy-runbook.md), [Postgres notes](docs/postgres-notes.md), reference project `prj_reference` |
 
-Phase **5** (next) is **integrations**; **6** is ops hardening.
+Phase **6** is complete; further work is feature backlog (Epic F/G, full PG port, etc.).
 
 ---
 
@@ -77,11 +78,12 @@ Phase **5** (next) is **integrations**; **6** is ops hardening.
 ```bash
 pip install -r requirements.txt
 cp .env.example .env   # optional
-python run.py
+python3 run.py         # or: python run.py
 ```
 
-- **Dashboard:** http://localhost:8000/context ( `/` redirects here )
+- **Dashboard:** http://localhost:8000/context (`/` redirects here)
 - **OpenAPI:** http://localhost:8000/docs
+- **Health:** http://localhost:8000/health · **Readiness (DB):** http://localhost:8000/ready
 
 With **`CONTEXT_DASHBOARD_PASSWORD`** + **`CONTEXT_SESSION_SECRET`** (≥32 chars) set, the browser must sign in at **`/context/login`** before using the dashboard. Omit them for local open access.
 
@@ -89,46 +91,66 @@ With **`CONTEXT_DASHBOARD_PASSWORD`** + **`CONTEXT_SESSION_SECRET`** (≥32 char
 
 ## Deployment
 
-### Docker (recommended)
+**Full operator guide:** [docs/deploy-runbook.md](docs/deploy-runbook.md) (backups, migrations CLI, seed data, restore). This section is the short path.
 
-```bash
-docker compose up --build
-```
+### Run with Docker Compose (recommended)
 
-- App listens on **8000**.
-- SQLite and manufacturing outputs use a **named volume** (`data`) so they survive restarts—see [docker-compose.yml](docker-compose.yml).
+1. **Build and start** (foreground logs):
 
-**Production checklist**
+   ```bash
+   docker compose up --build
+   ```
 
-| Item | Notes |
-|------|--------|
-| **Dashboard auth** | Set **`CONTEXT_DASHBOARD_PASSWORD`** and **`CONTEXT_SESSION_SECRET`** (≥32 chars, e.g. `openssl rand -hex 32`). Set **`CONTEXT_SESSION_HTTPS_ONLY=1`** when TLS terminates at the app. |
-| **REST** | Set **`CONTEXT_API_KEY`** so `/api/*` is not anonymous |
-| **Project default** | Set `CONTEXT_PROJECT_ID` or rely on UI cookie / `X-Context-Project` |
-| **Persistence** | Mount a volume at `/app/data` (see compose) or switch DB later |
-| **Manufacturing (D9)** | Image includes **`git`**. For the git adapter set `MANUFACTURING_GIT_URL` (and optionally `MANUFACTURING_PATCH_FILE`, `MANUFACTURING_RUN_CMD`). Needs outbound network to clone. |
-| **HTTPS** | Terminate TLS at your reverse proxy / platform load balancer |
-| **OpenAI** | Optional `OPENAI_API_KEY` for meeting extraction |
+2. **Check** the app is up:
 
-**Build image only**
+   ```bash
+   curl -sSf http://127.0.0.1:8000/health
+   curl -sSf http://127.0.0.1:8000/ready
+   ```
+
+3. **Open** the dashboard at http://localhost:8000/context
+
+The Compose file maps **8000 → 8000**, stores SQLite and manufacturing outputs on a **named volume** (`context_platform_data` → `/app/data`). The image includes a **container healthcheck** against `/ready` (see [docker-compose.yml](docker-compose.yml)).
+
+### Build and run the image alone
 
 ```bash
 docker build -t context-platform .
-docker run -p 8000:8000 -v context_data:/app/data \
+docker run -d --name ctx -p 8000:8000 \
+  -v context_data:/app/data \
   -e CONTEXT_API_KEY=your-api-key \
   -e CONTEXT_DASHBOARD_PASSWORD=your-dashboard-password \
-  -e CONTEXT_SESSION_SECRET=$(openssl rand -hex 32) \
+  -e CONTEXT_SESSION_SECRET="$(openssl rand -hex 32)" \
   context-platform
+curl -sSf http://127.0.0.1:8000/ready
 ```
 
-### CI
+Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respects `HOST` / `PORT`).
 
-The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml): each push runs **`docker build`** so the image stays buildable (no registry push unless you extend the workflow).
+### Production checklist
 
-### Platform examples
+| Item | Notes |
+|------|--------|
+| **TLS** | Terminate HTTPS at your reverse proxy or platform; set **`CONTEXT_SESSION_HTTPS_ONLY=1`** when the app sees HTTPS. |
+| **Probes** | Liveness: **`GET /health`**. Readiness / dependency: **`GET /ready`** (503 if SQLite cannot be opened). |
+| **Dashboard auth** | **`CONTEXT_DASHBOARD_PASSWORD`** + **`CONTEXT_SESSION_SECRET`** (≥32 chars). |
+| **REST** | **`CONTEXT_API_KEY`** on `/api/*` — **`/api/context/webhooks/*`** is exempt; use **`CONTEXT_SCM_WEBHOOK_SECRET`** + GitHub HMAC for SCM. |
+| **SCM webhook** | Same secret in GitHub and **`CONTEXT_SCM_WEBHOOK_SECRET`**; webhook URL over HTTPS; optional **`?context_project=`** / **`?story_id=`**. |
+| **Persistence** | Mount a volume on **`/app/data`** (Compose does this). Back up the SQLite file per [docs/deploy-runbook.md](docs/deploy-runbook.md). |
+| **Manufacturing** | Image includes **`git`**. Set **`MANUFACTURING_*`** only if you use the git adapter; requires outbound network to clone. |
+| **OpenAI** | Optional **`OPENAI_API_KEY`** for meeting extraction. |
 
-- **Fly.io / Railway / Render:** Dockerfile deploy; set `PORT` if the platform injects it; bind `0.0.0.0` (default). Mount persistent disk for `/app/data`.
-- **Kubernetes:** Single Deployment + PVC for `/app/data`; Secret for env vars.
+### After deploy (optional)
+
+- **Reference demo data** (idempotent, project `prj_reference`):  
+  `docker compose exec web python -m src.context_platform.cli seed`  
+  (or run the same command on the host against `CONTEXT_DB_PATH`.)
+- **CI:** [`.github/workflows/docker-build.yml`](.github/workflows/docker-build.yml) runs **`docker build`** plus a **`cli`** job (`migrate` + `seed`) on each push.
+
+### Platform notes
+
+- **Fly.io / Railway / Render:** Dockerfile deploy; bind **`0.0.0.0`**; mount persistent disk for **`/app/data`**; align **`PORT`** with the platform.
+- **Kubernetes:** Deployment + Service; **livenessProbe** → `/health`, **readinessProbe** → `/ready`; PVC for **`/app/data`**; Secrets for env vars.
 
 ---
 
@@ -142,12 +164,20 @@ The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docke
 | Package / D7 | `/stories/{id}/context-packages`, `PATCH`, `/sign-offs` |
 | D9 / D10 | `/context-packages/{id}/manufacturing`, `/manufacturing/{id}/triage`, `GET /triage-results` |
 | Meetings | `/meetings`, **D1** `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda`; **D4** transcript, extract, confirm, per-item review |
+| Integrations | **`POST /webhooks/scm/github`** — GitHub **push** / **ping** (JSON); signs with **`X-Hub-Signature-256`** when secret set |
+| Health (Phase 6) | **`GET /health`** (liveness), **`GET /ready`** (DB ping — 503 if store fails) |
 | Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
 
 **D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen.  
 **D8:** One story ↔ one sprint commitment; D7 required unless override env/checkbox.  
 **D10:** Q1 notes; Q2 gap lines; Q3 root cause + narrative (`detail_json`).  
 **D1 (Phase 4):** Agenda lines stored in `meeting_agenda_items`; optional link to `context_gaps.id`; **generate-agenda** appends one item per unresolved gap in the project (skips gaps already linked to that meeting).
+
+**Phase 5 (SCM):** Configure GitHub → **Webhooks** → URL  
+`https://<host>/api/context/webhooks/scm/github`  
+Add **`?context_project=<project_id>`** if the default env project is wrong, and **`&story_id=<story_uuid>`** to attach a story (must exist in that project). Set **`CONTEXT_SCM_WEBHOOK_SECRET`** to a long random string; in GitHub use the same as the webhook **Secret** so `X-Hub-Signature-256` validates. Events appear in **`GET /api/context/audit-events`** as **`scm_push_received`**, **`scm_webhook_ping`**, or **`scm_webhook_event`**.
+
+**Phase 6:** Operator procedures, backups, and **`python -m src.context_platform.cli`** (`migrate` / `seed` / `backup`) — [docs/deploy-runbook.md](docs/deploy-runbook.md). **PostgreSQL:** [docs/postgres-notes.md](docs/postgres-notes.md). Reference seed: [data/reference_manifest.json](data/reference_manifest.json).
 
 ---
 
@@ -158,7 +188,8 @@ The repo includes [`.github/workflows/docker-build.yml`](.github/workflows/docke
 | `CONTEXT_DB_PATH` | `data/context_platform.db` | SQLite path |
 | `CONTEXT_PROJECT_ID` | `prj_default` | Default project (override with header/cookie) |
 | `CONTEXT_ACTOR` | `anonymous` | Default actor; per request: `X-Context-Actor` |
-| `CONTEXT_API_KEY` | — | If set, `/api/*` requires `X-Context-API-Key` or `Authorization: Bearer` |
+| `CONTEXT_API_KEY` | — | If set, `/api/*` requires `X-Context-API-Key` or `Authorization: Bearer` (webhooks under `/api/context/webhooks/` are exempt) |
+| `CONTEXT_SCM_WEBHOOK_SECRET` | — | If set, **`POST /webhooks/scm/github`** requires HMAC-SHA256 (`X-Hub-Signature-256: sha256=<hex>` or `X-Context-SCM-Signature`) |
 | `CONTEXT_DASHBOARD_PASSWORD` | — | If set, `/context/*` (except `/login`) requires session sign-in |
 | `CONTEXT_SESSION_SECRET` | — | Required with dashboard password; ≥32 chars; signs session cookie |
 | `CONTEXT_DASHBOARD_USER` | `admin` | Dashboard login username |
@@ -211,7 +242,12 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 ├── .github/workflows/      # Docker build CI
 ├── docs/
 │   ├── context-platform-process-architecture.md
+│   ├── agent-context-retrieval.md
+│   ├── deploy-runbook.md
+│   ├── postgres-notes.md
 │   └── roadmap-github-issues.md
+├── data/
+│   └── reference_manifest.json
 ├── src/context_platform/
 │   ├── api.py
 │   ├── store.py
@@ -222,7 +258,10 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 │   ├── dashboard_auth.py
 │   ├── middleware_*.py
 │   ├── meeting_extraction.py
-│   └── manufacturing_worker.py
+│   ├── manufacturing_worker.py
+│   ├── scm_webhook.py
+│   ├── reference_seed.py
+│   └── cli.py
 └── templates/
     ├── context_dashboard.html
     └── dashboard_login.html
@@ -232,4 +271,4 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 
 ## SQLite migration
 
-Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions` (including **`meeting_agenda_items`** for Phase 4). For production scale-out, plan a **single-writer** SQLite or move to Postgres (future phase).
+Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions` (including **`meeting_agenda_items`** for Phase 4). There is **no separate Alembic migration pack**; run **`python -m src.context_platform.cli migrate`** to validate the file the same way the app does on boot. For production scale-out, plan a **single-writer** SQLite and follow [docs/deploy-runbook.md](docs/deploy-runbook.md), or plan a **Postgres port** ([docs/postgres-notes.md](docs/postgres-notes.md)).

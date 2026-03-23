@@ -4,12 +4,25 @@ services:
     build: .
     ports:
       - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','8000')+'/ready', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 20s
     environment:
       CONTEXT_DB_PATH: /app/data/context_platform.db
       MANUFACTURING_OUTPUT_DIR: /app/data/manufacturing_outputs
       HOST: "0.0.0.0"
       PORT: "8000"
       # CONTEXT_API_KEY: change-me
+      # CONTEXT_SCM_WEBHOOK_SECRET: use same value as GitHub webhook secret (Phase 5)
       # Production: set dashboard login + session secret (see README Phase 2)
       # CONTEXT_DASHBOARD_PASSWORD: ${CONTEXT_DASHBOARD_PASSWORD}
       # CONTEXT_SESSION_SECRET: ${CONTEXT_SESSION_SECRET}

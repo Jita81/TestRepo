@@ -3,15 +3,26 @@
 from __future__ import annotations
 
 import json
+import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Body, Form, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Form, HTTPException, Query, Request
 from pydantic import ValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from src.context_platform.manufacturing_worker import run_manufacturing_job
-from src.context_platform.context_project import get_project_id
+from src.context_platform.context_project import (
+    get_project_id,
+    reset_project_token,
+    set_project_token,
+)
+from src.context_platform.scm_webhook import (
+    is_github_hook_ping,
+    scm_webhook_secret,
+    summarize_github_push,
+    verify_scm_signature,
+)
 from src.context_platform.dashboard_auth import (
     dashboard_password_configured,
     verify_dashboard_credentials,
@@ -50,6 +61,123 @@ templates = Jinja2Templates(directory="templates")
 
 api_router = APIRouter(prefix="/api/context")
 page_router = APIRouter(prefix="/context", tags=["context-platform-ui"])
+
+
+# --- SCM webhooks (Phase 5) — no CONTEXT_API_KEY; optional HMAC via CONTEXT_SCM_WEBHOOK_SECRET ---
+
+
+@api_router.post("/webhooks/scm/github")
+async def api_scm_github_webhook(
+    request: Request,
+    story_id: Optional[str] = Query(
+        None,
+        max_length=80,
+        description="Optional platform story id (must belong to the active project).",
+    ),
+    context_project: Optional[str] = Query(
+        None,
+        max_length=80,
+        description="Project id for this event when the sender cannot set X-Context-Project (append to webhook URL).",
+    ),
+):
+    """
+    Accepts GitHub **push** and **ping** payloads (JSON). Verifies
+    `X-Hub-Signature-256` when `CONTEXT_SCM_WEBHOOK_SECRET` is set.
+    Logs **`scm_push_received`** or **`scm_webhook_ping`** / **`scm_webhook_event`** to `audit_events`.
+    """
+    body = await request.body()
+    sig = request.headers.get("x-hub-signature-256") or request.headers.get(
+        "x-context-scm-signature"
+    )
+    if scm_webhook_secret() and not verify_scm_signature(body, sig):
+        raise HTTPException(401, "Invalid webhook signature") from None
+    try:
+        data = json.loads(body.decode("utf-8") or "{}")
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise HTTPException(400, "Invalid JSON body") from e
+    if not isinstance(data, dict):
+        raise HTTPException(400, "JSON body must be an object") from None
+
+    tok = None
+    cp = (context_project or "").strip()[:80]
+    if cp:
+        tok = set_project_token(cp)
+    try:
+        store = get_store()
+        if story_id:
+            try:
+                store.get_story(story_id)
+            except KeyError:
+                raise HTTPException(
+                    404, "Story not found in the selected project"
+                ) from None
+
+        gh_event = (request.headers.get("x-github-event") or "").strip().lower()
+        if gh_event == "ping" or is_github_hook_ping(data):
+            hook_id = str(data.get("hook_id") or "ping")
+            store.log_audit(
+                "scm_webhook_ping",
+                "scm_webhook",
+                hook_id[:120],
+                actor="scm_webhook",
+                detail={
+                    "zen": data.get("zen"),
+                    "hook_id": data.get("hook_id"),
+                    "repository": (data.get("repository") or {})
+                    if isinstance(data.get("repository"), dict)
+                    else None,
+                },
+            )
+            return {
+                "ok": True,
+                "ping": True,
+                "project_id": get_project_id(),
+                "linked_story_id": story_id,
+            }
+
+        if gh_event == "push" or (
+            "ref" in data and isinstance(data.get("repository"), dict)
+        ):
+            summary = summarize_github_push(data)
+            if story_id:
+                summary["linked_story_id"] = story_id
+            repo = summary.get("repository_full_name") or "unknown"
+            ref = summary.get("ref") or "unknown"
+            entity_id = f"{repo}@{ref}"[:200]
+            store.log_audit(
+                "scm_push_received",
+                "scm_repository",
+                entity_id,
+                actor="scm_webhook",
+                detail=summary,
+            )
+            return {
+                "ok": True,
+                "project_id": get_project_id(),
+                "entity_id": entity_id,
+                "linked_story_id": story_id,
+            }
+
+        eid = f"{gh_event or 'unknown'}_{uuid.uuid4().hex[:10]}"
+        store.log_audit(
+            "scm_webhook_event",
+            "scm_webhook",
+            eid[:120],
+            actor="scm_webhook",
+            detail={
+                "github_event": gh_event or None,
+                "payload_keys": list(data.keys())[:40],
+            },
+        )
+        return {
+            "ok": True,
+            "project_id": get_project_id(),
+            "github_event": gh_event or None,
+            "linked_story_id": story_id,
+        }
+    finally:
+        if tok is not None:
+            reset_project_token(tok)
 
 
 def _dump(m: Any) -> dict:

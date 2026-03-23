@@ -2,7 +2,7 @@
 
 **Master implementation plan (goals, status, agent phases, deploy):** [README.md](../README.md)
 
-**Progress (repo):** **A1**, **B1**, **B2**; **H1** stub manufacturing + file artifact; **D2** transcript + per-item review + optional OpenAI; **`audit_events`** + **`project_id`**; **D11** from Q2/Q3; **A2 (partial):** `decision_records` + `artifacts` (both **`project_id`**) with **D7/D8/D10/D4** wiring + **`X-Context-Actor`**; **C1 (partial):** `sprints` + `sprint_commitments`, D7 gate + env/UI override, dashboard + API; **C2 (partial):** D10 **structured triage** (`detail_json` + queue rules Q1/Q2/Q3, `GET /triage-results`); **A3 (partial):** before/after snapshots on package **update** / **sign_off** + gap **resolve**; optional **`CONTEXT_API_KEY`** for **`/api/*`**; **`projects`** table + **`project_id`** on roadmap/stories/meetings/sprints + **`X-Context-Project`** / cookie / **`CONTEXT_PROJECT_ID`**. **Phase 1 (README):** traceability rows scoped by project. **Phase 2:** optional dashboard session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`), `/context/login`, gated `GET`/`POST` under `/context`. **Phase 3:** manufacturing git adapter (`MANUFACTURING_GIT_URL`, optional patch + run cmd). **Phase 4:** **`meeting_agenda_items`** (optional `context_gap_id`), `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda` from open gaps, dashboard block. Remaining: **A2** (full D1–D12 coverage, UI per decision), **A3** (full entity diff coverage), OAuth/org-level auth, integrations, D3 heuristics/D12, PR automation, sprint dates/capacity depth, triage analytics depth.
+**Progress (repo):** **A1**, **B1**, **B2**; **H1** stub manufacturing + file artifact; **D2** transcript + per-item review + optional OpenAI; **`audit_events`** + **`project_id`**; **D11** from Q2/Q3; **A2 (partial):** `decision_records` + `artifacts` (both **`project_id`**) with **D7/D8/D10/D4** wiring + **`X-Context-Actor`**; **C1 (partial):** `sprints` + `sprint_commitments`, D7 gate + env/UI override, dashboard + API; **C2 (partial):** D10 **structured triage** (`detail_json` + queue rules Q1/Q2/Q3, `GET /triage-results`); **A3 (partial):** before/after snapshots on package **update** / **sign_off** + gap **resolve**; optional **`CONTEXT_API_KEY`** for **`/api/*`**; **`projects`** table + **`project_id`** on roadmap/stories/meetings/sprints + **`X-Context-Project`** / cookie / **`CONTEXT_PROJECT_ID`**. **Phase 1 (README):** traceability rows scoped by project. **Phase 2:** optional dashboard session login (`CONTEXT_DASHBOARD_PASSWORD` + `CONTEXT_SESSION_SECRET`), `/context/login`, gated `GET`/`POST` under `/context`. **Phase 3:** manufacturing git adapter (`MANUFACTURING_GIT_URL`, optional patch + run cmd). **Phase 4:** **`meeting_agenda_items`** (optional `context_gap_id`), `GET/POST /meetings/{id}/agenda`, `POST /meetings/{id}/generate-agenda` from open gaps, dashboard block. **Phase 5:** **`POST /api/context/webhooks/scm/github`** (push/ping → `audit_events`, optional `story_id` / `context_project` query params, `CONTEXT_SCM_WEBHOOK_SECRET` + `X-Hub-Signature-256`). **Phase 6:** **`/health`** & **`/ready`**, **`python -m src.context_platform.cli`** (`migrate` / `seed` / `backup`), [docs/deploy-runbook.md](../docs/deploy-runbook.md), [docs/postgres-notes.md](../docs/postgres-notes.md), reference dataset **`prj_reference`**. Remaining: **A2** (full D1–D12 coverage, UI per decision), **A3** (full entity diff coverage), OAuth/org-level auth, integrations, D3 heuristics/D12, PR automation, sprint dates/capacity depth, triage analytics depth.
 
 Use this document to create **Epics** (GitHub Milestones or parent Issues) and **child Issues**. Each block below is intended as **one issue**: title = first line; body = the rest of the block.
 
@@ -257,6 +257,8 @@ Phase completion: aggregate story outcomes, test/coverage hooks (placeholders), 
 **Description**  
 Receive PR open/edit/merge; store events; optional comment on PR with context package link when manufacturing creates PR (stub ok).
 
+**Repo note (Phase 5):** **Push** and **ping** JSON webhooks are accepted at **`POST /api/context/webhooks/scm/github`** with optional HMAC (`CONTEXT_SCM_WEBHOOK_SECRET`). Normalized per-PR rows and PR event types are **not** implemented yet.
+
 **Acceptance criteria**
 - [ ] Webhook endpoint + secret validation.
 - [ ] Persist normalized event rows linked to repo/story when mapping exists.
@@ -292,6 +294,8 @@ Post agenda before meeting; notify when extraction ready for review; optional re
 ---
 
 ## Epic G — Codebase intelligence
+
+**Platform note:** Agent-facing retrieval should combine **semantic indexes** with **indexed regex / text search** (trigram-style and successors); see [agent-context-retrieval.md](agent-context-retrieval.md) and **§07** in [context-platform-process-architecture.md](context-platform-process-architecture.md).
 
 ### Issue G1 — Repository clone + static scan job
 
@@ -386,6 +390,8 @@ Scope all entities by `org_id` / `project_id`; enforce in API.
 
 **Description**  
 JSON logs, request ids, `/health` and `/ready` for DB; basic metrics hooks.
+
+**Repo note (Phase 6):** **`GET /health`** (liveness) and **`GET /ready`** (SQLite ping via store) implemented. JSON logs / metrics hooks not done.
 
 **Acceptance criteria**
 - [ ] `/health` returns DB connectivity.

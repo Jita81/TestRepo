@@ -20,5 +20,9 @@ RUN mkdir -p data data/manufacturing_outputs templates
 
 EXPOSE 8000
 
+# Orchestrators and `docker ps` can use this; Compose also defines a healthcheck.
+HEALTHCHECK --interval=30s --timeout=6s --start-period=20s --retries=3 \
+  CMD ["python", "-c", "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','8000')+'/ready', timeout=5)"]
+
 # PORT/HOST respected by uvicorn; many PaaS set PORT
 CMD sh -c 'exec uvicorn main:app --host ${HOST:-0.0.0.0} --port ${PORT:-8000}'

@@ -780,6 +780,11 @@ class ContextStore:
         finally:
             conn.close()
 
+    def ping(self) -> None:
+        """Cheap connectivity check for `/ready` (Phase 6)."""
+        with self._connect() as conn:
+            conn.execute("SELECT 1").fetchone()
+
     def log_audit(
         self,
         action: str,
