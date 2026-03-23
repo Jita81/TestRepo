@@ -374,6 +374,8 @@ The entire architecture rests on a single principle: AI accelerates every part o
 
 An MVP aligned with **D7** / **D8** (sprint commitments with D7 gate + override) / **D9** / **D10** (structured **Q1/Q2/Q3** triage with `detail_json`) / **D4** (meeting extraction sign-off), plus **`projects`** (workspace isolation), **`decision_records`** and **`artifacts`** for traceability, **audit events** (including **before/after** snapshots for key package edits), optional **`CONTEXT_API_KEY`** on **`/api/*`**, and request **`X-Context-Actor`** / **`X-Context-Project`**, lives in `src/context_platform/`: roadmap **cycle → phase → feature → story**, structured package sections, SQLite persistence (with migration from legacy `work_items`), REST API under `/api/context`, and a dashboard at `/context`. Run `python run.py` and see the repository README for URLs and `CONTEXT_DB_PATH`.
 
+**Enterprise / process architecture v2.0:** the gap-closing roadmap for seven systems, data contracts, MCP, and **indexed regex** in Codebase Intelligence is **[implementation-phase-plan-enterprise-v2.md](implementation-phase-plan-enterprise-v2.md)**.
+
 ---
 
 *Learn more: [contextengineering.team](https://contextengineering.team/) · [softwaremanufacturing.team](https://softwaremanufacturing.team/)*  
