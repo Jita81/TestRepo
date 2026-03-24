@@ -65,6 +65,15 @@ export CONTEXT_PROJECT_ID=prj_default   # or your tenant
 python3 -m src.context_platform.cli index-codebase --root /path/to/git/checkout
 ```
 
+## 4c. Observatory / analytics (Phase 12)
+
+Project-scoped aggregates for operators and integrations:
+
+- **`GET /api/context/analytics-summary`** — manufacturing counts, D10 queue mix, open gaps by `severity_tier`, D11 status counts, Q2 rows with diff metadata, triage prediction match rate, pending `process_outbox` rows.
+- **Metric tiers** (how to read the JSON): [ea-metric-tiers-phase12.md](ea-metric-tiers-phase12.md).
+
+The dashboard includes an **Observatory** card when you open `/context`.
+
 ## 5. Reference dataset
 
 One **idempotent** demo graph (project `prj_reference`, cycle → story → draft package → gap):

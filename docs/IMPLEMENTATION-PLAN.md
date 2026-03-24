@@ -3,7 +3,7 @@
 **Version:** 2.1 · March 2026  
 **Canonical roadmap** for this repository relative to **Enterprise Architecture v2.0** & **Process Architecture v2.0** (Automated Agile / Context Engineering Platform).
 
-**Companion docs:** [context-platform-process-architecture.md](context-platform-process-architecture.md) · [roadmap-github-issues.md](roadmap-github-issues.md) · [agent-context-retrieval.md](agent-context-retrieval.md) · [codebase-index-phase11.md](codebase-index-phase11.md) · [decision-agent-fleet.md](decision-agent-fleet.md) · [deploy-runbook.md](deploy-runbook.md)
+**Companion docs:** [context-platform-process-architecture.md](context-platform-process-architecture.md) · [roadmap-github-issues.md](roadmap-github-issues.md) · [agent-context-retrieval.md](agent-context-retrieval.md) · [codebase-index-phase11.md](codebase-index-phase11.md) · [ea-metric-tiers-phase12.md](ea-metric-tiers-phase12.md) · [decision-agent-fleet.md](decision-agent-fleet.md) · [deploy-runbook.md](deploy-runbook.md)
 
 ---
 
@@ -16,7 +16,7 @@
 | **Integrations** | GitHub SCM webhook (push/ping) — **shipped**; PM/chat/MCP — **not**. |
 | **Decision intelligence** | **D1–D12 decision agent fleet** + shared **`llm_client`** (`CONTEXT_LLM_MODEL`) — **shipped** (`GET/POST /api/context/decision-agents/...`). |
 | **Codebase intelligence** | **Policy** + **Phase 11 MVP** ([codebase-index-phase11.md](codebase-index-phase11.md)) — CLI mirror, **`/codebase-search`**, regex verify, **`codebase.*`** audits. |
-| **Enterprise target** | Seven systems, five UX surfaces, event bus, EA data contracts — **Phases 7–11 shipped**; **Phases 12–14** remain. |
+| **Enterprise target** | Seven systems, five UX surfaces, event bus, EA data contracts — **Phases 7–12 shipped**; **Phases 13–14** remain. |
 
 ---
 
@@ -39,6 +39,7 @@ These map to README **agent phases 1–6** plus adjacent features.
 | **P9 — Process orchestration** | Stored `readiness_score` documented; quick-path rule + `process.*` audits + `process_outbox`; optional note-only extraction auto-accept. |
 | **P10 — Manufacturing gateway** | `manufacturing_gateway` prompt bundle + Markdown; CI tests; `predicted_triage_queue` vs actual D10 in audits. |
 | **P11 — Codebase index** | `codebase_index` + `codebase_index_entries`; CLI **`index-codebase`**; **`GET .../codebase-search`** + verify; docs + unittest. |
+| **P12 — Feedback & observatory** | Q2 optional **`diff_attachment`** in triage `detail_json`; **`GET .../analytics-summary`**; dashboard Observatory card; [ea-metric-tiers-phase12.md](ea-metric-tiers-phase12.md). |
 
 ---
 
@@ -51,7 +52,7 @@ These map to README **agent phases 1–6** plus adjacent features.
 | **9** | **Process & tiers** | **Done** — readiness on `context_packages`; env-gated quick path + note-only auto-accept; `process_outbox` + `GET/POST .../process-outbox`. |
 | **10** | **Manufacturing gateway** | **Done** — `manufacturing_gateway` module; `GET .../manufacturing-prompt`; prediction column + audit match fields. |
 | **11** | **Codebase intel + regex index** | **Done (MVP)** — SQLite mirror + substring `LIKE` + optional regex verify; **`codebase.*`** audits; [codebase-index-phase11.md](codebase-index-phase11.md). |
-| **12** | **Feedback & observatory** | Q2 diff metadata; Q1/2/3 dashboards; baseline metrics (EA §9). |
+| **12** | **Feedback & observatory** | **Done** — Q2 optional diff (`detail_json.diff_attachment`); **`GET .../analytics-summary`**; dashboard slice + EA metric tiers doc. |
 | **13** | **MCP & bus** | MCP tools (graph, search, **decision invoke**); integration stubs; bus ADR. |
 | **14** | **Enterprise scale** | HA/Postgres path; SSO; five UX surfaces map. |
 
@@ -79,9 +80,9 @@ These map to README **agent phases 1–6** plus adjacent features.
 | 4.2 | Codebase intelligence | Policy + **CLI/API index (11)** | Trigram / FTS scale-up; MCP (**13**) |
 | 4.3 | Context graph | SQLite relational | Richer contracts, auto-assembly (**7**) |
 | 4.4 | Manufacturing gateway | Worker + API + **gateway Markdown** | Compiler/tests (**10**); deeper codegen in later phases |
-| 4.5 | Feedback hub | D10 + improvements | Q2 diff, taxonomy (**12**) |
+| 4.5 | Feedback hub | D10 + improvements + **Q2 diff attachment (12)** | Deeper taxonomy / PM links (**13+**) |
 | 4.6 | Process orchestration | D7/D8 gates + Phase 9 outbox / `process.*` | Adaptive tiers deepen in ops (**9** shipped MVP) |
-| 4.7 | Analytics | Audit lists | Observatory (**12**) |
+| 4.7 | Analytics | **`GET /analytics-summary`** + dashboard · [ea-metric-tiers-phase12.md](ea-metric-tiers-phase12.md) | Warehouse / cross-project (**14**) |
 
 ---
 
@@ -126,8 +127,8 @@ Align storage/API with EA **context package** sections (`technical_context`, `su
 - [x] `codebase.*` audit events + perf note (`codebase.index_completed`, `codebase.search` with `duration_ms`; perf section in doc).
 
 ### Phase 12 — Feedback hub & observatory
-- [ ] Q2 optional diff attachment.
-- [ ] Analytics API/dashboard slice + EA metric tiers doc.
+- [x] Q2 optional diff attachment (`TriageSubmit.diff_*` → `detail_json.diff_attachment`; cap + audit `has_diff_attachment`).
+- [x] Analytics API/dashboard slice + EA metric tiers doc (`GET /analytics-summary`, dashboard Observatory card, [ea-metric-tiers-phase12.md](ea-metric-tiers-phase12.md)).
 
 ### Phase 13 — MCP & integration backbone
 - [ ] MCP server + tools (graph, search, decision invoke).

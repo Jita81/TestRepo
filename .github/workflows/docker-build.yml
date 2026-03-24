@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - name: manufacturing gateway tests (Phase 10)
+      - name: unit tests (Phases 10–12 + suite)
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: migrate + seed (Phase 6)
         run: |
