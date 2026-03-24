@@ -1,7 +1,7 @@
 # Agent context retrieval: semantic search + indexed text search
 
 **Status:** Platform policy · March 2026  
-**Related:** [context-platform-process-architecture.md](context-platform-process-architecture.md) · Epic **G** (codebase intelligence) in [roadmap-github-issues.md](roadmap-github-issues.md)
+**Related:** [context-platform-process-architecture.md](context-platform-process-architecture.md) · Epic **G** (codebase intelligence) in [roadmap-github-issues.md](roadmap-github-issues.md) · **Phase 11 MVP index:** [codebase-index-phase11.md](codebase-index-phase11.md)
 
 This document states **how we treat “context” for agentic workflows** in the Automated Agile / Context Engineering Platform: **structured human decisions** (this repo’s spine) sit alongside **machine retrieval** from code and text. For the latter, we explicitly endorse **two complementary modes**:
 

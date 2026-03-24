@@ -439,6 +439,19 @@ CREATE TABLE IF NOT EXISTS process_outbox (
 
 CREATE INDEX IF NOT EXISTS idx_process_outbox_project_pending
 ON process_outbox(project_id, processed_at);
+
+CREATE TABLE IF NOT EXISTS codebase_index_entries (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    relpath TEXT NOT NULL,
+    content_sha256 TEXT NOT NULL,
+    byte_length INTEGER NOT NULL,
+    searchable_text TEXT NOT NULL,
+    indexed_at TEXT NOT NULL,
+    UNIQUE(project_id, relpath)
+);
+
+CREATE INDEX IF NOT EXISTS idx_codebase_index_project ON codebase_index_entries(project_id);
 """
 
 
@@ -742,6 +755,32 @@ def _ensure_phase9_process_outbox(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_phase11_codebase_index(conn: sqlite3.Connection) -> None:
+    """Phase 11: mirrored codebase text for substring / verify search."""
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS codebase_index_entries (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id),
+            relpath TEXT NOT NULL,
+            content_sha256 TEXT NOT NULL,
+            byte_length INTEGER NOT NULL,
+            searchable_text TEXT NOT NULL,
+            indexed_at TEXT NOT NULL,
+            UNIQUE(project_id, relpath)
+        )
+        """
+    )
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_codebase_index_project ON codebase_index_entries(project_id)"
+        )
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+
+
 def _ensure_phase10_manufacturing_predicted_triage(conn: sqlite3.Connection) -> None:
     """Phase 10: optional predicted D10 queue on manufacturing_requests."""
 
@@ -813,6 +852,7 @@ class ContextStore:
             _ensure_phase7_ea_contracts(conn)
             _ensure_phase9_process_outbox(conn)
             _ensure_phase10_manufacturing_predicted_triage(conn)
+            _ensure_phase11_codebase_index(conn)
             mcols = _table_columns(conn, "manufacturing_requests")
             for col, ddl in [
                 ("started_at", "ALTER TABLE manufacturing_requests ADD COLUMN started_at TEXT"),
@@ -1150,6 +1190,161 @@ class ContextStore:
             "quick_path_eligible_now": eligible,
             "min_readiness_configured": quick_path_min_readiness_threshold(),
             "process_event_emitted": emitted,
+        }
+
+    def reindex_codebase_mirror(
+        self, root: Path, *, max_files: int = 50_000
+    ) -> dict[str, Any]:
+        """Phase 11: replace per-project index from a directory walk."""
+
+        from src.context_platform.codebase_index import (
+            iter_indexable_files,
+            to_searchable_text,
+        )
+
+        prj = get_project_id()
+        root = root.resolve()
+        if not root.is_dir():
+            raise ValueError("codebase_index_root_not_a_directory")
+        ts = _now()
+        batch: list[tuple[Any, ...]] = []
+        skipped = 0
+        for rel, raw in iter_indexable_files(root, max_files=max_files):
+            try:
+                digest = hashlib.sha256(raw).hexdigest()
+                stext = to_searchable_text(raw)
+            except Exception:
+                skipped += 1
+                continue
+            eid = hashlib.sha256(f"{prj}:{rel}".encode()).hexdigest()[:40]
+            batch.append((eid, prj, rel, digest, len(raw), stext, ts))
+        with self._connect() as conn:
+            conn.execute(
+                "DELETE FROM codebase_index_entries WHERE project_id = ?", (prj,)
+            )
+            chunk = 400
+            for i in range(0, len(batch), chunk):
+                conn.executemany(
+                    """INSERT INTO codebase_index_entries
+                    (id, project_id, relpath, content_sha256, byte_length, searchable_text, indexed_at)
+                    VALUES (?,?,?,?,?,?,?)""",
+                    batch[i : i + chunk],
+                )
+            conn.commit()
+        detail = {
+            "files_indexed": len(batch),
+            "skipped": skipped,
+            "root": str(root),
+            "max_files": max_files,
+        }
+        self.log_audit(
+            "codebase.index_completed",
+            "project",
+            prj,
+            detail=detail,
+        )
+        return {"project_id": prj, **detail}
+
+    def search_codebase_index(
+        self,
+        query: str,
+        *,
+        verify_pattern: Optional[str] = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Phase 11: substring tokens + optional regex verify (disk or snippet)."""
+
+        import re
+        import time
+
+        from src.context_platform.codebase_index import (
+            sql_like_literal,
+            tokenize_query,
+            verify_regex_on_disk,
+            verify_regex_on_snippet,
+        )
+
+        t0 = time.perf_counter()
+        prj = get_project_id()
+        tokens = tokenize_query(query)
+        if not tokens:
+            return {
+                "query": query,
+                "matches": [],
+                "truncated": False,
+                "verify_applied": False,
+                "mirror_root_configured": False,
+                "duration_ms": round((time.perf_counter() - t0) * 1000, 2),
+            }
+        lim = min(max(limit, 1), 100)
+        fetch_cap = lim * 25 if verify_pattern else lim
+        like_params = [sql_like_literal(t) for t in tokens]
+        where_sql = " AND ".join(
+            ["searchable_text LIKE ? ESCAPE '\\'"] * len(tokens)
+        )
+        sql = f"""SELECT relpath, content_sha256, byte_length, searchable_text
+            FROM codebase_index_entries
+            WHERE project_id = ? AND {where_sql}
+            LIMIT ?"""
+        params: list[Any] = [prj, *like_params, fetch_cap]
+        compiled: Optional[re.Pattern[str]] = None
+        verify_applied = False
+        if verify_pattern and verify_pattern.strip():
+            try:
+                compiled = re.compile(verify_pattern, re.MULTILINE | re.DOTALL)
+            except re.error as e:
+                raise ValueError(f"invalid_verify_regex: {e}") from e
+            verify_applied = True
+        mirror_raw = (os.environ.get("CONTEXT_CODEBASE_INDEX_ROOT") or "").strip()
+        mirror_root = Path(mirror_raw).resolve() if mirror_raw else None
+        mirror_ok = bool(mirror_root and mirror_root.is_dir())
+
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+
+        matches: list[dict[str, Any]] = []
+        for row in rows:
+            rel = row["relpath"]
+            st = row["searchable_text"] or ""
+            snip = st[:240].replace("\n", " ")
+            ok = True
+            if compiled is not None:
+                if mirror_ok and mirror_root is not None:
+                    ok = verify_regex_on_disk(mirror_root, rel, compiled)
+                else:
+                    ok = verify_regex_on_snippet(st, compiled)
+            if not ok:
+                continue
+            matches.append(
+                {
+                    "relpath": rel,
+                    "content_sha256": row["content_sha256"],
+                    "byte_length": int(row["byte_length"] or 0),
+                    "snippet": snip,
+                    "verify_passed": True if compiled else None,
+                }
+            )
+            if len(matches) >= lim:
+                break
+        dur = round((time.perf_counter() - t0) * 1000, 2)
+        self.log_audit(
+            "codebase.search",
+            "project",
+            prj,
+            detail={
+                "query": query[:500],
+                "n_results": len(matches),
+                "verify_pattern_set": verify_applied,
+                "duration_ms": dur,
+            },
+        )
+        return {
+            "query": query,
+            "matches": matches,
+            "truncated": len(rows) >= fetch_cap,
+            "verify_applied": verify_applied,
+            "mirror_root_configured": mirror_ok,
+            "duration_ms": dur,
         }
 
     def log_audit(

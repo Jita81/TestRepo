@@ -2,7 +2,7 @@
 
 Reference implementation for the **Automated Agile — Context Engineering Platform**: a **self-curating context graph** (roadmap → story → **D7** context package → **D8** sprint commitment → **D9** manufacturing → **D10** triage → **D11** improvement backlog) with **meetings (D4 extraction)**, **audit trail**, **decision/artifact records**, and **project-scoped** workspaces.
 
-**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Master plan:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) · **Backlog issues:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Decision agents (D1–D12):** [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) · **Deploy:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
+**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Master plan:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) · **Backlog issues:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Codebase index (Phase 11):** [docs/codebase-index-phase11.md](docs/codebase-index-phase11.md) · **Decision agents (D1–D12):** [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) · **Deploy:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
 
 ---
 
@@ -42,13 +42,13 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Integrations | F | **Phase 5 (partial)** — GitHub **push/ping** webhook → `audit_events`; optional `story_id` + `context_project` query params; **not** PR events or normalized event table |
 | Ops / hardening | I3 / Phase 6 | **Done** — **`GET /health`**, **`GET /ready`**, CLI **`python -m src.context_platform.cli`**, SQLite backup guidance, reference dataset **`prj_reference`**; **Postgres** documented as future ([docs/postgres-notes.md](docs/postgres-notes.md)) |
 | Decision agents (LLM) | Process D1–D12 | **Done (MVP)** — shared **`llm_client`**; **`GET/POST /api/context/decision-agents`**; see [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) |
-| Codebase intelligence | G | **Not done** — policy: [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md); implementation **Phase 11** in [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) |
+| Codebase intelligence | G | **Partial (MVP)** — policy: [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md); **Phase 11** CLI + **`GET /codebase-search`** + verify: [docs/codebase-index-phase11.md](docs/codebase-index-phase11.md) |
 
 ---
 
 ## What’s left (grouped backlog)
 
-**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–10 done**; **Phases 11–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
+**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–11 done**; **Phases 12–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
 
 1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
 2. **Identity:** OAuth / SSO; roles (PO, CE, dev) beyond shared dashboard password; service accounts for automation.
@@ -61,7 +61,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 
 ## Master implementation plan
 
-**Canonical document:** **[docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md)** — completed milestones (**P1–P6** + decision-agent fleet + agent-context policy), **Phases 7–14** toward Enterprise/Process Architecture v2.0, seven-systems matrix, **indexed regex** in Phase 11, MCP in Phase 13.
+**Canonical document:** **[docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md)** — completed milestones (**P1–P6** + decision-agent fleet + agent-context policy + **P11 codebase index**), **Phases 7–14** toward Enterprise/Process Architecture v2.0, seven-systems matrix, MCP in Phase 13.
 
 ### Completed delivery slices (historical agent phases 1–6)
 
@@ -82,7 +82,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | **8** | Meeting intelligence v2 — **✅ Done** (`unresolved[]`, gaps pipeline, pending-confirmation API) |
 | **9** | Process orchestration & **tiered confirmation** — **✅ Done** (outbox, `process.*` audits, optional auto-accept) |
 | **10** | **Manufacturing gateway** — **✅ Done** (prompt module, tests, triage prediction field) |
-| **11** | **Codebase intelligence** + **indexed regex** search |
+| **11** | **Codebase intelligence** + **indexed regex** — **✅ Done (MVP)** (`cli index-codebase`, `/codebase-search`) |
 | **12** | Feedback hub & **Observatory** (baseline metrics) |
 | **13** | **MCP** + event bus + wrap decision/search tools |
 | **14** | Enterprise **scale** — HA, Postgres path, SSO, five UX surfaces |
@@ -187,6 +187,7 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 | Health (Phase 6) | **`GET /health`** (liveness), **`GET /ready`** (DB ping — 503 if store fails) |
 | Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
 | Process (Phase 9) | **`GET /process-outbox`**, **`POST /process-outbox/{id}/ack`**, **`POST /context-packages/{id}/evaluate-process-rules`** — filter audits with `action` prefix `process.` |
+| Codebase (Phase 11) | **`GET /codebase-search`** (`q`, optional `verify_pattern`, `limit`) — populate index via **`python -m src.context_platform.cli index-codebase --root <path>`**; audits `codebase.*` |
 
 **D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen (**Phase 7:** canonical snapshot includes EA extension JSON; `schema_version` **3** in stored snapshot).  
 **D8:** One story ↔ one sprint commitment; D7 required unless override env/checkbox.  
@@ -198,6 +199,8 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 **Phase 9 (process orchestration):** **`readiness_score`** is the canonical stored metric on each context package (0–100, from `compute_readiness_with_extensions` on PATCH). Set **`CONTEXT_PROCESS_QUICK_PATH_MIN_READINESS`** (e.g. `90`) to enable quick-path: when readiness ≥ threshold and **`gap_analysis.gaps`** is empty, the platform logs **`process.package_quick_path_eligible`** and enqueues **`process_outbox`**. Set **`CONTEXT_PROCESS_AUTO_ACCEPT_NOTE_ONLY_EXTRACTION=1`** to auto-run per-item accept-all after extraction when every draft line is type **`note`** — audit **`process.meeting_extraction_auto_accepted`**. List pending rows via **`GET /api/context/process-outbox`**; acknowledge with **`POST .../process-outbox/{id}/ack`** (worker stub).
 
 **Phase 10 (manufacturing gateway):** [`manufacturing_gateway.py`](src/context_platform/manufacturing_gateway.py) builds a versioned **JSON bundle** and **canonical Markdown** (embedded ahead of adapter output in `MANUFACTURING.md`). **`POST /context-packages/{id}/manufacturing`** accepts optional **`predicted_triage_queue`** (`Q1`/`Q2`/`Q3`); set **`CONTEXT_MANUFACTURING_AUTO_PREDICT_TRIAGE=1`** to store a heuristic prediction when omitted. D10 **`submit_triage`** audits include **`predicted_triage_queue`** and **`prediction_matches_actual`** for analytics.
+
+**Phase 11 (codebase index):** Operators run **`cli index-codebase`** to mirror text files into **`codebase_index_entries`** (per `CONTEXT_PROJECT_ID`). Agents use **`GET /api/context/codebase-search`** with space-separated substring tokens (AND). Optional **`verify_pattern`** regex narrows candidates; set **`CONTEXT_CODEBASE_INDEX_ROOT`** to the same path as `--root` so verification reads **fresh file bytes** on disk. See [docs/codebase-index-phase11.md](docs/codebase-index-phase11.md).
 
 **Phase 5 (SCM):** Configure GitHub → **Webhooks** → URL  
 `https://<host>/api/context/webhooks/scm/github`  
@@ -238,6 +241,7 @@ Add **`?context_project=<project_id>`** if the default env project is wrong, and
 | `MANUFACTURING_RUN_CMD` | — | Optional shell command run **in repo root** (e.g. `pytest -q` or `npm test`). **Runs as the app user** — treat like CI. |
 | `MANUFACTURING_TIMEOUT_SEC` | `600` | Timeout for clone, apply, and run command |
 | `CONTEXT_MANUFACTURING_AUTO_PREDICT_TRIAGE` | unset | `1` / `true` — set **`predicted_triage_queue`** on manufacturing submit using readiness/gaps heuristic when not provided in JSON body |
+| `CONTEXT_CODEBASE_INDEX_ROOT` | unset | Phase 11: directory path matching the last **`index-codebase --root`** — enables **regex verify** against on-disk files for **`/codebase-search`** |
 | `HOST` / `PORT` | `0.0.0.0` / `8000` | Server bind |
 
 See [.env.example](.env.example).
@@ -281,6 +285,7 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 ├── docs/
 │   ├── context-platform-process-architecture.md
 │   ├── agent-context-retrieval.md
+│   ├── codebase-index-phase11.md
 │   ├── IMPLEMENTATION-PLAN.md
 │   ├── decision-agent-fleet.md
 │   ├── implementation-phase-plan-enterprise-v2.md
@@ -301,6 +306,7 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 │   ├── meeting_extraction.py
 │   ├── meeting_extraction_schema.py  # Phase 8 — EA draft shape + summaries
 │   ├── process_orchestration.py      # Phase 9 — quick-path env helpers
+│   ├── codebase_index.py             # Phase 11 — mirror rules + verify helpers
 │   ├── manufacturing_gateway.py      # Phase 10 — prompt bundle + Markdown + triage hint
 │   ├── manufacturing_worker.py
 │   ├── scm_webhook.py
@@ -317,4 +323,4 @@ Use a **small** public repo and a **bounded** command for demos; production shou
 
 ## SQLite migration
 
-Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions` (including **`meeting_agenda_items`** for Phase 4). There is **no separate Alembic migration pack**; run **`python -m src.context_platform.cli migrate`** to validate the file the same way the app does on boot. For production scale-out, plan a **single-writer** SQLite and follow [docs/deploy-runbook.md](docs/deploy-runbook.md), or plan a **Postgres port** ([docs/postgres-notes.md](docs/postgres-notes.md)).
+Legacy `work_items` DBs are migrated on startup to the v2 hierarchy. New columns are added incrementally via `_ensure_extensions` (including **`meeting_agenda_items`** for Phase 4 and **`codebase_index_entries`** for Phase 11). There is **no separate Alembic migration pack**; run **`python -m src.context_platform.cli migrate`** to validate the file the same way the app does on boot. For production scale-out, plan a **single-writer** SQLite and follow [docs/deploy-runbook.md](docs/deploy-runbook.md), or plan a **Postgres port** ([docs/postgres-notes.md](docs/postgres-notes.md)).

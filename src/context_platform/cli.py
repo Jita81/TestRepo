@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -39,6 +40,28 @@ def cmd_seed() -> int:
     return 0
 
 
+def cmd_index_codebase(ns: argparse.Namespace) -> int:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    from pathlib import Path
+
+    from src.context_platform.store import get_store, init_store
+
+    root = Path(ns.root).resolve()
+    if not root.is_dir():
+        print(f"index-codebase: error — not a directory: {root}", file=sys.stderr)
+        return 1
+    init_store(_db_path())
+    try:
+        stats = get_store().reindex_codebase_mirror(root, max_files=ns.max_files)
+    except Exception as e:
+        print(f"index-codebase: error — {e}", file=sys.stderr)
+        return 1
+    print(json.dumps(stats, indent=2))
+    return 0
+
+
 def cmd_backup(ns: argparse.Namespace) -> int:
     db = Path(ns.db or _db_path())
     if not db.is_file():
@@ -56,7 +79,7 @@ def cmd_backup(ns: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="python -m src.context_platform.cli",
-        description="Context platform operations (Phase 6 hardening).",
+        description="Context platform operations (migrations, seed, backup, codebase index).",
     )
     sub = p.add_subparsers(dest="command", required=True)
 
@@ -73,6 +96,22 @@ def main(argv: list[str] | None = None) -> int:
         help="Backup directory (default: data/backups).",
     )
 
+    ic = sub.add_parser(
+        "index-codebase",
+        help="Phase 11: mirror text files from --root into SQLite for /codebase-search.",
+    )
+    ic.add_argument(
+        "--root",
+        required=True,
+        help="Absolute or relative path to repository root to index.",
+    )
+    ic.add_argument(
+        "--max-files",
+        type=int,
+        default=50_000,
+        help="Safety cap on number of files (default 50000).",
+    )
+
     args = p.parse_args(argv)
     if args.command == "migrate":
         return cmd_migrate()
@@ -80,6 +119,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_seed()
     if args.command == "backup":
         return cmd_backup(args)
+    if args.command == "index-codebase":
+        return cmd_index_codebase(args)
     return 1
 
 

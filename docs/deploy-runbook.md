@@ -56,6 +56,15 @@ Validate migrations without running the server:
 CONTEXT_DB_PATH=/path/to/context_platform.db python -m src.context_platform.cli migrate
 ```
 
+## 4b. Codebase index (Phase 11)
+
+Mirror a repo into SQLite for **`GET /api/context/codebase-search`** (substring + optional regex verify). See [codebase-index-phase11.md](codebase-index-phase11.md).
+
+```bash
+export CONTEXT_PROJECT_ID=prj_default   # or your tenant
+python3 -m src.context_platform.cli index-codebase --root /path/to/git/checkout
+```
+
 ## 5. Reference dataset
 
 One **idempotent** demo graph (project `prj_reference`, cycle → story → draft package → gap):
