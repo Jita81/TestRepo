@@ -301,6 +301,8 @@ class TriageSubmit(BaseModel):
     """
     D10 triage: queue-specific rules — Q1 needs notes; Q2 needs ≥1 gap line;
     Q3 needs root-cause category + narrative.
+
+    Phase 12 (Q2): optional diff attachment — stored under ``detail_json["diff_attachment"]``.
     """
 
     queue: TriageQueue
@@ -308,6 +310,18 @@ class TriageSubmit(BaseModel):
     gap_items: list[str] = Field(default_factory=list)
     root_cause_category: Optional[TriageRootCauseCategory] = None
     root_cause_narrative: Optional[str] = None
+    diff_summary: str = Field(
+        default="",
+        description="Optional Q2: unified diff or patch excerpt (capped server-side).",
+    )
+    diff_format: str = Field(
+        default="",
+        description="Optional Q2: unified_diff | patch | url | other.",
+    )
+    diff_ref: str = Field(
+        default="",
+        description="Optional Q2: URL, commit SHA, or PR reference for the diff.",
+    )
 
     @model_validator(mode="after")
     def validate_by_queue(self) -> "TriageSubmit":
@@ -323,6 +337,25 @@ class TriageSubmit(BaseModel):
                 raise ValueError("q3_requires_root_cause_category")
             if not self.root_cause_narrative or len(self.root_cause_narrative.strip()) < 2:
                 raise ValueError("q3_requires_root_cause_narrative")
+
+        ds = self.diff_summary.strip()
+        dr = self.diff_ref.strip()
+        df = self.diff_format.strip().lower()
+        if self.queue != TriageQueue.Q2:
+            if ds or dr or df:
+                raise ValueError("diff_attachment_only_for_q2")
+        elif ds or dr or df:
+            allowed = {"unified_diff", "patch", "url", "other"}
+            if not df and ds:
+                df = "unified_diff"
+            elif not df and dr:
+                df = "url"
+            if df not in allowed:
+                raise ValueError("invalid_diff_format")
+            if not ds and not dr:
+                raise ValueError("diff_summary_or_ref_required")
+            object.__setattr__(self, "diff_format", df)
+
         return self
 
 

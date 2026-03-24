@@ -159,6 +159,9 @@ def _gap_row_to_read(row: sqlite3.Row) -> ContextGapRead:
     )
 
 
+TRIAGE_DIFF_SUMMARY_MAX_CHARS = 120_000
+
+
 def _triage_feedback_and_detail(data: TriageSubmit) -> tuple[str, dict[str, Any]]:
     """Human-readable feedback column + structured JSON for analytics (D10)."""
     detail: dict[str, Any] = {"queue": data.queue.value}
@@ -170,10 +173,29 @@ def _triage_feedback_and_detail(data: TriageSubmit) -> tuple[str, dict[str, Any]
         detail["gap_items"] = gaps
         if data.feedback.strip():
             detail["notes"] = data.feedback.strip()
+        ds = data.diff_summary.strip()
+        dr = data.diff_ref.strip()
+        df = data.diff_format.strip().lower()
+        if ds or dr or df:
+            summary = ds[:TRIAGE_DIFF_SUMMARY_MAX_CHARS]
+            truncated = len(ds) > TRIAGE_DIFF_SUMMARY_MAX_CHARS
+            detail["diff_attachment"] = {
+                "format": df or ("unified_diff" if summary else "url"),
+                "ref": dr,
+                "summary": summary,
+                "summary_truncated": truncated,
+            }
         lines = [f"[gap] {g}" for g in gaps]
         if data.feedback.strip():
             lines.append(data.feedback.strip())
-        return "\n".join(lines), detail
+        fb = "\n".join(lines)
+        if detail.get("diff_attachment"):
+            da = detail["diff_attachment"]
+            hint = da.get("ref") or (
+                f"inline excerpt ({len(da.get('summary') or '')} chars)"
+            )
+            fb = fb + f"\n[diff_attachment: {hint}]"
+        return fb, detail
     cat = data.root_cause_category.value if data.root_cause_category else ""
     narr = (data.root_cause_narrative or "").strip()
     detail["root_cause_category"] = cat
@@ -2889,6 +2911,7 @@ class ContextStore:
                 "structured_keys": list(detail_obj.keys()),
                 "predicted_triage_queue": pred_q,
                 "prediction_matches_actual": match,
+                "has_diff_attachment": bool(detail_obj.get("diff_attachment")),
             },
         )
         if improvement_id:
@@ -2989,6 +3012,119 @@ class ContextStore:
         with self._connect() as conn:
             rows = conn.execute(q, params).fetchall()
         return [self._triage_row_to_read(r) for r in rows]
+
+    def get_analytics_summary(self) -> dict[str, Any]:
+        """Phase 12: project-scoped aggregates for the observatory API / dashboard."""
+        prj = get_project_id()
+        out: dict[str, Any] = {
+            "project_id": prj,
+            "metric_tiers_doc": "docs/ea-metric-tiers-phase12.md",
+        }
+        with self._connect() as conn:
+            m_rows = conn.execute(
+                """SELECT m.status, COUNT(*) AS n
+                FROM manufacturing_requests m
+                JOIN context_packages cp ON m.context_package_id = cp.id
+                JOIN stories s ON cp.story_id = s.id
+                WHERE s.project_id = ?
+                GROUP BY m.status""",
+                (prj,),
+            ).fetchall()
+            out["manufacturing_by_status"] = {
+                str(r["status"]): int(r["n"]) for r in m_rows
+            }
+
+            t_rows = conn.execute(
+                """SELECT t.queue, COUNT(*) AS n
+                FROM triage_results t
+                JOIN manufacturing_requests m ON t.manufacturing_request_id = m.id
+                JOIN context_packages cp ON m.context_package_id = cp.id
+                JOIN stories s ON cp.story_id = s.id
+                WHERE s.project_id = ?
+                GROUP BY t.queue""",
+                (prj,),
+            ).fetchall()
+            out["triage_by_queue"] = {str(r["queue"]): int(r["n"]) for r in t_rows}
+
+            q2_diff = 0
+            q2_rows = conn.execute(
+                """SELECT t.detail_json FROM triage_results t
+                JOIN manufacturing_requests m ON t.manufacturing_request_id = m.id
+                JOIN context_packages cp ON m.context_package_id = cp.id
+                JOIN stories s ON cp.story_id = s.id
+                WHERE s.project_id = ? AND t.queue = 'Q2' AND t.detail_json IS NOT NULL
+                AND LENGTH(t.detail_json) > 2""",
+                (prj,),
+            ).fetchall()
+            for r in q2_rows:
+                raw = r["detail_json"]
+                try:
+                    parsed = json.loads(raw)
+                except (TypeError, json.JSONDecodeError):
+                    continue
+                if isinstance(parsed, dict) and parsed.get("diff_attachment"):
+                    q2_diff += 1
+            out["q2_with_diff_attachment"] = q2_diff
+
+            g_rows = conn.execute(
+                """SELECT COALESCE(NULLIF(TRIM(g.severity_tier), ''), 'degrading') AS tier, COUNT(*) AS n
+                FROM context_gaps g
+                JOIN stories s ON g.story_id = s.id
+                WHERE s.project_id = ? AND g.resolved = 0
+                GROUP BY tier""",
+                (prj,),
+            ).fetchall()
+            out["unresolved_gaps_by_severity_tier"] = {
+                str(r["tier"]): int(r["n"]) for r in g_rows
+            }
+
+            i_rows = conn.execute(
+                """SELECT i.status, COUNT(*) AS n
+                FROM context_improvement_items i
+                LEFT JOIN stories s ON i.story_id = s.id
+                WHERE (i.story_id IS NULL OR s.project_id = ?)
+                GROUP BY i.status""",
+                (prj,),
+            ).fetchall()
+            out["improvement_items_by_status"] = {
+                str(r["status"]): int(r["n"]) for r in i_rows
+            }
+
+            pred_rows = conn.execute(
+                """SELECT m.predicted_triage_queue, t.queue
+                FROM manufacturing_requests m
+                JOIN triage_results t ON t.id = (
+                    SELECT id FROM triage_results
+                    WHERE manufacturing_request_id = m.id
+                    ORDER BY created_at DESC LIMIT 1
+                )
+                JOIN context_packages cp ON m.context_package_id = cp.id
+                JOIN stories s ON cp.story_id = s.id
+                WHERE s.project_id = ?
+                AND m.status = 'completed'
+                AND m.predicted_triage_queue IS NOT NULL
+                AND TRIM(m.predicted_triage_queue) != ''""",
+                (prj,),
+            ).fetchall()
+            n_pred = len(pred_rows)
+            n_match = sum(
+                1
+                for r in pred_rows
+                if r["predicted_triage_queue"] and r["predicted_triage_queue"] == r["queue"]
+            )
+            out["triage_prediction"] = {
+                "with_prediction": n_pred,
+                "matches_actual": n_match,
+                "match_rate": (n_match / n_pred) if n_pred else None,
+            }
+
+            pend = conn.execute(
+                "SELECT COUNT(*) AS n FROM process_outbox WHERE project_id = ? AND processed_at IS NULL",
+                (prj,),
+            ).fetchone()
+            out["process_outbox_pending"] = int(pend["n"]) if pend else 0
+
+        return out
 
     def _meeting_row_to_read(self, row: sqlite3.Row) -> MeetingRead:
         keys = set(row.keys())

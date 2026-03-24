@@ -451,6 +451,13 @@ def api_list_triage_results(queue: Optional[str] = None, limit: int = 100):
     ]
 
 
+@api_router.get("/analytics-summary")
+def api_analytics_summary():
+    """Phase 12: project-scoped observatory aggregates (see docs/ea-metric-tiers-phase12.md)."""
+
+    return _dump(get_store().get_analytics_summary())
+
+
 @api_router.get("/meetings")
 def api_list_meetings():
     return [_dump(m) for m in get_store().list_meetings()]
@@ -810,6 +817,7 @@ def _dashboard_context(request: Request) -> dict[str, Any]:
         "audit_events": store.list_audit_events(limit=30),
         "decision_records": store.list_decision_records(limit=25),
         "artifacts": store.list_artifacts(limit=25),
+        "analytics_summary": store.get_analytics_summary(),
         "open_improvements": store.list_improvement_items(status="open", limit=40),
         "sprint_boards": sprint_boards,
         "allow_unapproved_sprint_env": store.allow_unapproved_sprint_commit_env(),
@@ -1156,6 +1164,9 @@ def form_triage(
     gap_lines: str = Form(""),
     root_cause_category: str = Form(""),
     root_cause_narrative: str = Form(""),
+    diff_summary: str = Form(""),
+    diff_format: str = Form(""),
+    diff_ref: str = Form(""),
 ):
     gaps = [ln.strip() for ln in gap_lines.replace("\r", "").split("\n") if ln.strip()]
     cat: Optional[TriageRootCauseCategory] = None
@@ -1171,6 +1182,9 @@ def form_triage(
             gap_items=gaps,
             root_cause_category=cat,
             root_cause_narrative=root_cause_narrative or None,
+            diff_summary=diff_summary,
+            diff_format=diff_format,
+            diff_ref=diff_ref,
         )
         get_store().submit_triage(request_id, body)
     except KeyError:
