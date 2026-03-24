@@ -2,7 +2,7 @@
 
 Reference implementation for the **Automated Agile — Context Engineering Platform**: a **self-curating context graph** (roadmap → story → **D7** context package → **D8** sprint commitment → **D9** manufacturing → **D10** triage → **D11** improvement backlog) with **meetings (D4 extraction)**, **audit trail**, **decision/artifact records**, and **project-scoped** workspaces.
 
-**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Master plan:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) · **Backlog issues:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Codebase index (Phase 11):** [docs/codebase-index-phase11.md](docs/codebase-index-phase11.md) · **Decision agents (D1–D12):** [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) · **Deploy:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
+**Spec:** [docs/context-platform-process-architecture.md](docs/context-platform-process-architecture.md) · **Master plan:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) · **Backlog issues:** [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md) · **Agent context (semantic + indexed search):** [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md) · **Codebase index (Phase 11):** [docs/codebase-index-phase11.md](docs/codebase-index-phase11.md) · **Observatory / metrics (Phase 12):** [docs/ea-metric-tiers-phase12.md](docs/ea-metric-tiers-phase12.md) · **Decision agents (D1–D12):** [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) · **Deploy:** [docs/deploy-runbook.md](docs/deploy-runbook.md)
 
 ---
 
@@ -32,7 +32,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Decision & artifact records | A2 | **Partial** — `decision_records` + `artifacts`; **D7, D8, D10, D4** wired; not full D1–D12 UI |
 | Audit / provenance | A3 | **Partial** — append-only events; **before/after** on key package + gap actions; not full graph diff |
 | Manufacturing | H1 / D9 | **Phase 3** — git/stub adapter; **Phase 10** — **`manufacturing_gateway`** prompt bundle + Markdown in `MANUFACTURING.md`; **`GET .../manufacturing-prompt`**; optional **`predicted_triage_queue`** vs D10 actual (audit `prediction_matches_actual`) |
-| Triage D10 | C2 | **Partial** — structured Q1/Q2/Q3 + `detail_json` + list API |
+| Triage D10 | C2 | **Partial** — structured Q1/Q2/Q3 + `detail_json` + list API; **Phase 12** optional **Q2 diff attachment** (`detail_json.diff_attachment`) |
 | Sprint D8 | C1 | **Partial** — sprints + commitments + D7 gate; light on dates/capacity |
 | D11 backlog | C3 | **Partial** — items from Q2/Q3; basic list/resolve |
 | Meetings / extraction D4 | D2 | **Partial** — transcript, LLM or stub, per-item review, confirm; **Phase 8** — EA draft **`unresolved[]`**, promote to gaps, **`GET .../meetings/pending-extraction-confirmation`** |
@@ -43,25 +43,26 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | Ops / hardening | I3 / Phase 6 | **Done** — **`GET /health`**, **`GET /ready`**, CLI **`python -m src.context_platform.cli`**, SQLite backup guidance, reference dataset **`prj_reference`**; **Postgres** documented as future ([docs/postgres-notes.md](docs/postgres-notes.md)) |
 | Decision agents (LLM) | Process D1–D12 | **Done (MVP)** — shared **`llm_client`**; **`GET/POST /api/context/decision-agents`**; see [docs/decision-agent-fleet.md](docs/decision-agent-fleet.md) |
 | Codebase intelligence | G | **Partial (MVP)** — policy: [docs/agent-context-retrieval.md](docs/agent-context-retrieval.md); **Phase 11** CLI + **`GET /codebase-search`** + verify: [docs/codebase-index-phase11.md](docs/codebase-index-phase11.md) |
+| Analytics / observatory | EA §9 (baseline) | **Partial (MVP)** — **Phase 12** **`GET /api/context/analytics-summary`** + dashboard Observatory card; tiers: [docs/ea-metric-tiers-phase12.md](docs/ea-metric-tiers-phase12.md) |
 
 ---
 
 ## What’s left (grouped backlog)
 
-**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–11 done**; **Phases 12–14** vs enterprise seven systems, data contracts, MCP, five surfaces).
+**Sequenced roadmap:** [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) (**Phases 7–12 done**; **Phases 13–14** vs enterprise seven systems, MCP, five surfaces).
 
 1. **Graph & governance:** Optional **PostgreSQL** for multi-instance deploys; org-level tenancy above `project_id`.
 2. **Identity:** OAuth / SSO; roles (PO, CE, dev) beyond shared dashboard password; service accounts for automation.
 3. **Delivery depth:** D8 sprint calendar/capacity UI; **D12** release sign-off placeholder; manufacturing **PR automation** / org-specific CI beyond env-driven git adapter.
 4. **Meetings:** **D1** item status / ordering rules beyond MVP; **D3** richer gap-driven agenda heuristics; richer M1–M7 registry.
-5. **Product / analytics:** Triage trends, improvement metrics, exports; **B4** predicted queue heuristic.
+5. **Product / analytics:** Phase 12 **project-scoped** summary API; cross-project trends, exports, warehouse — future.
 6. **Integrations:** Chat, PM tools; **SCM** beyond push/ping audit (PR events, repo↔story mapping table); see Epic F in [docs/roadmap-github-issues.md](docs/roadmap-github-issues.md).
 
 ---
 
 ## Master implementation plan
 
-**Canonical document:** **[docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md)** — completed milestones (**P1–P6** + decision-agent fleet + agent-context policy + **P11 codebase index**), **Phases 7–14** toward Enterprise/Process Architecture v2.0, seven-systems matrix, MCP in Phase 13.
+**Canonical document:** **[docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md)** — completed milestones (**P1–P6** + decision-agent fleet + agent-context policy + **P11 codebase index** + **P12 observatory**), **Phases 7–14** toward Enterprise/Process Architecture v2.0, seven-systems matrix, MCP in Phase 13.
 
 ### Completed delivery slices (historical agent phases 1–6)
 
@@ -83,7 +84,7 @@ This repo is an **MVP**: it demonstrates the spine end-to-end with SQLite, a sin
 | **9** | Process orchestration & **tiered confirmation** — **✅ Done** (outbox, `process.*` audits, optional auto-accept) |
 | **10** | **Manufacturing gateway** — **✅ Done** (prompt module, tests, triage prediction field) |
 | **11** | **Codebase intelligence** + **indexed regex** — **✅ Done (MVP)** (`cli index-codebase`, `/codebase-search`) |
-| **12** | Feedback hub & **Observatory** (baseline metrics) |
+| **12** | Feedback hub & **Observatory** — **✅ Done (MVP)** (Q2 diff attachment, `/analytics-summary`, [ea-metric-tiers-phase12.md](docs/ea-metric-tiers-phase12.md)) |
 | **13** | **MCP** + event bus + wrap decision/search tools |
 | **14** | Enterprise **scale** — HA, Postgres path, SSO, five UX surfaces |
 
@@ -186,12 +187,13 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 | Integrations | **`POST /webhooks/scm/github`** — GitHub **push** / **ping** (JSON); signs with **`X-Hub-Signature-256`** when secret set |
 | Health (Phase 6) | **`GET /health`** (liveness), **`GET /ready`** (DB ping — 503 if store fails) |
 | Traceability | `/audit-events`, `/decision-records`, `/artifacts`, `/improvement-items` |
+| Observatory (Phase 12) | **`GET /analytics-summary`** — project-scoped aggregates; see [ea-metric-tiers-phase12.md](docs/ea-metric-tiers-phase12.md) |
 | Process (Phase 9) | **`GET /process-outbox`**, **`POST /process-outbox/{id}/ack`**, **`POST /context-packages/{id}/evaluate-process-rules`** — filter audits with `action` prefix `process.` |
 | Codebase (Phase 11) | **`GET /codebase-search`** (`q`, optional `verify_pattern`, `limit`) — populate index via **`python -m src.context_platform.cli index-codebase --root <path>`**; audits `codebase.*` |
 
 **D7:** CE + PO + (tech lead **or** developer); approved snapshot + hash frozen (**Phase 7:** canonical snapshot includes EA extension JSON; `schema_version` **3** in stored snapshot).  
 **D8:** One story ↔ one sprint commitment; D7 required unless override env/checkbox.  
-**D10:** Q1 notes; Q2 gap lines; Q3 root cause + narrative (`detail_json`).  
+**D10:** Q1 notes; Q2 gap lines + optional **diff** (`detail_json.diff_attachment`); Q3 root cause + narrative (`detail_json`).  
 **D1 (Phase 4):** Agenda lines stored in `meeting_agenda_items`; optional link to `context_gaps.id`; **generate-agenda** appends one item per unresolved gap in the project (skips gaps already linked to that meeting).
 
 **Phase 8 (meeting extraction v2):** Draft JSON uses **`extraction_schema_version` 2** with **`proposed_items`** + **`unresolved[]`** (normalized via `meeting_extraction_schema.normalize_extraction_draft`). Stub recognizes **`UNRESOLVED:`**, **`OPEN:`**, **`??`** lines; LLM returns the same shape when configured. **`POST /meetings/{id}/unresolved-to-gaps`** creates **`context_gaps`** on a chosen story (indices or all); audit action **`meeting_unresolved_promoted_to_gaps`**.
@@ -201,6 +203,8 @@ Use **`-e PORT=...`** if your platform injects a non-8000 port (the image respec
 **Phase 10 (manufacturing gateway):** [`manufacturing_gateway.py`](src/context_platform/manufacturing_gateway.py) builds a versioned **JSON bundle** and **canonical Markdown** (embedded ahead of adapter output in `MANUFACTURING.md`). **`POST /context-packages/{id}/manufacturing`** accepts optional **`predicted_triage_queue`** (`Q1`/`Q2`/`Q3`); set **`CONTEXT_MANUFACTURING_AUTO_PREDICT_TRIAGE=1`** to store a heuristic prediction when omitted. D10 **`submit_triage`** audits include **`predicted_triage_queue`** and **`prediction_matches_actual`** for analytics.
 
 **Phase 11 (codebase index):** Operators run **`cli index-codebase`** to mirror text files into **`codebase_index_entries`** (per `CONTEXT_PROJECT_ID`). Agents use **`GET /api/context/codebase-search`** with space-separated substring tokens (AND). Optional **`verify_pattern`** regex narrows candidates; set **`CONTEXT_CODEBASE_INDEX_ROOT`** to the same path as `--root` so verification reads **fresh file bytes** on disk. See [docs/codebase-index-phase11.md](docs/codebase-index-phase11.md).
+
+**Phase 12 (feedback hub & observatory):** **`POST /manufacturing/{id}/triage`** JSON body may include **`diff_summary`**, **`diff_ref`**, **`diff_format`** when **`queue`** is **`Q2`** (stored under **`detail_json.diff_attachment`**; large excerpts truncated server-side). **`GET /api/context/analytics-summary`** returns manufacturing status counts, D10 queue mix, open gaps by severity, improvement item status counts, Q2-with-diff count, triage prediction match rate, and pending process-outbox rows — see [docs/ea-metric-tiers-phase12.md](docs/ea-metric-tiers-phase12.md).
 
 **Phase 5 (SCM):** Configure GitHub → **Webhooks** → URL  
 `https://<host>/api/context/webhooks/scm/github`  

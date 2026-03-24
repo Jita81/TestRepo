@@ -169,6 +169,31 @@
     </div>
 
     <div class="card">
+      <h2>Observatory (Phase 12)</h2>
+      <p class="muted" style="margin-bottom:0.75rem">Project-scoped aggregates. <code>GET /api/context/analytics-summary</code> · metric tiers: <a href="/docs" style="color:var(--muted)">OpenAPI</a> / <code>docs/ea-metric-tiers-phase12.md</code></p>
+      {% if analytics_summary %}
+      <dl style="font-size:0.85rem;display:grid;grid-template-columns:1fr 1fr;gap:0.35rem 1rem;margin-bottom:0.75rem">
+        <dt class="muted">Mfg by status</dt>
+        <dd><code style="font-size:0.78rem">{{ analytics_summary.manufacturing_by_status }}</code></dd>
+        <dt class="muted">D10 by queue</dt>
+        <dd><code style="font-size:0.78rem">{{ analytics_summary.triage_by_queue }}</code></dd>
+        <dt class="muted">Q2 w/ diff attach</dt>
+        <dd>{{ analytics_summary.q2_with_diff_attachment }}</dd>
+        <dt class="muted">Open gaps by tier</dt>
+        <dd><code style="font-size:0.78rem">{{ analytics_summary.unresolved_gaps_by_severity_tier }}</code></dd>
+        <dt class="muted">D11 by status</dt>
+        <dd><code style="font-size:0.78rem">{{ analytics_summary.improvement_items_by_status }}</code></dd>
+        <dt class="muted">Pred vs actual</dt>
+        <dd class="muted">n={{ analytics_summary.triage_prediction.with_prediction }}{% if analytics_summary.triage_prediction.match_rate is not none %} · match {{ (analytics_summary.triage_prediction.match_rate * 100) | int }}%{% endif %}</dd>
+        <dt class="muted">Process outbox pending</dt>
+        <dd>{{ analytics_summary.process_outbox_pending }}</dd>
+      </dl>
+      {% else %}
+      <p class="muted">No summary.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
       <h2>Context improvement backlog (D11)</h2>
       <p class="muted" style="margin-bottom:0.75rem">Opened automatically on <strong>Q2</strong> or <strong>Q3</strong> triage.</p>
       {% if open_improvements %}
@@ -669,10 +694,17 @@
             <p class="muted" style="font-size:0.85rem;margin-top:0.35rem">{{ mv.triage.detail['root_cause_narrative'][:400] }}{% if mv.triage.detail['root_cause_narrative']|length > 400 %}…{% endif %}</p>
             {% endif %}
             <p class="muted" style="font-size:0.85rem;margin-top:0.35rem">{{ mv.triage.feedback[:300] }}{% if mv.triage.feedback|length > 300 %}…{% endif %}</p>
+            {% if mv.triage.detail and mv.triage.detail.get('diff_attachment') %}
+            {% set da = mv.triage.detail['diff_attachment'] %}
+            <p class="muted" style="font-size:0.8rem;margin-top:0.35rem"><strong>Diff</strong> · {{ da.get('format','?') }}{% if da.get('ref') %} · <span style="word-break:break-all">{{ da['ref'][:200] }}{% if da['ref']|length > 200 %}…{% endif %}</span>{% endif %}{% if da.get('summary_truncated') %} · excerpt truncated{% endif %}</p>
+            {% if da.get('summary') %}
+            <pre style="margin-top:0.35rem;padding:0.5rem;background:var(--bg);border-radius:6px;font-size:0.72rem;max-height:10rem;overflow:auto;white-space:pre-wrap">{{ da['summary'][:8000] }}{% if da['summary']|length > 8000 %}…{% endif %}</pre>
+            {% endif %}
+            {% endif %}
           </div>
           {% elif mv.m.status.value in ('awaiting_triage', 'queued') %}
           <form method="post" action="/context/manufacturing/{{ mv.m.id }}/triage" style="margin-top:0.5rem">
-            <p class="muted" style="font-size:0.8rem;margin-bottom:0.5rem">D10: <strong>Q1</strong> — notes only · <strong>Q2</strong> — one gap per line (required) + optional notes · <strong>Q3</strong> — category + narrative (required) + optional notes.</p>
+            <p class="muted" style="font-size:0.8rem;margin-bottom:0.5rem">D10: <strong>Q1</strong> — notes only · <strong>Q2</strong> — one gap per line (required) + optional notes + optional diff · <strong>Q3</strong> — category + narrative (required) + optional notes.</p>
             <div class="row">
               <div>
                 <label>Queue</label>
@@ -687,6 +719,25 @@
             </div>
             <label>Gaps — one per line (Q2)</label>
             <textarea name="gap_lines" rows="3" placeholder="Missing acceptance criteria&#10;Unclear error handling"></textarea>
+            <p class="muted" style="margin:0.5rem 0 0.35rem;font-size:0.8rem">Optional Q2 — diff attachment (stored in triage <code>detail_json</code>)</p>
+            <div class="row">
+              <div>
+                <label>Diff format</label>
+                <select name="diff_format">
+                  <option value="">— (auto if text/ref set)</option>
+                  <option value="unified_diff">unified_diff</option>
+                  <option value="patch">patch</option>
+                  <option value="url">url</option>
+                  <option value="other">other</option>
+                </select>
+              </div>
+              <div style="flex:2">
+                <label>Diff ref (URL, PR, commit)</label>
+                <input name="diff_ref" placeholder="https://github.com/org/repo/pull/42">
+              </div>
+            </div>
+            <label>Diff excerpt (unified diff / patch text)</label>
+            <textarea name="diff_summary" rows="4" placeholder="--- a/foo.py&#10;+++ b/foo.py&#10;@@ ..."></textarea>
             <div class="row" style="margin-top:0.5rem">
               <div>
                 <label>Root cause (Q3)</label>
