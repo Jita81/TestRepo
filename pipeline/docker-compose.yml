@@ -1,0 +1,166 @@
+# Docker Compose for POS to 3D Pipeline - Full Stack
+version: '3.8'
+
+services:
+  # Main Pipeline API Service
+  pipeline-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pipeline-api
+    ports:
+      - "8000:8000"
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=pipeline
+      - RABBITMQ_PASS=pipeline_secret
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./storage:/app/storage
+      - ./config:/app/config
+    depends_on:
+      - rabbitmq
+      - minio
+      - redis
+    networks:
+      - pipeline-network
+    restart: unless-stopped
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: pipeline-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=pipeline
+      - RABBITMQ_DEFAULT_PASS=pipeline_secret
+      - RABBITMQ_DEFAULT_VHOST=/
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - pipeline-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: pipeline-minio
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - pipeline-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: pipeline-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - pipeline-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: pipeline-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - pipeline-network
+    restart: unless-stopped
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pipeline-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - pipeline-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Worker for Async Processing (Optional)
+  pipeline-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pipeline-worker
+    command: python -m src.workers.queue_worker
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=pipeline
+      - RABBITMQ_PASS=pipeline_secret
+      - WORKER_CONCURRENCY=2
+    volumes:
+      - ./storage:/app/storage
+      - ./config:/app/config
+    depends_on:
+      - rabbitmq
+      - minio
+    networks:
+      - pipeline-network
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+volumes:
+  rabbitmq-data:
+  minio-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  pipeline-network:
+    driver: bridge
